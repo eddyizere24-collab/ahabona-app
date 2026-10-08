@@ -1,13 +1,11 @@
 {
-  "name": "ahabona-app",
+  "name": "ahabona",
   "version": "1.0.0",
-  "description": "AHABONA Production Server",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
+  "private": true,
+  "engines": {
+    "node": ">=22.5"
   },
-  "dependencies": {
-    "express": "^4.19.2"
+  "scripts": {
+    "start": "node --no-warnings server.js"
   }
 }
-
