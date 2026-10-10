@@ -322,12 +322,5 @@ export default function App() {
       </footer>
     </div>
   );
-}
-sm:px-6 lg:px-8 mt-8 pt-8 border-t border-slate-800 text-center text-xs text-slate-500">
-          &copy; {new Date().getFullYear()} AHABONA Platform. All rights reserved.
-        </div>
-      </footer>
-    </div>
-  );
-     }
-              
+        }
+                                          
