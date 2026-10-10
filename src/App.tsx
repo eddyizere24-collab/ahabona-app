@@ -1,9 +1,13 @@
 import { useState } from 'react';
-import { Search, Briefcase, ShieldCheck, ArrowRight, Menu, X, CheckCircle, Mail, Phone, MapPin } from 'lucide-react';
+import { Search, Briefcase, ShieldCheck, ArrowRight, Menu, X, CheckCircle, Mail, Phone, MapPin, UserCheck, Lock } from 'lucide-react';
 
 export default function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // State yo gucunga Modal (Pop-up form)
+  const [authModal, setAuthModal] = useState<'login' | 'register' | null>(null);
+  const [role, setRole] = useState<'client' | 'provider'>('client');
 
   const services = [
     { id: 1, title: 'Ubwubatsi n’Ibigenerana', category: 'Fundi & Abafundi', count: '120+ experts' },
@@ -13,9 +17,9 @@ export default function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans relative">
       {/* Navigation Bar */}
-      <nav className="bg-emerald-700 text-white sticky top-0 z-50 shadow-md">
+      <nav className="bg-emerald-700 text-white sticky top-0 z-40 shadow-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-white text-emerald-700 font-bold text-xl rounded-xl flex items-center justify-center shadow">
@@ -32,8 +36,16 @@ export default function App() {
           </div>
 
           <div className="hidden md:flex items-center space-x-4">
-            <button className="px-4 py-2 text-emerald-100 hover:text-white font-medium">Kwinjira</button>
-            <button className="px-5 py-2 bg-white text-emerald-700 hover:bg-emerald-50 font-bold rounded-lg shadow transition">
+            <button 
+              onClick={() => setAuthModal('login')} 
+              className="px-4 py-2 text-emerald-100 hover:text-white font-medium"
+            >
+              Kwinjira
+            </button>
+            <button 
+              onClick={() => setAuthModal('register')} 
+              className="px-5 py-2 bg-white text-emerald-700 hover:bg-emerald-50 font-bold rounded-lg shadow transition"
+            >
               Kwiyandikisha
             </button>
           </div>
@@ -53,8 +65,18 @@ export default function App() {
             <a href="#about" className="block py-2 text-emerald-100">Abo tURI bo</a>
             <a href="#contact" className="block py-2 text-emerald-100">Twandikire</a>
             <div className="pt-2 border-t border-emerald-600 flex flex-col space-y-2">
-              <button className="w-full py-2 text-center text-white font-medium">Kwinjira</button>
-              <button className="w-full py-2 bg-white text-emerald-700 font-bold rounded-lg">Kwiyandikisha</button>
+              <button 
+                onClick={() => { setAuthModal('login'); setIsMenuOpen(false); }} 
+                className="w-full py-2 text-center text-white font-medium"
+              >
+                Kwinjira
+              </button>
+              <button 
+                onClick={() => { setAuthModal('register'); setIsMenuOpen(false); }} 
+                className="w-full py-2 bg-white text-emerald-700 font-bold rounded-lg"
+              >
+                Kwiyandikisha
+              </button>
             </div>
           </div>
         )}
@@ -152,8 +174,121 @@ export default function App() {
         </div>
       </section>
 
+      {/* Modal / Form Pop-Up wo Kwinjira no Kwiyandikisha */}
+      {authModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200">
+            <button 
+              onClick={() => setAuthModal(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-2 rounded-full"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="text-center mb-6">
+              <h3 className="text-2xl font-extrabold text-slate-900">
+                {authModal === 'login' ? 'Kwinjira muri AHABONA' : 'Fungura Konti Nshya'}
+              </h3>
+              <p className="text-slate-500 text-sm mt-1">
+                {authModal === 'login' ? 'Injiza amakuru yawe usanzwe ukoresha' : 'Hitamo icyo ushaka gukora kuri platform'}
+              </p>
+            </div>
+
+            {/* Toggle Provider / Client (Aba ku bw'iyandikisha) */}
+            {authModal === 'register' && (
+              <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
+                <button
+                  onClick={() => setRole('client')}
+                  className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${
+                    role === 'client' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'
+                  }`}
+                >
+                  Nshaka Serivisi
+                </button>
+                <button
+                  onClick={() => setRole('provider')}
+                  className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${
+                    role === 'provider' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'
+                  }`}
+                >
+                  Ndi Umunyamwuga / Fundi
+                </button>
+              </div>
+            )}
+
+            <form onSubmit={(e) => { e.preventDefault(); alert("Agateganyo: Amakuru yawe azajya muri Database muri step ikurikira!"); setAuthModal(null); }} className="space-y-4">
+              {authModal === 'register' && (
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Amasina Yombi</label>
+                  <div className="relative">
+                    <UserCheck className="absolute left-3 top-3 text-slate-400" size={18} />
+                    <input 
+                      type="text" 
+                      required
+                      placeholder="e.g. Eddy Izere" 
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 text-sm"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Email cyangwa Telefone</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-3 text-slate-400" size={18} />
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="example@mail.com / 078..." 
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Ijambo ry'ibanga (Password)</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 text-slate-400" size={18} />
+                  <input 
+                    type="password" 
+                    required
+                    placeholder="••••••••" 
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 text-sm"
+                  />
+                </div>
+              </div>
+
+              <button 
+                type="submit" 
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg transition mt-2"
+              >
+                {authModal === 'login' ? 'Kwinjira' : 'Kwiyandikisha Ubu'}
+              </button>
+            </form>
+
+            <div className="mt-4 text-center">
+              {authModal === 'login' ? (
+                <p className="text-xs text-slate-500">
+                  Nturagira konti?{' '}
+                  <button onClick={() => setAuthModal('register')} className="text-emerald-600 font-bold hover:underline">
+                    Kwiyandikisha hano
+                  </button>
+                </p>
+              ) : (
+                <p className="text-xs text-slate-500">
+                  Ufite konti usanganywe?{' '}
+                  <button onClick={() => setAuthModal('login')} className="text-emerald-600 font-bold hover:underline">
+                    Kwinjira hano
+                  </button>
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
-      <footer id="contact" className="bg-slate-900 text-slate-400 py-12">
+      <footer id="contact" className="bg-slate-900 text-slate-400 py-12 border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-3 gap-8">
           <div>
             <div className="flex items-center space-x-2 text-white font-bold text-xl mb-4">
@@ -182,6 +317,13 @@ export default function App() {
           </div>
         </div>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 pt-8 border-t border-slate-800 text-center text-xs text-slate-500">
+          &copy; {new Date().getFullYear()} AHABONA Platform. All rights reserved.
+        </div>
+      </footer>
+    </div>
+  );
+}
+sm:px-6 lg:px-8 mt-8 pt-8 border-t border-slate-800 text-center text-xs text-slate-500">
           &copy; {new Date().getFullYear()} AHABONA Platform. All rights reserved.
         </div>
       </footer>
