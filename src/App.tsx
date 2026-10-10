@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Search, Users, Briefcase, Award, ShieldCheck, ArrowRight, Menu, X, CheckCircle, Mail, Phone, MapPin } from 'lucide-react';
+import { useState } from 'react';
+import { Search, Briefcase, ShieldCheck, ArrowRight, Menu, X, CheckCircle, Mail, Phone, MapPin } from 'lucide-react';
 
 export default function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -188,4 +188,4 @@ export default function App() {
     </div>
   );
      }
-            
+              
