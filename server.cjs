@@ -14,7 +14,32 @@ const DICT = {
   }
 };
 function t(k){ return DICT[lang][k] || k; }
-      
+function applyLang(){
+  let b = document.getElementById("bLang");
+  if(!b){
+    const brand = document.querySelector(".brand");
+    if(brand){
+      b = document.createElement("button");
+      b.id = "bLang";
+      b.className = "ib";
+      b.style.cssText = "font-weight:700;font-size:13px;";
+      brand.after(b);
+    }
+  }
+  if(b) b.textContent = lang.toUpperCase();
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const k = el.getAttribute('data-i18n');
+    if(DICT[lang] && DICT[lang][k]) el.textContent = DICT[lang][k];
+  });
+                                                                               }
+ document.addEventListener("click", (e) => {
+  if(e.target && e.target.id === "bLang"){
+    lang = lang === 'rw' ? 'en' : 'rw';
+    localStorage.setItem('ahabona_lang', lang);
+    applyLang();
+  }
+});
+    
 const DIST=Object.values(PROV).flat(),provOf=d=>Object.keys(PROV).find(p=>PROV[p].includes(d))||'';
 const TAX={"Mu rugo":["Umukozi wo mu rugo","Umurezi w'abana","Umutetsi","Umukozi w'isuku","Umuzamu","Umurimyi w'ubusitani"],"Ubwikorezi":["Umushoferi","Umumotari","Umunyonzi","Umushoferi w'ikamyo","Umukozi wo gutwara ibicuruzwa"],"Ubwubatsi, amazi n'amashanyarazi":["Umufundi","Umubaji","Umusudira","Umuhanga mu mashanyarazi","Umukozi w'amazi","Umusiga irangi","Umukozi w'amabati","Umukozi w'amatafari n'amabuye"],"Gukanika no gusana":["Umukanishi w'imodoka","Umukanishi wa moto","Umukanishi w'amagare","Usana telefoni","Usana mudasobwa","Usana ibikoresho by'amashanyarazi","Woza imodoka"],"Ubuhinzi n'ubworozi":["Umuhinzi","Umworozi","Umworozi w'amafi","Umuvuzi w'amatungo","Umukozi w'ubuhinzi","Ucuruza ibikomoka ku buhinzi"],"Ubucuruzi":["Umucuruzi","Umukozi w'iduka","Ucuruza imboga n'imbuto","Agent wa mobile money","Ucuruza imyenda","Ucuruza ibikoresho"],"Ubwiza n'imyambaro":["Umudozi","Umuvuzi w'imisatsi","Umwogoshi","Ukora ubwiza (make-up)","Ukora inkweto","Ukora imitako"],"Uburezi n'ubuzima":["Umwarimu","Umwarimu w'abana","Umuforomo","Umuganga","Umujyanama w'ubuzima","Uhugura abantu"],"Ikoranabuhanga n'ibiro":["Umukozi w'ibiro","Umucungamari","Ukora porogaramu","Ukora imbuga za interineti","Ukora ibishushanyo","Umusemuzi","Ukora ubutumwa kuri social media"],"Ubukerarugendo n'amahoteri":["Uyobora ba mukerarugendo","Umukozi wa hoteli","Umukozi wa resitora","Utegura ibirori","Umucungamutungo w'amacumbi"],"Ubuhanzi n'imyidagaduro":["Umuririmbyi","Umubyinnyi","Umushushanya","Umufotozi","Ufata amashusho","DJ","Umushyushyarugamba (MC)"]};
 const ALIAS={"Umushoferi":["gutwara imodoka","utwara imodoka","umuntu utwara imodoka","shoferi","driver","chauffeur"],"Umukozi wo mu rugo":["gukora mu rugo","isuku mu rugo","umukozi w'urugo","maid","house help","domestic worker"],"Umukozi w'isuku":["cleaner","cleaning"],"Umubaji":["gukora ameza","gukora inzugi","carpenter","woodwork"],"Umufundi":["kubaka","umwubatsi","mason","builder"],"Umudozi":["gudoda","imyenda","tailor","seamstress"],"Umumotari":["moto","gutwara moto","motorcycle taxi"],"Umucuruzi":["gucuruza","iduka","ubucuruzi","trader","shopkeeper"],"Umutetsi":["guteka","cook","chef"],"Umukanishi w'imodoka":["gukanika","gusana imodoka","mechanic","garage","car mechanic"],"Umukanishi wa moto":["gukanika moto","mechanic","motorcycle mechanic"],"Umuhinzi":["guhinga","ubuhinzi","farmer"],"Woza imodoka":["kunyoza imodoka","kwoza imodoka","kogesha imodoka","umuntu woza imodoka","umuntu ushobora kunyoza imodoka","car washing","car wash","wash car"],"Umusudira":["gusudira","welder","welding"],"Umwarimu":["kwigisha","teacher","tutor"],"Umuvuzi w'imisatsi":["gusuka","hairdresser","salon"],"Umwogoshi":["kogosha","barber"],"Umuforomo":["nurse"],"Umuganga":["doctor"],"Umufotozi":["gufotora","photographer"],"Umusemuzi":["translator","interpreter"],"Umuzamu":["security guard","guard"],"Umukozi w'amazi":["plumber","plumbing"],"Umuhanga mu mashanyarazi":["electrician","amashanyarazi"],"Umusiga irangi":["painter","irangi"]};
