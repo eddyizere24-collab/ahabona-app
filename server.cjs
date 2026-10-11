@@ -4,7 +4,8 @@ const EMBED={"index.html": "<!doctype html>\n<html lang=\"rw\"><head><meta chars
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const {DatabaseSync}=require('node:sqlite');
 const PROV={"Umujyi wa Kigali":["Gasabo","Kicukiro","Nyarugenge"],"Amajyepfo":["Gisagara","Huye","Kamonyi","Muhanga","Nyamagabe","Nyanza","Nyaruguru","Ruhango"],"Amajyaruguru":["Burera","Gakenke","Gicumbi","Musanze","Rulindo"],"Iburasirazuba":["Bugesera","Gatsibo","Kayonza","Kirehe","Ngoma","Nyagatare","Rwamagana"],"Iburengerazuba":["Karongi","Ngororero","Nyabihu","Nyamasheke","Rubavu","Rusizi","Rutsiro"]};
-let lang = localStorage.getItem('ahabona_lang') || (navigator.language && navigator.language.toLowerCase().startsWith('rw') ? 'rw' : 'en');
+let lang = 'rw';
+
 const DICT = {
   rw: {
     reg: "Iyandikishe", profile: "Umwirondoro", login: "Injira", logout: "Sohoka", home: "Ahabanza", about: "Ibyerekeye AHABONA", help: "Ubufasha", saved: "Abantu wabitse", more: "Erekana abandi", qph: "Shaka uwo ukeneye"
