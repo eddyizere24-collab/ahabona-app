@@ -387,7 +387,11 @@ async function main() {
     const updatedProfile = JSON.parse(profileUpdateText).profile;
     assert.equal(updatedProfile.name, 'CI Updated Member');
     assert.equal(updatedProfile.phone_visible, false, 'member should be able to change phone visibility in profile settings');
-    assert.equal(updatedProfile.phone, '', 'hidden phone should not be returned as public contact on profile response');
+    assert.equal(updatedProfile.phone, '0781234567', 'the profile owner should still be able to see their own phone number');
+    const publicHiddenResponse = await fetch(base + '/api/profile/' + registrationResult.profile.pid);
+    assert.equal(publicHiddenResponse.status, 200, 'public profile endpoint should remain accessible');
+    const publicHiddenProfile = (await publicHiddenResponse.json()).profile;
+    assert.equal(publicHiddenProfile.phone, '', 'a hidden phone number must not be exposed publicly');
 
     const revealPayload = Object.assign({}, editPayload, { phone_visible: true, name: 'CI Updated Member' });
     const revealResponse = await putJson(base, '/api/me', revealPayload, memberCookie);
