@@ -1745,9 +1745,12 @@ function openForgot(){
 }
 async function doForgot(){
   var fe=document.getElementById('fe');if(!fe)return;
-  await api('POST','/api/password/forgot',{email:fe.value.trim()});
+  var _r=await api('POST','/api/password/forgot',{email:fe.value.trim()});
   var fm=document.getElementById('fm');
-  if(fm)fm.textContent=t('forgot.sent');
+  if(fm){
+    if(_r&&_r.data&&_r.data.has_existing)fm.textContent=t('forgot.already_sent');
+    else fm.textContent=t('forgot.sent');
+  }
 }
 
 function openReset(token){
