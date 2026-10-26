@@ -1,7 +1,7 @@
 /* AHABONA Service Worker v2 */
-const SHELL='ahabona-shell-v6';
-const DATA='ahabona-data-v6';
-const PHOTOS='ahabona-photos-v6';
+const SHELL='ahabona-shell-v9';
+const DATA='ahabona-data-v9';
+const PHOTOS='ahabona-photos-v9';
 const SHELL_URLS=['/','/manifest.webmanifest','/icon.svg','/splash.js'];
 const DATA_LIMIT=60;
 const PHOTO_LIMIT=120;
