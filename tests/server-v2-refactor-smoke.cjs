@@ -159,9 +159,10 @@ async function main() {
 
     // Changed assets intentionally include bug fixes and new language controls.
     const changedAssetChecks = [
-      ['/app.js', ["rgSet('phone_visible',!!el.checked)", "reg.service.max", "function setLang"]],
+      ['/app.js', ["rgSet('phone_visible',!!el.checked)", "reg.service.max", "function setLang", "phone_visible:4", "displayProv(p)", "Mu mpera z’icyumweru"]],
+      ['/', ['name="viewport"', '@media(min-width:640px)', '@media(min-width:900px)', 'id="bReg"']],
       ['/admin', ['data-admin-lang="rw"', 'data-admin-lang="en"']],
-      ['/admin.html', ['data-admin-lang="rw"', 'data-admin-lang="en"']],
+      ['/admin.html', ['name="viewport"', '@media(max-width:800px)', 'data-admin-lang="rw"', 'data-admin-lang="en"']],
       ['/admin.js', ['ADMIN_EN', 'function setAdminLanguage', 'setupAdminLanguage']],
       ['/terms', ['id="rwContent"', 'id="enContent"', 'AHABONA Terms of Use']],
       ['/terms.html', ['id="rwContent"', 'id="enContent"', 'AHABONA Terms of Use']],
