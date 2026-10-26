@@ -2173,6 +2173,388 @@ function adminStats(ctx,req,res){
   sendJson(req,res,200,{top_searches:top,by_district:byDistrict});
 }
 
+
+/* Request dispatch and staff routes restored from the active server copy; kept in this entry file. */
+var Q, caps, capName, store, deviceOf;
+
+function handleRequest(ctx,req,res){
+  securityHeaders(res,ctx.secure);
+  var url;
+  try{url=new URL(req.url,'http://localhost')}
+  catch(e){return sendError(req,res,400,'err.server')}
+  var p;
+  try{p=decodeURIComponent(url.pathname)}
+  catch(e){return sendError(req,res,400,'err.server')}
+  var ip=ctx.ipOf(req)||'unknown';
+  if(!ctx.rate.allow('g:'+ip,600,60000))return sendError(req,res,429,'err.rate');
+  if(p==='/icon.svg'){
+    var svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="34" fill="#1a9b6c"/><g stroke="#d4a838" stroke-width="6" stroke-linecap="round"><line x1="96" y1="42" x2="96" y2="20"/><line x1="120" y1="48" x2="135" y2="30"/><line x1="138" y1="72" x2="158" y2="62"/><line x1="142" y1="96" x2="164" y2="96"/><line x1="138" y1="120" x2="158" y2="130"/><line x1="120" y1="144" x2="135" y2="162"/><line x1="72" y1="144" x2="57" y2="162"/><line x1="54" y1="120" x2="34" y2="130"/><line x1="50" y1="96" x2="28" y2="96"/><line x1="54" y1="72" x2="34" y2="62"/><line x1="72" y1="48" x2="57" y2="30"/></g><circle cx="96" cy="96" r="40" fill="#d4a838"/><text x="96" y="164" text-anchor="middle" fill="#fff" font-family="system-ui,sans-serif" font-size="22" font-weight="800">AHABONA</text></svg>';
+    var buf=Buffer.from(svg,'utf8');
+    res.writeHead(200,{'Content-Type':'image/svg+xml','Cache-Control':'public, max-age=86400','Content-Length':buf.length});
+    return res.end(buf);
+  }
+  if(p==='/sw.js'){
+    var sw=EMBED['sw.js']||'';
+    var swb=Buffer.from(sw,'utf8');
+    res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-cache','Service-Worker-Allowed':'/','Content-Length':swb.length});
+    return res.end(swb);
+  }
+  if(p==='/manifest.webmanifest'){
+    var manifest={
+      name:'AHABONA',
+      short_name:'AHABONA',
+      description:'Menya abantu. Menya amahirwe.',
+      start_url:'/',
+      scope:'/',
+      display:'standalone',
+      orientation:'portrait',
+      theme_color:'#1a9b6c',
+      background_color:'#faf7ef',
+      lang:'rw',
+      icons:[
+        {src:'/icon.svg',sizes:'any',type:'image/svg+xml',purpose:'any'},
+        {src:'/icon.svg',sizes:'any',type:'image/svg+xml',purpose:'maskable'}
+      ]
+    };
+    var mb=Buffer.from(JSON.stringify(manifest),'utf8');
+    res.writeHead(200,{'Content-Type':'application/manifest+json; charset=utf-8','Cache-Control':'public, max-age=3600','Content-Length':mb.length});
+    return res.end(mb);
+  }
+  if(p.startsWith('/photos/')){
+    var f=p.slice(8);
+    if(!/^[a-z0-9]+-(?:[0-5]|t)\.jpg$/.test(f))return sendError(req,res,404,'err.notfound');
+    var b=ctx.store.read(f);
+    if(!b)return sendError(req,res,404,'err.notfound');
+    return sendBinary(req,res,200,b,'image/jpeg','public, max-age=86400, immutable');
+  }
+  if(p.startsWith('/media/')){
+    var mf=p.slice(7);
+    var mm=/^strip-(\d+)\.(mp4|webm|avi|jpg|png|webp)$/.exec(mf);
+    if(!mm||!ctx.mediaStore)return sendError(req,res,404,'err.notfound');
+    var mtype=mm[2]==='mp4'?'video/mp4':(mm[2]==='webm'?'video/webm':(mm[2]==='avi'?'video/x-msvideo':(mm[2]==='jpg'?'image/jpeg':(mm[2]==='png'?'image/png':'image/webp'))));
+    var mcache=url.searchParams.has('v')?'public, max-age=604800':'public, max-age=3600';
+    return sendMediaFile(req,res,ctx.mediaStore.pathOf(mf),mtype,mcache);
+  }
+  if(p.startsWith('/api/'))return handleApi(ctx,req,res,url,p);
+  var key='';
+  // Normalize: strip a single trailing slash (but keep "/" itself)
+  if(p.length>1&&p.endsWith('/'))p=p.slice(0,-1);
+  if(p==='/')key='index.html';
+  else if(p==='/admin')key='admin.html';
+  else if(p==='/terms')key='terms.html';
+  else if(p==='/privacy')key='privacy.html';
+  else if(p==='/help')key='index.html';
+  else if(/^\/u\/[a-z0-9-]+$/.test(p))key='index.html';
+  else if(/^\/reset\/[A-Za-z0-9_-]+$/.test(p))key='index.html';
+  else if(p==='/saved')key='index.html';
+  else if(p==='/about')key='index.html';
+  else if(Object.prototype.hasOwnProperty.call(EMBED,p.slice(1)))key=p.slice(1);
+  else{
+    var name=p.slice(1);
+    if(!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)||name.indexOf('..')!==-1)return sendError(req,res,404,'err.notfound');
+    var fp=path.join(ctx.pubDir,name);
+    try{
+      var b2=fs.readFileSync(fp);
+      var ext2=path.extname(name).toLowerCase();
+      var mime2=({
+        '.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8',
+        '.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8',
+        '.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg',
+        '.jpeg':'image/jpeg','.ico':'image/x-icon','.webmanifest':'application/manifest+json; charset=utf-8',
+        '.woff2':'font/woff2','.txt':'text/plain; charset=utf-8'
+      })[ext2]||'application/octet-stream';
+      return sendBinary(req,res,200,b2,mime2,'public, max-age=3600');
+    }catch(e){
+      return sendError(req,res,404,'err.notfound');
+    }
+  }
+  var body=EMBED[key];
+  if(body===undefined)return sendError(req,res,404,'err.notfound');
+  var ext=path.extname(key)||'.html';
+  var type=({
+    '.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8',
+    '.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8'
+  })[ext]||'text/html; charset=utf-8';
+  var cc=ext==='.html'?'public, max-age=60':(ext==='.js'?'no-cache':'public, max-age=3600');
+  return sendText(req,res,200,body,type,{cache:cc});
+}
+
+async function handleApi(ctx,req,res,url,p){
+  var m=req.method;
+  if(p==='/api/health')return apiHealth(req,res);
+  if(p==='/api/config'&&(m==='GET'||m==='HEAD'))return apiConfig(ctx,req,res);
+  if(p==='/api/strip'&&(m==='GET'||m==='HEAD'))return apiStrip(ctx,req,res);
+  if(p==='/api/profiles'&&(m==='GET'||m==='HEAD'))return apiProfiles(ctx,req,res,url);
+  var mt;
+  if((mt=p.match(/^\/api\/profile\/([a-z0-9-]+)$/))&&(m==='GET'||m==='HEAD'))return apiProfile(ctx,req,res,mt[1]);
+  if(p==='/api/events'&&m==='POST')return apiEvents(ctx,req,res);
+  if(p==='/api/help/ask'&&m==='POST')return apiHelpAsk(ctx,req,res);
+  if(p==='/api/help/contact'&&m==='POST')return apiHelpContact(ctx,req,res);
+  if(p==='/api/report'&&m==='POST')return apiReport(ctx,req,res);
+  if(p==='/api/register'&&m==='POST')return apiRegister(ctx,req,res);
+  if(p==='/api/login'&&m==='POST')return apiLogin(ctx,req,res);
+  if(p==='/api/logout'&&m==='POST')return apiLogout(ctx,req,res);
+  if(p==='/api/me/logout-all'&&m==='POST')return apiLogoutAll(ctx,req,res);
+  if(p==='/api/me/notifications'&&m==='GET')return apiNotificationsList(ctx,req,res);
+  if(p==='/api/me/notifications/read-all'&&m==='POST')return apiNotificationsReadAll(ctx,req,res);
+  if(p==='/api/me/lang'&&m==='PUT')return apiMeLang(ctx,req,res);
+  if(p==='/api/me/verify-email'&&m==='POST')return apiVerifyEmailRequest(ctx,req,res);
+  if(p==='/api/me/verify-phone'&&m==='POST')return apiVerifyPhoneRequest(ctx,req,res);
+  if(p==='/api/me/verify-phone/confirm'&&m==='POST')return apiVerifyPhoneConfirm(ctx,req,res);
+  var vt;
+  if((vt=p.match(/^\/api\/verify-email\/([A-Za-z0-9_-]+)$/))&&(m==='GET'||m==='HEAD'))return apiVerifyEmailToken(ctx,req,res,vt[1]);
+  if(p==='/api/me'&&m==='GET')return apiMeGet(ctx,req,res);
+  if(p==='/api/me'&&m==='PUT')return apiMePut(ctx,req,res);
+  if(p==='/api/me/password'&&m==='POST')return apiMePassword(ctx,req,res);
+  if(p==='/api/me/delete'&&m==='POST')return apiMeDelete(ctx,req,res);
+  if(p==='/api/me/restore'&&m==='POST')return apiMeRestore(ctx,req,res);
+  if(p==='/api/password/forgot'&&m==='POST')return apiPasswordForgot(ctx,req,res);
+  if(p==='/api/password/reset'&&m==='POST')return apiPasswordReset(ctx,req,res);
+  if(p==='/api/saved'&&m==='GET')return apiSavedList(ctx,req,res);
+  if((mt=p.match(/^\/api\/saved\/([a-z0-9]+)$/))&&(m==='PUT'||m==='DELETE'))return apiSavedToggle(ctx,req,res,mt[1],m);
+  if(p==='/api/messages'&&m==='POST')return apiUserMessage(ctx,req,res);
+  if(p==='/api/messages'&&m==='GET')return apiMessagesList(ctx,req,res);
+  var u=ctx.sessionUser(req);
+  if(p.indexOf('/api/admin/')===0){
+    if(!u)return sendError(req,res,401,'err.auth');
+    if(!ctx.isAdmin(u))return sendError(req,res,403,'err.forbidden');
+    var ar=adminRoute(ctx,req,res,p,m,u);
+    if(ar!==NOROUTE)return ar;
+  }
+  return sendError(req,res,404,'err.notfound');
+}
+
+const NOROUTE={};
+const ADMIN_ROUTES=[
+  ['GET','/api/admin/summary','dash.view',function(ctx,req,res,mt,u){return adminSummary(ctx,req,res)}],
+  ['GET','/api/admin/users','users.view',function(ctx,req,res,mt,u){return adminUsers(ctx,req,res,u)}],
+  ['POST','/api/admin/broadcast','broadcast.send',function(ctx,req,res,mt,u){return adminBroadcast(ctx,req,res,u)}],
+  ['GET','/api/admin/reports','reports.handle',function(ctx,req,res,mt,u){return adminReports(ctx,req,res)}],
+  ['GET','/api/admin/requests','requests.handle',function(ctx,req,res,mt,u){return adminRequests(ctx,req,res)}],
+  ['GET','/api/admin/audit','audit.view',function(ctx,req,res,mt,u){return adminAudit(ctx,req,res)}],
+  ['GET','/api/admin/logs','audit.view',function(ctx,req,res,mt,u){return adminLogs(ctx,req,res)}],
+  ['GET','/api/admin/messages','content.edit',function(ctx,req,res,mt,u){return adminMessages(ctx,req,res)}],
+  ['GET','/api/admin/settings','settings.edit',function(ctx,req,res,mt,u){return adminSettings(ctx,req,res)}],
+  ['POST','/api/admin/settings','settings.edit',function(ctx,req,res,mt,u){return adminSettingsUpdate(ctx,req,res,u)}],
+  ['POST','/api/admin/features','settings.edit',function(ctx,req,res,mt,u){return adminFeatureToggle(ctx,req,res,u)}],
+  ['GET','/api/admin/strip','content.edit',function(ctx,req,res,mt,u){return adminStripList(ctx,req,res)}],
+  ['POST','/api/admin/strip','content.edit',function(ctx,req,res,mt,u){return adminStripAdd(ctx,req,res,u)}],
+  ['GET','/api/admin/caps','catalog.edit',function(ctx,req,res,mt,u){return adminCapsList(ctx,req,res)}],
+  ['POST','/api/admin/caps','catalog.edit',function(ctx,req,res,mt,u){return adminCapsAdd(ctx,req,res,u)}],
+  ['GET','/api/admin/cats','catalog.edit',function(ctx,req,res,mt,u){return adminCategoriesList(ctx,req,res)}],
+  ['POST','/api/admin/cats','catalog.edit',function(ctx,req,res,mt,u){return adminCategoriesAdd(ctx,req,res,u)}],
+  ['GET','/api/admin/faq','content.edit',function(ctx,req,res,mt,u){return adminFaqList(ctx,req,res)}],
+  ['POST','/api/admin/faq','content.edit',function(ctx,req,res,mt,u){return adminFaqAdd(ctx,req,res,u)}],
+  ['GET','/api/admin/stats','dash.view',function(ctx,req,res,mt,u){return adminStats(ctx,req,res)}],
+  ['GET',/^\/api\/admin\/users\/(\d+)$/,'users.view',function(ctx,req,res,mt,u){return adminUserGet(ctx,req,res,+mt[1],u)}],
+  ['PUT',/^\/api\/admin\/users\/(\d+)$/,'users.edit',function(ctx,req,res,mt,u){return adminUserPut(ctx,req,res,+mt[1],u)}],
+  ['DELETE',/^\/api\/admin\/users\/(\d+)$/,'users.delete',function(ctx,req,res,mt,u){return adminUserDelete(ctx,req,res,+mt[1],u)}],
+  ['POST',/^\/api\/admin\/users\/(\d+)\/message$/,'users.message',function(ctx,req,res,mt,u){return adminUserMessage(ctx,req,res,+mt[1],u)}],
+  ['POST',/^\/api\/admin\/users\/(\d+)\/reset-password$/,'users.edit',function(ctx,req,res,mt,u){return adminUserResetPw(ctx,req,res,+mt[1],u)}],
+  ['POST',/^\/api\/admin\/reports\/(\d+)$/,'reports.handle',function(ctx,req,res,mt,u){return adminReportUpdate(ctx,req,res,+mt[1],u)}],
+  ['POST',/^\/api\/admin\/requests\/(\d+)$/,'requests.handle',function(ctx,req,res,mt,u){return adminRequestDecide(ctx,req,res,+mt[1],u)}],
+  ['POST',/^\/api\/admin\/profiles\/([a-z0-9]+)$/,'profiles.moderate',function(ctx,req,res,mt,u){return adminProfileSuspend(ctx,req,res,mt[1],u)}],
+  ['PUT',/^\/api\/admin\/messages\/(\d+)$/,'content.edit',function(ctx,req,res,mt,u){return adminMessageUpdate(ctx,req,res,+mt[1],u)}],
+  ['PUT',/^\/api\/admin\/strip\/(\d+)$/,'content.edit',function(ctx,req,res,mt,u){return adminStripUpdate(ctx,req,res,+mt[1],u)}],
+  ['DELETE',/^\/api\/admin\/strip\/(\d+)$/,'content.edit',function(ctx,req,res,mt,u){return adminStripDelete(ctx,req,res,+mt[1],u)}],
+  ['POST',/^\/api\/admin\/strip\/(\d+)\/video$/,'content.edit',function(ctx,req,res,mt,u){return adminStripVideoUpload(ctx,req,res,+mt[1],u)}],
+  ['POST',/^\/api\/admin\/strip\/(\d+)\/image$/,'content.edit',function(ctx,req,res,mt,u){return adminStripImageUpload(ctx,req,res,+mt[1],u)}],
+  ['PUT',/^\/api\/admin\/caps\/(\d+)$/,'catalog.edit',function(ctx,req,res,mt,u){return adminCapsUpdate(ctx,req,res,+mt[1],u)}],
+  ['DELETE',/^\/api\/admin\/caps\/(\d+)$/,'catalog.edit',function(ctx,req,res,mt,u){return adminCapsDelete(ctx,req,res,+mt[1],u)}],
+  ['PUT',/^\/api\/admin\/faq\/(\d+)$/,'content.edit',function(ctx,req,res,mt,u){return adminFaqUpdate(ctx,req,res,+mt[1],u)}],
+  ['DELETE',/^\/api\/admin\/faq\/(\d+)$/,'content.edit',function(ctx,req,res,mt,u){return adminFaqDelete(ctx,req,res,+mt[1],u)}],
+  ['GET','/api/admin/perms',null,function(ctx,req,res,mt,u){return adminPerms(ctx,req,res,u)}],
+  ['GET','/api/admin/staff','staff.manage',function(ctx,req,res,mt,u){return adminStaffList(ctx,req,res,u)}],
+  ['POST','/api/admin/staff','staff.manage',function(ctx,req,res,mt,u){return adminStaffCreate(ctx,req,res,u)}],
+  ['PUT',/^\/api\/admin\/staff\/(\d+)$/,'staff.manage',function(ctx,req,res,mt,u){return adminStaffUpdate(ctx,req,res,+mt[1],u)}],
+  ['DELETE',/^\/api\/admin\/staff\/(\d+)$/,'staff.manage',function(ctx,req,res,mt,u){return adminStaffDelete(ctx,req,res,+mt[1],u)}],
+  ['POST',/^\/api\/admin\/staff\/(\d+)\/invite$/,'staff.manage',function(ctx,req,res,mt,u){return adminStaffInvite(ctx,req,res,+mt[1],u)}]
+];
+function adminRoute(ctx,req,res,p,m,u){
+  for(let i=0;i<ADMIN_ROUTES.length;i++){
+    const r=ADMIN_ROUTES[i];
+    if(r[0]!==m)continue;
+    let mt=null;
+    if(typeof r[1]==='string'){if(p===r[1])mt=[p]}else mt=p.match(r[1]);
+    if(!mt)continue;
+    if(r[2]&&!ctx.can(u,r[2]))return sendError(req,res,403,'err.forbidden');
+    return r[3](ctx,req,res,mt,u);
+  }
+  return NOROUTE;
+}
+
+function staffMayAssign(actor,role){
+  if(staffLevel(actor)==='super')return true;
+  return rankOfLevel(role)<rankOfLevel(staffLevel(actor));
+}
+function staffMayManage(actor,level){
+  if(staffLevel(actor)==='super')return true;
+  return rankOfLevel(level)<rankOfLevel(staffLevel(actor));
+}
+function cleanPermsInput(actor,role,d){
+  if(role==='super')return null;
+  const base=new Set(ROLE_PERMS[role]||[]);
+  const mine=new Set(permsOf(actor));
+  const add=[],remove=[];
+  (Array.isArray(d.add)?d.add:[]).forEach(x=>{if(isPerm(x)&&!base.has(x)&&mine.has(x)&&!add.includes(x))add.push(x)});
+  (Array.isArray(d.remove)?d.remove:[]).forEach(x=>{if(isPerm(x)&&base.has(x)&&!remove.includes(x))remove.push(x)});
+  return(add.length||remove.length)?JSON.stringify({add:add,remove:remove}):null;
+}
+function parsePermsJson(t){
+  try{const o=JSON.parse(t.perms||'{}')||{};return{add:Array.isArray(o.add)?o.add:[],remove:Array.isArray(o.remove)?o.remove:[]}}catch(e){return{add:[],remove:[]}}
+}
+function makeInviteLink(req,userId){
+  const base=trustedBaseUrl();
+  if(!base)return null;
+  const tok=crypto.randomBytes(32).toString('base64url');
+  Q('DELETE FROM resets WHERE user_id=?').run(userId);
+  Q('INSERT INTO resets(th,user_id,expires) VALUES(?,?,?)').run(sha(tok),userId,Date.now()+3*24*HOUR);
+  return base+'/reset/'+tok;
+}
+function staffRow(t){
+  const lv=staffLevelRaw(t);
+  return{id:t.id,name:t.display_name||t.name||t.email,email:t.email,phone:t.phone,level:lv,status:t.status,perms:parsePermsJson(t),effective:permsFor(t),has_profile:!!t.pid,created_at:t.created_at};
+}
+function adminPerms(ctx,req,res,actor){
+  sendJson(req,res,200,{perms:permsCatalog(),roles:rolesCatalog(),mine:permsOf(actor),level:staffLevel(actor)});
+}
+function adminStaffList(ctx,req,res,actor){
+  const rows=ctx.Q("SELECT u.id,u.email,u.phone,u.status,u.role,u.role_level,u.perms,u.display_name,u.created_at,p.pid,p.name FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.role_level IN ('super','admin','mod','editor','viewer') OR u.role='admin' ORDER BY u.id").all();
+  sendJson(req,res,200,{staff:rows.map(staffRow),perms:permsCatalog(),roles:rolesCatalog(),me:{id:actor.id,level:staffLevel(actor),mine:permsOf(actor)}});
+}
+async function adminStaffCreate(ctx,req,res,actor){
+  const b=await readBody(req,8192);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const d=b.data||{};
+  const name=clean(d.name,80);
+  const email=clean(d.email,254).toLowerCase();
+  const phone=np(String(d.phone||''));
+  const role=STAFF_LEVELS.includes(d.role)?d.role:null;
+  if(name.length<2)return sendError(req,res,400,'reg.err.name','name');
+  if(!EM.test(email))return sendError(req,res,400,'reg.err.email','email');
+  if(!MP.test(phone))return sendError(req,res,400,'reg.err.phone','phone');
+  if(!role)return sendError(req,res,400,'common.required','role');
+  if(!staffMayAssign(actor,role))return sendError(req,res,403,'staff.err.rank');
+  const perms=cleanPermsInput(actor,role,d);
+  const us=ctx.Q('SELECT * FROM users WHERE email=?').get(email);
+  let id=0,promoted=false;
+  if(us){
+    if(us.status!=='active')return sendError(req,res,409,'reg.err.email','email');
+    if(staffLevelRaw(us))return sendError(req,res,409,'staff.err.exists');
+    if(us.phone!==phone)return sendError(req,res,409,'reg.err.phone','phone');
+    ctx.Q('UPDATE users SET role=?,role_level=?,perms=?,display_name=? WHERE id=?').run('admin',role,perms,name,us.id);
+    id=us.id;promoted=true;
+  }else{
+    if(ctx.Q('SELECT 1 FROM users WHERE phone=?').get(phone))return sendError(req,res,409,'reg.err.phone','phone');
+    const pw=await hashPw(crypto.randomBytes(24).toString('hex'));
+    try{
+      const r=ctx.Q('INSERT INTO users(email,phone,pw,role,role_level,perms,display_name,terms_at,created_at) VALUES(?,?,?,?,?,?,?,?,?)').run(email,phone,pw,'admin',role,perms,name,Date.now(),Date.now());
+      id=Number(r.lastInsertRowid);
+    }catch(e){return sendError(req,res,409,'reg.err.email','email')}
+  }
+  let invite=null;
+  if(!promoted){
+    invite=makeInviteLink(req,id);
+    if(invite&&ctx.mailer.isLive){
+      try{await ctx.mailer.send(email,'AHABONA: ubutumire bw\'ubuyobozi','Wahawe uburenganzira bwo gufasha kuyobora AHABONA. Kanda hano ushyireho ijambobanga ryawe (rimara iminsi 3): '+invite)}catch(e){}
+    }
+  }
+  ctx.adminLog(actor.id,'staff.create','user',String(id),JSON.stringify({role:role,promoted:promoted}),ctx.ipOf(req));
+  sendJson(req,res,201,{ok:true,id:id,promoted:promoted,invite:invite});
+}
+async function adminStaffUpdate(ctx,req,res,id,actor){
+  const b=await readBody(req,8192);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const d=b.data||{};
+  const t=ctx.Q('SELECT * FROM users WHERE id=?').get(id);
+  if(!t||!staffLevelRaw(t))return sendError(req,res,404,'err.notfound');
+  const curLv=staffLevelRaw(t);
+  const isSelf=t.id===actor.id;
+  if(isSelf&&(d.role!==undefined||d.status!==undefined||d.add!==undefined||d.remove!==undefined))return sendError(req,res,403,'staff.err.self');
+  if(!isSelf&&!staffMayManage(actor,curLv))return sendError(req,res,403,'staff.err.rank');
+  let role=curLv;
+  if(d.role!==undefined){
+    if(!STAFF_LEVELS.includes(d.role))return sendError(req,res,400,'common.required','role');
+    role=d.role;
+    if(role!==curLv&&!staffMayAssign(actor,role))return sendError(req,res,403,'staff.err.rank');
+  }
+  let status=t.status;
+  if(d.status!==undefined){
+    if(!['active','suspended'].includes(d.status))return sendError(req,res,400,'common.required','status');
+    status=d.status;
+  }
+  let perms=t.perms||null;
+  if(d.add!==undefined||d.remove!==undefined){
+    const cur=parsePermsJson(t);
+    perms=cleanPermsInput(actor,role,{add:d.add!==undefined?d.add:cur.add,remove:d.remove!==undefined?d.remove:cur.remove});
+  }else if(role!==curLv){
+    perms=null;
+  }
+  if(curLv==='super'&&(role!=='super'||status!=='active')){
+    const n=ctx.Q("SELECT COUNT(*) n FROM users WHERE role_level='super' AND status='active' AND id<>?").get(t.id).n;
+    if(n<1)return sendError(req,res,400,'staff.err.lastsuper');
+  }
+  const name=d.name!==undefined?clean(d.name,80):t.display_name;
+  ctx.Q('UPDATE users SET role=?,role_level=?,perms=?,status=?,display_name=? WHERE id=?').run('admin',role,perms,status,name||null,t.id);
+  if(status!=='active')ctx.Q('DELETE FROM sessions WHERE user_id=?').run(t.id);
+  ctx.adminLog(actor.id,'staff.update','user',String(t.id),JSON.stringify({role:role,status:status}),ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true});
+}
+function adminStaffDelete(ctx,req,res,id,actor){
+  const t=ctx.Q('SELECT * FROM users WHERE id=?').get(id);
+  if(!t||!staffLevelRaw(t))return sendError(req,res,404,'err.notfound');
+  if(t.id===actor.id)return sendError(req,res,403,'staff.err.self');
+  const curLv=staffLevelRaw(t);
+  if(!staffMayManage(actor,curLv))return sendError(req,res,403,'staff.err.rank');
+  if(curLv==='super'){
+    const n=ctx.Q("SELECT COUNT(*) n FROM users WHERE role_level='super' AND status='active' AND id<>?").get(t.id).n;
+    if(n<1)return sendError(req,res,400,'staff.err.lastsuper');
+  }
+  const hasProfile=ctx.Q('SELECT 1 FROM profiles WHERE user_id=?').get(t.id);
+  if(hasProfile){
+    ctx.Q("UPDATE users SET role='user',role_level='user',perms=NULL,display_name=NULL WHERE id=?").run(t.id);
+    ctx.Q('DELETE FROM sessions WHERE user_id=?').run(t.id);
+  }else{
+    try{deleteUserData(t.id)}catch(e){return sendError(req,res,500,'err.server')}
+  }
+  ctx.adminLog(actor.id,'staff.remove','user',String(t.id),null,ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true});
+}
+
+async function adminUserResetPw(ctx,req,res,id,admin){
+  const t=ctx.Q('SELECT * FROM users WHERE id=?').get(id);
+  if(!t)return sendError(req,res,404,'err.notfound');
+  const tLv=staffLevelRaw(t);
+  if(tLv&&t.id!==admin.id&&!(ctx.can(admin,'staff.manage')&&staffMayManage(admin,tLv)))return sendError(req,res,403,'staff.err.rank');
+  // 1-hour password-reset token (not the 3-day staff invite)
+  const base=trustedBaseUrl();
+  if(!base)return sendError(req,res,503,'err.server');
+  const tok=crypto.randomBytes(32).toString('base64url');
+  ctx.Q('DELETE FROM resets WHERE user_id=?').run(t.id);
+  ctx.Q('INSERT INTO resets(th,user_id,expires) VALUES(?,?,?)').run(sha(tok),t.id,Date.now()+HOUR);
+  const link=base+'/reset/'+tok;
+  if(ctx.mailer.isLive||ctx.mailer.isDev){
+    try{await ctx.mailer.send(t.email,'AHABONA: reset password','Link (1 hour): '+link)}catch(e){}
+  }
+  ctx.adminLog(admin.id,'user.resetpw','user',String(id),null,ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true,link:link});
+}
+async function adminStaffInvite(ctx,req,res,id,actor){
+  const t=ctx.Q('SELECT * FROM users WHERE id=?').get(id);
+  if(!t||!staffLevelRaw(t))return sendError(req,res,404,'err.notfound');
+  if(t.id!==actor.id&&!staffMayManage(actor,staffLevelRaw(t)))return sendError(req,res,403,'staff.err.rank');
+  if(t.status!=='active')return sendError(req,res,409,'err.forbidden');
+  const invite=makeInviteLink(req,t.id);
+  if(!invite)return sendError(req,res,503,'err.server');
+  if(ctx.mailer.isLive){
+    try{await ctx.mailer.send(t.email,'AHABONA: shyiraho ijambobanga','Kanda hano ushyireho ijambobanga rishya (rimara iminsi 3): '+invite)}catch(e){}
+  }
+  ctx.adminLog(actor.id,'staff.invite','user',String(t.id),null,ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true,invite:invite});
+}
+
+/* ===== END OF IGICE 18/19 ===== */
+
 /* Static web assets are maintained separately under server-v2-modules/assets/. */
 
 
