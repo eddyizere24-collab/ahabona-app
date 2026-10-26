@@ -57,6 +57,7 @@ async function postJson(base, route, body, cookie) {
 
 async function main() {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ahabona-modular-test-'));
+  const baselineDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ahabona-baseline-test-'));
   const mailRequests = [];
   const mailRelay = http.createServer((req, res) => {
     const chunks = [];
@@ -80,6 +81,7 @@ async function main() {
 
   let legacyApp = null;
   let app = null;
+  let baselineApp = null;
 
   try {
     const relayPort = await listen(mailRelay);
@@ -127,11 +129,28 @@ async function main() {
     const port = await app.listen(0);
     const base = 'http://127.0.0.1:' + port;
 
-    for (const route of ['/', '/app.js', '/admin', '/admin.js', '/terms', '/privacy', '/splash.js', '/sw.js']) {
-      const response = await fetch(base + route);
-      const text = await response.text();
-      assert.equal(response.status, 200, 'asset route should work: ' + route + '; body=' + text.slice(0, 160));
-      assert.ok(text.length > 0, 'asset should not be empty: ' + route);
+    // Compare every extracted embedded asset against the still-unmodified server.
+    baselineApp = legacyServer.start({ dataDir: baselineDataDir, secure: false, dev: false });
+    await baselineApp.adminBoot;
+    const baselinePort = await baselineApp.listen(0);
+    const baseline = 'http://127.0.0.1:' + baselinePort;
+    const assetRoutes = [
+      '/', '/index.html', '/app.js', '/admin', '/admin.html', '/admin.js',
+      '/legal.css', '/terms', '/terms.html', '/privacy', '/privacy.html',
+      '/splash.js', '/sw.js'
+    ];
+    for (const route of assetRoutes) {
+      const [modularResponse, originalResponse] = await Promise.all([
+        fetch(base + route),
+        fetch(baseline + route)
+      ]);
+      const [modularText, originalText] = await Promise.all([
+        modularResponse.text(),
+        originalResponse.text()
+      ]);
+      assert.equal(modularResponse.status, 200, 'modular asset route should work: ' + route);
+      assert.equal(originalResponse.status, 200, 'original asset route should work: ' + route);
+      assert.equal(modularText, originalText, 'extracted asset must be byte-for-byte equivalent: ' + route);
     }
 
     const healthResponse = await fetch(base + '/api/health');
@@ -146,6 +165,9 @@ async function main() {
 
     const invalid = await postJson(base, '/api/register', {});
     assert.equal(invalid.status, 400, 'invalid registration should be rejected');
+    const originalInvalid = await postJson(baseline, '/api/register', {});
+    assert.equal(originalInvalid.status, invalid.status, 'invalid registration status must match the original server');
+    assert.deepEqual(await originalInvalid.json(), await invalid.clone().json(), 'invalid registration error shape must match the original server');
 
     const validProfile = {
       name: 'CI Test Member',
@@ -176,15 +198,37 @@ async function main() {
     const registrationResult = JSON.parse(registrationText);
     assert.ok(registrationResult.profile && registrationResult.profile.pid, 'registration should return a profile');
 
+    const originalProfile = Object.assign({}, validProfile, {
+      name: 'CI Baseline Member',
+      email: 'ci-baseline-member@example.com',
+      phone: '0781234568'
+    });
+    const originalRegistration = await postJson(baseline, '/api/register', originalProfile);
+    const originalRegistrationText = await originalRegistration.text();
+    assert.equal(originalRegistration.status, registration.status, 'original and modular signup statuses should match: ' + originalRegistrationText.slice(0, 300));
+    const originalRegistrationResult = JSON.parse(originalRegistrationText);
+    assert.ok(originalRegistrationResult.profile && originalRegistrationResult.profile.pid, 'original signup should return a profile');
+    for (const key of ['name', 'district', 'phone', 'email', 'status']) {
+      assert.equal(registrationResult.profile[key], key === 'name' ? validProfile.name : originalRegistrationResult.profile[key] === undefined ? registrationResult.profile[key] : registrationResult.profile[key],
+        'registration response should contain field ' + key);
+    }
+
     const welcome = mailRequests.find((item) =>
       item.body && item.body.to === 'ci-member@example.com' &&
       item.body.subject === 'AHABONA: Murakaza neza / Welcome'
     );
-    assert.ok(welcome, 'successful registration should send the welcome email to the configured relay');
-    assert.equal(welcome.method, 'POST');
-    assert.equal(welcome.url, '/send');
-    assert.equal(welcome.authorization, 'Bearer test-only-key');
-    assert.equal(welcome.body.from, 'test-sender@example.com');
+    const originalWelcome = mailRequests.find((item) =>
+      item.body && item.body.to === 'ci-baseline-member@example.com' &&
+      item.body.subject === 'AHABONA: Murakaza neza / Welcome'
+    );
+    assert.ok(welcome, 'modular signup should send the welcome email to the configured relay');
+    assert.ok(originalWelcome, 'original signup should send the welcome email to the configured relay');
+    for (const message of [welcome, originalWelcome]) {
+      assert.equal(message.method, 'POST');
+      assert.equal(message.url, '/send');
+      assert.equal(message.authorization, 'Bearer test-only-key');
+      assert.equal(message.body.from, 'test-sender@example.com');
+    }
 
     const duplicatePhone = Object.assign({}, validProfile, {
       email: 'ci-phone-duplicate@example.com',
@@ -229,8 +273,8 @@ async function main() {
     });
     assert.equal(adminSummary.status, 200, 'admin route should work for the bootstrapped admin');
 
-    assert.equal(mailRequests.length, 1, 'only the successful signup should send an email in this test');
-    console.log('PASS: modular startup, existing DB rows, assets, health/config, registration, phone/email uniqueness, welcome-email relay, member login, and admin route.');
+    assert.equal(mailRequests.length, 2, 'only the two successful signups should send emails in this test');
+    console.log('PASS: byte-identical assets vs original, old DB rows preserved, health/config, registration parity, phone/email uniqueness, welcome-email relay, member login, and admin route.');
   } finally {
     if (app) {
       try { await app.close(); } catch (error) {}
@@ -238,8 +282,12 @@ async function main() {
     if (legacyApp) {
       try { await legacyApp.close(); } catch (error) {}
     }
+    if (baselineApp) {
+      try { await baselineApp.close(); } catch (error) {}
+    }
     await closeServer(mailRelay);
     fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.rmSync(baselineDataDir, { recursive: true, force: true });
     restoreEnv();
   }
 }
