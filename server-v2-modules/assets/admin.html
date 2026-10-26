@@ -78,12 +78,17 @@ input[type=checkbox],input[type=radio]{width:auto;min-height:auto}
 .sw input:checked+.sl{background:var(--p)}
 .sw input:checked+.sl:before{transform:translateX(20px)}
 @media(max-width:640px){table{font-size:12px}table th,table td{padding:6px 4px}}
+
+.lang-switch{display:flex;align-items:center;gap:4px}
+.lang-switch button{background:transparent;border:1px solid var(--b);border-radius:7px;padding:6px 9px;font:inherit;font-weight:700;min-height:32px;cursor:pointer;color:var(--t)}
+.lang-switch button.active{background:var(--p);border-color:var(--p);color:#fff}
 </style>
 </head>
 <body>
 <div class="top">
 <div class="brand"><span id="sunTop"></span>AHABONA</div>
 <div class="spacer"></div>
+<div class="lang-switch" role="group" aria-label="Language"><button type="button" data-admin-lang="rw">RW</button><button type="button" data-admin-lang="en">EN</button></div>
 <span class="user" id="whoAmI"></span>
 <button class="b" id="btnLogout">Sohoka</button>
 </div>
