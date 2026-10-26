@@ -4,6 +4,147 @@
 var LANG='rw';
 var TAX_GLOBAL={};
 function t(k){return k}
+
+/* UI translations for the separate admin dashboard. User-supplied names and content
+   remain unchanged; only known interface labels and prompts are translated. */
+var ADMIN_EN={
+  "Ubuyobozi":"Admin","Injira":"Log in","Injira kugira ngo ukomeze":"Sign in to continue",
+  "Email cyangwa telefoni":"Email or phone","Ijambobanga":"Password",
+  "Email, telefoni cyangwa ijambobanga si byo.":"Email, phone number or password is incorrect.",
+  "Iyi konti si iy’umuyobozi.":"This account is not an administrator.",
+  "Nta burenganzira bwo kureba ikintu na kimwe. Saba Super Admin.":"You do not have permission to view any section. Contact the Super Admin.",
+  "Birimo…":"Loading…","Habaye ikibazo":"An error occurred",
+  "Incamake":"Overview","Uko urubuga rukorera ubu":"Current website activity",
+  "Abakoresha":"Users","Imyirondoro":"Profiles","Ibibazo":"Reports","Ibisabwa":"Requests",
+  "Imirimo":"Skills and jobs","Ibyiciro":"Categories","Ikibaho cy’Izuba":"Hero banner",
+  "FAQ":"FAQ","Ubutumwa":"Messages","Ibikorwa":"Features","Igenamiterere":"Settings",
+  "Amateka":"Audit log","Abayobozi":"Administrators","Ohereza ubutumwa kuri bose":"Send a message to everyone",
+  "Umutwe":"Subject","Ubutumwa":"Message","Ohereza":"Send","Bika":"Save","Emeza":"Confirm",
+  "Hindura":"Edit","Reba":"View","Siba":"Delete","Kuraho":"Remove","Subira":"Back",
+  "Ongeraho":"Add","Ongeraho icyiciro":"Add category","Ongeraho ikibazo":"Add question",
+  "Ongeraho umurimo mushya":"Add a new skill","Ongeraho umuyobozi":"Add administrator",
+  "Bose":"All","Akarere":"District","Izina":"Name","Telefoni":"Phone","Email":"Email",
+  "Ibara":"Color","Ubwoko":"Type","Icyiciro":"Category","Ijambo":"Term","Inshuro":"Count",
+  "Igikorwa":"Action","Igihe":"Date and time","Impamvu":"Reason","Igisubizo":"Response",
+  "Icyo yasabye":"Requested item","Ibyo yemerewe":"Permissions","Imirimo n’ibyo yemerewe":"Skills and permissions",
+  "Link y’ubutumire":"Invitation link","Kopera link":"Copy link","Reset password":"Reset password",
+  "Ohereza kuri WhatsApp":"Send via WhatsApp","Ifoto":"Image","Ifoto (fayile)":"Image file",
+  "Video (fayile)":"Video file","Video (max ~30s)":"Video (max ~30 seconds)",
+  "Agaciro (ijambo ryo gushakisha, link cyangwa telefoni)":"Value (search term, link or phone number)",
+  "Amagambo (English)":"Text (English)","Amagambo (Kinyarwanda)":"Text (Kinyarwanda)",
+  "Izina rya buto (English)":"Button label (English)","Izina rya buto (Kinyarwanda)":"Button label (Kinyarwanda)",
+  "Umutwe (English)":"Title (English)","Umutwe (Kinyarwanda)":"Title (Kinyarwanda)",
+  "Tagline":"Tagline","Icyiciro kigomba kuba kimwe muri ibi:":"Category must be one of these:",
+  "Ubwoko bwikibaho":"Banner type","Ubwoko (akamenyetso gato hejuru)":"Type (small label at the top)",
+  "Igikorwa cya buto":"Button action","Tondeka":"Sort order","Itondekanya (umubare munini ujya imbere)":"Sort order (higher numbers first)",
+  "Itangira (itariki, bishobora kuba ubusa)":"Starts at (date, may be empty)",
+  "Irangira (itariki, bishobora kuba ubusa)":"Ends at (date, may be empty)",
+  "Ifoto ihindurwa ku telefoni yawe mbere yo koherezwa (ntirenze 1600px). Ushobora kongeraho amafoto menshi uko ushaka: buri foto ni ikibaho cyayo.":"Images are resized on your device before upload (maximum 1600px). You can add multiple images; each image becomes its own banner.",
+  "Ifoto iriho ubu irerekanwa hasi. Hitamo indi niba ushaka kuyisimbuza.":"The current image is shown below. Choose another file to replace it.",
+  "Video ntirenze 64MB. Niba ndende, dufata amasegonda 30 ya mbere (iyo ffmpeg ihari). Hasi urabona niba ikina.":"Videos must be no larger than 64 MB. If longer, the first 30 seconds are used when ffmpeg is available. The preview below shows whether the video plays.",
+  "Ibibaho bizunguruka hejuru y’urubuga. Ongeraho inyandiko, ifoto cyangwa video (max ~30s), ibibaho byinshi uko ushaka. Ibiri ON bihinduranya. Ibifite itangira n’irangira bigaragara gusa muri icyo gihe.":"Banners rotate at the top of the website. Add text, an image or a video (about 30 seconds maximum); add as many banners as needed. Enabled banners rotate. Scheduled banners appear only during their start and end dates.",
+  "Ibyamamaza (Iyamamaza) bihora byanditseho “Iyamamaza” kugira ngo abantu batayobywa.":"Advertisements must be labelled “Advertisement” so users are not misled.",
+  "Ibifite akamenyetso “Haracyaje” ntibirakora: kubizimya cyangwa kubifungura ntacyo bihindura.":"Features marked “Coming soon” are not implemented; turning them on or off has no effect.",
+  "Super Admin ni we uhindura ibyemerewe byihariye.":"Only the Super Admin can change restricted permissions.",
+  "Nta bakoresha.":"No users.","Nta bibazo.":"No reports.","Nta bisabwa.":"No requests.",
+  "Nta butumwa.":"No messages.","Nta mateka.":"No audit events.",
+  "Ubutumwa buzoherezwa ku bakoresha BOSE. Urabyemeza?":"This message will be sent to ALL users. Continue?",
+  "Urabyemeza gusiba uyu mukoresha?":"Are you sure you want to delete this user?",
+  "Siba umurimo?":"Delete this skill?","Gusiba iki kibaho?":"Delete this banner?",
+  "Siba?":"Delete?","Iyi link imara iminsi 3. Ushobora gukora indi mu rutonde rw’abayobozi.":"This link expires in 3 days. You can create another from the administrators list.",
+  "Nta foto iragaragara":"No image to display","ifoto nta URL":"image URL is missing",
+  "ifoto: FAYILE NTIBONEKA":"image: FILE NOT FOUND","video nta URL":"video URL is missing",
+  "video: FAYILE NTIBONEKA":"video: FILE NOT FOUND","Buto":"Button","Stats zuzuye":"Full statistics",
+  "Injira":"Sign in","Owner":"Owner","Role":"Role","Status":"Status","Verified":"Verified",
+  "Category":"Category","Contact":"Contact","Top searches (7d)":"Top searches (7 days)",
+  "Terms (amagambo yo gushakisha)":"Terms (search terms)","Message":"Message","Name":"Name",
+  "Umunyamuryango":"Member","active":"Active","suspended":"Suspended","deleted":"Deleted",
+  "dismissed":"Dismissed","reviewed":"Reviewed","actioned":"Actioned","done":"Done",
+  "off":"Off","on":"On","new":"New","read":"Read","deleted":"Deleted",
+  "Hindura umukoresha":"Edit user","Nta muntu":"No user"
+};
+var ADMIN_TEXT_SOURCE=new WeakMap();
+var ADMIN_ATTR_SOURCE=new WeakMap();
+function adminEnglishText(source){
+  if(Object.prototype.hasOwnProperty.call(ADMIN_EN,source))return ADMIN_EN[source];
+  var m;
+  if((m=/^(\\d+) bakoresha$/.exec(source)))return m[1]+' users';
+  if((m=/^(\\d+) imyirondoro$/.exec(source)))return m[1]+' profiles';
+  if((m=/^(\\d+) ibibazo$/.exec(source)))return m[1]+' reports';
+  if((m=/^(\\d+) bisabwa$/.exec(source)))return m[1]+' requests';
+  if((m=/^(\\d+) imirimo$/.exec(source)))return m[1]+' skills';
+  if((m=/^(\\d+) byiciro$/.exec(source)))return m[1]+' categories';
+  if((m=/^(\\d+) messages$/.exec(source)))return m[1]+' messages';
+  if((m=/^(\\d+) reports$/.exec(source)))return m[1]+' reports';
+  if((m=/^Hindura umukoresha #(\\d+)$/.exec(source)))return 'Edit user #'+m[1];
+  if((m=/^Hindura ikibaho #(\\d+)$/.exec(source)))return 'Edit banner #'+m[1];
+  if((m=/^Hindura (.+)$/.exec(source)))return 'Edit '+m[1];
+  if((m=/^Ohereza iyi link kuri (.+)\\. Ni we ushyiraho ijambobanga rye; ntawe urimenya\\.$/.exec(source)))return 'Send this link to '+m[1]+'. They set their own password; nobody else can see it.';
+  if((m=/^Guhagarika (.+)\\? Ntazabasha kwinjira\\.$/.exec(source)))return 'Suspend '+m[1]+'? They will not be able to sign in.';
+  if((m=/^Gukuraho ubuyobozi bwa (.+)\\?(.+)$/.exec(source)))return 'Remove administrator access for '+m[1]+'?'+m[2];
+  if((m=/^Habaye ikibazo: (.+)$/.exec(source)))return 'An error occurred: '+m[1];
+  if((m=/^(.+): tegereza…$/.exec(source)))return 'Waiting: '+m[1];
+  if((m=/^(.+): NTIKINA\\.(.*)$/.exec(source)))return m[1]+': NOT PLAYING.'+m[2];
+  if((m=/^(.+): irakina \\((.+)\\)\\.(.*)$/.exec(source)))return m[1]+': playing ('+m[2]+').'+m[3];
+  return source;
+}
+function translateAdminTextNode(node){
+  var current=node.nodeValue||'';
+  var rec=ADMIN_TEXT_SOURCE.get(node);
+  var source=rec&&current===rec.output?rec.source:current;
+  var output=LANG==='en'?adminEnglishText(source):source;
+  ADMIN_TEXT_SOURCE.set(node,{source:source,output:output});
+  if(current!==output)node.nodeValue=output;
+}
+function translateAdminAttributes(el){
+  ['placeholder','title','aria-label'].forEach(function(attr){
+    if(!el.hasAttribute||!el.hasAttribute(attr))return;
+    var current=el.getAttribute(attr)||'';
+    var dict=ADMIN_ATTR_SOURCE.get(el)||{};
+    var rec=dict[attr];
+    var source=rec&&current===rec.output?rec.source:current;
+    var output=LANG==='en'?adminEnglishText(source):source;
+    dict[attr]={source:source,output:output};
+    ADMIN_ATTR_SOURCE.set(el,dict);
+    if(current!==output)el.setAttribute(attr,output);
+  });
+}
+function translateAdminNode(node){
+  if(!node)return;
+  if(node.nodeType===3){translateAdminTextNode(node);return}
+  if(node.nodeType!==1&&node.nodeType!==9&&node.nodeType!==11)return;
+  if(node.nodeType===1)translateAdminAttributes(node);
+  var walker=document.createTreeWalker(node,NodeFilter.SHOW_TEXT);
+  var textNode;
+  while((textNode=walker.nextNode()))translateAdminTextNode(textNode);
+  if(node.querySelectorAll)node.querySelectorAll('*').forEach(translateAdminAttributes);
+}
+function setAdminLanguage(lang){
+  LANG=lang==='en'?'en':'rw';
+  try{localStorage.setItem('ahabona_lang',LANG)}catch(e){}
+  document.documentElement.lang=LANG;
+  document.querySelectorAll('[data-admin-lang]').forEach(function(btn){
+    btn.classList.toggle('active',btn.getAttribute('data-admin-lang')===LANG);
+    btn.setAttribute('aria-pressed',btn.getAttribute('data-admin-lang')===LANG?'true':'false');
+  });
+  translateAdminNode(document.body);
+}
+function setupAdminLanguage(){
+  document.querySelectorAll('[data-admin-lang]').forEach(function(btn){
+    btn.addEventListener('click',function(){setAdminLanguage(btn.getAttribute('data-admin-lang'))});
+  });
+  var initial='rw';
+  try{var saved=localStorage.getItem('ahabona_lang');if(saved==='rw'||saved==='en')initial=saved}catch(e){}
+  setAdminLanguage(initial);
+  var observer=new MutationObserver(function(records){
+    records.forEach(function(rec){
+      if(rec.type==='characterData')translateAdminTextNode(rec.target);
+      if(rec.type==='attributes'&&rec.target.nodeType===1)translateAdminAttributes(rec.target);
+      rec.addedNodes&&rec.addedNodes.forEach(translateAdminNode);
+    });
+  });
+  observer.observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['placeholder','title','aria-label']});
+}
 function $(s){return document.querySelector(s)}
 function $$(s){return Array.prototype.slice.call(document.querySelectorAll(s))}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
@@ -1018,6 +1159,7 @@ async function renderStaff(c){
   })});
 }
 
+setupAdminLanguage();
 boot();
 })();
 /* end admin.js */
