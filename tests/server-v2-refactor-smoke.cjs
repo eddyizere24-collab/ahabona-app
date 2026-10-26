@@ -159,14 +159,14 @@ async function main() {
 
     // Changed assets intentionally include bug fixes and new language controls.
     const changedAssetChecks = [
-      ['/app.js', ["rgSet('phone_visible',!!el.checked)", "reg.service.max", "function setLang", "phone_visible:4", "displayProv(p)", "Mu mpera z’icyumweru"]],
+      ['/app.js', ["rgSet('phone_visible',!!el.checked)", "reg.service.max", "function setLang", "phone_visible:4", "displayProv(p)", "Mu mpera z’icyumweru", "reg.name.ph", "isRegisterStep&&typeof RG!=='undefined'&&RG.step>1"]],
       ['/', ['name="viewport"', '@media(min-width:640px)', '@media(min-width:900px)', 'id="bReg"']],
       ['/admin', ['data-admin-lang="rw"', 'data-admin-lang="en"']],
       ['/admin.html', ['name="viewport"', '@media(max-width:800px)', 'data-admin-lang="rw"', 'data-admin-lang="en"']],
-      ['/admin.js', ['ADMIN_EN', 'function setAdminLanguage', 'setupAdminLanguage']],
-      ['/terms', ['id="rwContent"', 'id="enContent"', 'AHABONA Terms of Use']],
+      ['/admin.js', ['ADMIN_EN', 'Object.assign(ADMIN_EN', 'function setAdminLanguage', 'setupAdminLanguage', 'AHABONA — Admin', 'No users.', 'Please wait…']],
+      ['/terms', ['id="rwContent"', 'id="enContent"', 'AHABONA Terms of Use', 'data-lang="en"', 'data-lang="rw"']],
       ['/terms.html', ['id="rwContent"', 'id="enContent"', 'AHABONA Terms of Use']],
-      ['/privacy', ['id="rwContent"', 'id="enContent"', 'AHABONA Privacy Notice']],
+      ['/privacy', ['id="rwContent"', 'id="enContent"', 'AHABONA Privacy Notice', 'data-lang="en"', 'data-lang="rw"']],
       ['/privacy.html', ['id="rwContent"', 'id="enContent"', 'AHABONA Privacy Notice']]
     ];
     for (const [route, markers] of changedAssetChecks) {
