@@ -135,7 +135,7 @@ async function main() {
     const baselinePort = await baselineApp.listen(0);
     const baseline = 'http://127.0.0.1:' + baselinePort;
     const assetRoutes = [
-      '/', '/index.html', '/app.js', '/admin', '/admin.html', '/admin.js',
+      '/', '/index.html', '/admin', '/admin.html', '/admin.js',
       '/legal.css', '/terms', '/terms.html', '/privacy', '/privacy.html',
       '/splash.js', '/sw.js'
     ];
@@ -152,6 +152,37 @@ async function main() {
       assert.equal(originalResponse.status, 200, 'original asset route should work: ' + route);
       assert.equal(modularText, originalText, 'extracted asset must be byte-for-byte equivalent: ' + route);
     }
+
+    // The client dictionaries must cover the same keys in both supported languages.
+    const clientAppSource = fs.readFileSync(
+      path.join(__dirname, '../server-v2-modules/assets/app.js'), 'utf8'
+    );
+    const rwStart = clientAppSource.indexOf('  rw:{');
+    const enStart = clientAppSource.indexOf('  en:{');
+    const enEnd = clientAppSource.indexOf("\n  }\n};", enStart);
+    assert.ok(rwStart >= 0 && enStart > rwStart && enEnd > enStart,
+      'both Kinyarwanda and English dictionaries should exist');
+    function localeKeys(text) {
+      return [...text.matchAll(/'([^']+)'\s*:/g)].map((match) => match[1]).sort();
+    }
+    assert.deepEqual(
+      localeKeys(clientAppSource.slice(rwStart, enStart)),
+      localeKeys(clientAppSource.slice(enStart, enEnd)),
+      'Kinyarwanda and English should define matching translation keys'
+    );
+
+    // Regression checks for the registration phone-consent and Back-navigation bugs.
+    assert.match(clientAppSource, /rgSet\('phone_visible',!!el\.checked\)/,
+      'phone visibility consent must be saved when the checkbox changes');
+    assert.match(clientAppSource, /if\(!d\.phone_visible\)return 'reg\.err\.phone\.agree';/,
+      'registration must require explicit phone visibility consent');
+    assert.equal(
+      (clientAppSource.match(/body\.phone_visible=!!d\.phone_visible/g) || []).length,
+      2,
+      'registration and profile edits must submit stored phone visibility state'
+    );
+    assert.match(clientAppSource, /isRegisterStep&&typeof RG!=='undefined'&&RG\.step>1/,
+      'browser Back should navigate to the previous registration step first');
 
     const healthResponse = await fetch(base + '/api/health');
     assert.equal(healthResponse.status, 200, 'health endpoint should respond');
@@ -197,11 +228,35 @@ async function main() {
       availability: []
     };
 
+    // Consent is mandatory at registration: unchecked or missing consent must not
+    // create an account or send a welcome email.
+    for (const [label, consent] of [['unchecked', false], ['missing', undefined]]) {
+      const refusedProfile = Object.assign({}, validProfile, {
+        email: 'ci-consent-' + label + '@example.com',
+        phone: label === 'unchecked' ? '0781234501' : '0781234502'
+      });
+      if (consent === undefined) delete refusedProfile.phone_visible;
+      else refusedProfile.phone_visible = consent;
+      const refusedResponse = await postJson(base, '/api/register', refusedProfile);
+      const refusedText = await refusedResponse.text();
+      assert.equal(refusedResponse.status, 400,
+        'registration without explicit phone visibility consent must fail: ' + refusedText.slice(0, 300));
+      const refusedResult = JSON.parse(refusedText);
+      assert.equal(refusedResult.field, 'phone_visible',
+        'consent refusal should identify the missing/unchecked phone visibility field');
+      assert.equal(
+        app.db.prepare('SELECT 1 FROM users WHERE email=?').get(refusedProfile.email),
+        undefined,
+        'consent refusal must not create a user account'
+      );
+    }
+
     const registration = await postJson(base, '/api/register', validProfile);
     const registrationText = await registration.text();
     assert.equal(registration.status, 201, 'valid registration should succeed: ' + registrationText.slice(0, 500));
     const registrationResult = JSON.parse(registrationText);
     assert.ok(registrationResult.profile && registrationResult.profile.pid, 'registration should return a profile');
+    assert.equal(registrationResult.profile.phone_visible, true, 'registered profile should retain explicit phone visibility consent');
 
     const originalProfile = Object.assign({}, validProfile, {
       email: 'ci-baseline-member@example.com',
@@ -332,7 +387,7 @@ async function main() {
       'photo bytes should remain unchanged after restart');
 
     assert.equal(mailRequests.length, 2, 'only the two successful signups should send emails in this test');
-    console.log('PASS: byte-identical assets vs original, old DB rows preserved, startup/restart, registration parity, phone/email uniqueness and login, photo storage, welcome-email relay, member session, and admin permissions.');
+    console.log('PASS: asset parity (except intentional app.js fix), language key parity, consent persistence/rejection, DB preservation/restart, registration parity, phone/email uniqueness, login/session, photo storage, welcome email, and admin permissions.');
   } finally {
     if (app) {
       try { await app.close(); } catch (error) {}
