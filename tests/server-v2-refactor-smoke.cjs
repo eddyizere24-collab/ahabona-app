@@ -142,11 +142,7 @@ async function main() {
     await baselineApp.adminBoot;
     const baselinePort = await baselineApp.listen(0);
     const baseline = 'http://127.0.0.1:' + baselinePort;
-    const assetRoutes = [
-      '/', '/index.html', '/admin', '/admin.html', '/admin.js',
-      '/legal.css', '/terms', '/terms.html', '/privacy', '/privacy.html',
-      '/splash.js', '/sw.js'
-    ];
+    const assetRoutes = ['/', '/index.html', '/legal.css', '/splash.js', '/sw.js'];
     for (const route of assetRoutes) {
       const [modularResponse, originalResponse] = await Promise.all([
         fetch(base + route),
@@ -159,6 +155,26 @@ async function main() {
       assert.equal(modularResponse.status, 200, 'modular asset route should work: ' + route);
       assert.equal(originalResponse.status, 200, 'original asset route should work: ' + route);
       assert.equal(modularText, originalText, 'extracted asset must be byte-for-byte equivalent: ' + route);
+    }
+
+    // Changed assets intentionally include bug fixes and new language controls.
+    const changedAssetChecks = [
+      ['/app.js', ['rgSet(\\'phone_visible\\',!!el.checked)', 'reg.service.max', 'function setLang']],
+      ['/admin', ['data-admin-lang="rw"', 'data-admin-lang="en"']],
+      ['/admin.html', ['data-admin-lang="rw"', 'data-admin-lang="en"']],
+      ['/admin.js', ['ADMIN_EN', 'function setAdminLanguage', 'setupAdminLanguage']],
+      ['/terms', ['id="rwContent"', 'id="enContent"', 'AHABONA Terms of Use']],
+      ['/terms.html', ['id="rwContent"', 'id="enContent"', 'AHABONA Terms of Use']],
+      ['/privacy', ['id="rwContent"', 'id="enContent"', 'AHABONA Privacy Notice']],
+      ['/privacy.html', ['id="rwContent"', 'id="enContent"', 'AHABONA Privacy Notice']]
+    ];
+    for (const [route, markers] of changedAssetChecks) {
+      const response = await fetch(base + route);
+      const body = await response.text();
+      assert.equal(response.status, 200, 'updated asset route should respond: ' + route);
+      for (const marker of markers) {
+        assert.ok(body.includes(marker), 'updated asset should include ' + marker + ': ' + route);
+      }
     }
 
     // The client dictionaries must cover the same keys in both supported languages.
