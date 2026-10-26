@@ -159,7 +159,7 @@ async function main() {
 
     // Changed assets intentionally include bug fixes and new language controls.
     const changedAssetChecks = [
-      ['/app.js', ['rgSet(\\'phone_visible\\',!!el.checked)', 'reg.service.max', 'function setLang']],
+      ['/app.js', ["rgSet('phone_visible',!!el.checked)", "reg.service.max", "function setLang"]],
       ['/admin', ['data-admin-lang="rw"', 'data-admin-lang="en"']],
       ['/admin.html', ['data-admin-lang="rw"', 'data-admin-lang="en"']],
       ['/admin.js', ['ADMIN_EN', 'function setAdminLanguage', 'setupAdminLanguage']],
