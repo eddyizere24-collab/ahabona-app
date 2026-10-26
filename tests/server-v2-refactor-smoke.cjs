@@ -199,7 +199,6 @@ async function main() {
     assert.ok(registrationResult.profile && registrationResult.profile.pid, 'registration should return a profile');
 
     const originalProfile = Object.assign({}, validProfile, {
-      name: 'CI Baseline Member',
       email: 'ci-baseline-member@example.com',
       phone: '0781234568'
     });
@@ -208,10 +207,14 @@ async function main() {
     assert.equal(originalRegistration.status, registration.status, 'original and modular signup statuses should match: ' + originalRegistrationText.slice(0, 300));
     const originalRegistrationResult = JSON.parse(originalRegistrationText);
     assert.ok(originalRegistrationResult.profile && originalRegistrationResult.profile.pid, 'original signup should return a profile');
-    for (const key of ['name', 'district', 'phone', 'email', 'status']) {
-      assert.equal(registrationResult.profile[key], key === 'name' ? validProfile.name : originalRegistrationResult.profile[key] === undefined ? registrationResult.profile[key] : registrationResult.profile[key],
-        'registration response should contain field ' + key);
+    for (const key of ['name', 'district', 'province', 'cap', 'pending', 'intro', 'edu', 'gender', 'birthdate', 'phone_visible']) {
+      assert.equal(registrationResult.profile[key], originalRegistrationResult.profile[key],
+        'registration behavior should match original for field ' + key);
     }
+    assert.deepEqual(registrationResult.profile.caps, originalRegistrationResult.profile.caps);
+    assert.deepEqual(registrationResult.profile.svc, originalRegistrationResult.profile.svc);
+    assert.deepEqual(registrationResult.profile.languages, originalRegistrationResult.profile.languages);
+    assert.deepEqual(registrationResult.profile.availability, originalRegistrationResult.profile.availability);
 
     const welcome = mailRequests.find((item) =>
       item.body && item.body.to === 'ci-member@example.com' &&
