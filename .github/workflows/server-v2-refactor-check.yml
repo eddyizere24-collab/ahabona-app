@@ -1,0 +1,46 @@
+name: Server v2 modular-refactor checks
+
+on:
+  pull_request:
+    paths:
+      - 'server-v2.cjs'
+      - 'server-v2.cjs17'
+      - 'server-v2-modules/**'
+      - 'tests/server-v2-refactor-smoke.cjs'
+      - '.github/workflows/server-v2-refactor-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Prepare the isolated copy with a runnable CommonJS extension
+        run: cp server-v2.cjs17 server-v2-refactor-test.cjs
+
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          set -eu
+          for file in server-v2.cjs server-v2-refactor-test.cjs server-v2-modules/*.cjs server-v2-modules/assets/*.js tests/server-v2-refactor-smoke.cjs; do
+            echo "Checking $file"
+            node --check "$file"
+          done
+
+      - name: Run isolated behavior and database smoke tests
+        run: node tests/server-v2-refactor-smoke.cjs
+
+      - name: Remove temporary test entry point
+        if: always()
+        run: rm -f server-v2-refactor-test.cjs
