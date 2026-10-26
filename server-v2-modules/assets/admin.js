@@ -218,6 +218,18 @@ Object.assign(ADMIN_EN,{
   "Ubutumwa":"Messages"
 });
 
+Object.assign(ADMIN_EN,{
+  "(ifoto)":"(image)",
+  ": NTIKINA. Nta shusho ya video isomwa (codec ntiyemewe).":": NOT PLAYING. The video cannot be decoded (unsupported codec).",
+  "Andika umutwe cyangwa amagambo":"Enter a title or text",
+  "Hitamo link uyikopere":"Select the link and copy it",
+  "Ibibazo bishya":"New reports",
+  "Ibisabwa bishya":"New requests",
+  "Ongeraho ku kibaho":"Add to banner",
+  "Shakisha: izina, email, telefoni":"Search: name, email, phone",
+  "Urugo rw’Izuba":"Sunrise Home"
+});
+
 var ADMIN_TEXT_SOURCE=new WeakMap();
 var ADMIN_ATTR_SOURCE=new WeakMap();
 function adminEnglishText(source){
