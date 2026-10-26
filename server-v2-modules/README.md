@@ -11,5 +11,7 @@ This folder supports the isolated `server-v2.cjs17` refactor branch. It is not t
 - `utils.cjs` contains input normalization, date and profile validation helpers, hashing/password helpers, and blocklist checks.
 - `compression.cjs` contains HTTP content-compression and ETag helpers.
 - `schema.cjs` contains SQLite schema definitions.
+- `database.cjs` contains additive migrations and initial seed data for capabilities, homepage strips, hero slides, and help FAQs.
+- `media.cjs` contains profile-photo validation/storage and promo-media processing.
 
-The HTTP endpoints, data-store setup, and request handling remain in `server-v2.cjs17` for a later, separately tested extraction. `server-v2.cjs` remains the active server and is unchanged by this refactor.
+The HTTP endpoints, request context, profile/discovery logic, and request handling remain in `server-v2.cjs17` for later, separately tested extraction. `server-v2.cjs` remains the active server and is unchanged by this refactor.
