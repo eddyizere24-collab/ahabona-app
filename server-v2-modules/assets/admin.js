@@ -68,24 +68,24 @@ var ADMIN_ATTR_SOURCE=new WeakMap();
 function adminEnglishText(source){
   if(Object.prototype.hasOwnProperty.call(ADMIN_EN,source))return ADMIN_EN[source];
   var m;
-  if((m=/^(\\d+) bakoresha$/.exec(source)))return m[1]+' users';
-  if((m=/^(\\d+) imyirondoro$/.exec(source)))return m[1]+' profiles';
-  if((m=/^(\\d+) ibibazo$/.exec(source)))return m[1]+' reports';
-  if((m=/^(\\d+) bisabwa$/.exec(source)))return m[1]+' requests';
-  if((m=/^(\\d+) imirimo$/.exec(source)))return m[1]+' skills';
-  if((m=/^(\\d+) byiciro$/.exec(source)))return m[1]+' categories';
-  if((m=/^(\\d+) messages$/.exec(source)))return m[1]+' messages';
-  if((m=/^(\\d+) reports$/.exec(source)))return m[1]+' reports';
-  if((m=/^Hindura umukoresha #(\\d+)$/.exec(source)))return 'Edit user #'+m[1];
-  if((m=/^Hindura ikibaho #(\\d+)$/.exec(source)))return 'Edit banner #'+m[1];
+  if((m=/^(\d+) bakoresha$/.exec(source)))return m[1]+' users';
+  if((m=/^(\d+) imyirondoro$/.exec(source)))return m[1]+' profiles';
+  if((m=/^(\d+) ibibazo$/.exec(source)))return m[1]+' reports';
+  if((m=/^(\d+) bisabwa$/.exec(source)))return m[1]+' requests';
+  if((m=/^(\d+) imirimo$/.exec(source)))return m[1]+' skills';
+  if((m=/^(\d+) byiciro$/.exec(source)))return m[1]+' categories';
+  if((m=/^(\d+) messages$/.exec(source)))return m[1]+' messages';
+  if((m=/^(\d+) reports$/.exec(source)))return m[1]+' reports';
+  if((m=/^Hindura umukoresha #(\d+)$/.exec(source)))return 'Edit user #'+m[1];
+  if((m=/^Hindura ikibaho #(\d+)$/.exec(source)))return 'Edit banner #'+m[1];
   if((m=/^Hindura (.+)$/.exec(source)))return 'Edit '+m[1];
-  if((m=/^Ohereza iyi link kuri (.+)\\. Ni we ushyiraho ijambobanga rye; ntawe urimenya\\.$/.exec(source)))return 'Send this link to '+m[1]+'. They set their own password; nobody else can see it.';
-  if((m=/^Guhagarika (.+)\\? Ntazabasha kwinjira\\.$/.exec(source)))return 'Suspend '+m[1]+'? They will not be able to sign in.';
-  if((m=/^Gukuraho ubuyobozi bwa (.+)\\?(.+)$/.exec(source)))return 'Remove administrator access for '+m[1]+'?'+m[2];
+  if((m=/^Ohereza iyi link kuri (.+)\. Ni we ushyiraho ijambobanga rye; ntawe urimenya\.$/.exec(source)))return 'Send this link to '+m[1]+'. They set their own password; nobody else can see it.';
+  if((m=/^Guhagarika (.+)\? Ntazabasha kwinjira\.$/.exec(source)))return 'Suspend '+m[1]+'? They will not be able to sign in.';
+  if((m=/^Gukuraho ubuyobozi bwa (.+)\?(.+)$/.exec(source)))return 'Remove administrator access for '+m[1]+'?'+m[2];
   if((m=/^Habaye ikibazo: (.+)$/.exec(source)))return 'An error occurred: '+m[1];
   if((m=/^(.+): tegereza…$/.exec(source)))return 'Waiting: '+m[1];
-  if((m=/^(.+): NTIKINA\\.(.*)$/.exec(source)))return m[1]+': NOT PLAYING.'+m[2];
-  if((m=/^(.+): irakina \\((.+)\\)\\.(.*)$/.exec(source)))return m[1]+': playing ('+m[2]+').'+m[3];
+  if((m=/^(.+): NTIKINA\.(.*)$/.exec(source)))return m[1]+': NOT PLAYING.'+m[2];
+  if((m=/^(.+): irakina \((.+)\)\.(.*)$/.exec(source)))return m[1]+': playing ('+m[2]+').'+m[3];
   return source;
 }
 function translateAdminTextNode(node){
@@ -169,7 +169,7 @@ async function api(m,u,b){
 function when(ts){
   if(!ts)return '';
   var d=new Date(ts);
-  return d.toLocaleString('rw-RW',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+  return d.toLocaleString(LANG==='en'?'en-GB':'rw-RW',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
 }
 var ME=null;
 var TAB='summary';
