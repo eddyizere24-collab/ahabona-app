@@ -120,7 +120,9 @@ async function main() {
     const preservedProfile = app.db.prepare(
       'SELECT name,district FROM profiles WHERE pid=?'
     ).get('legacyci01');
-    assert.deepEqual(preservedProfile, { name: 'Legacy Fixture', district: 'Gasabo' });
+    assert.ok(preservedProfile, 'legacy profile row should remain after modular startup');
+    assert.equal(preservedProfile.name, 'Legacy Fixture');
+    assert.equal(preservedProfile.district, 'Gasabo');
 
     const port = await app.listen(0);
     const base = 'http://127.0.0.1:' + port;
