@@ -282,6 +282,12 @@ async function main() {
     const meData = await me.json();
     assert.equal(meData.user.email, 'ci-member@example.com');
 
+    const phoneLogin = await postJson(base, '/api/login', {
+      id: '+250 781 234 567',
+      password: 'TestMemberPass123!'
+    });
+    assert.equal(phoneLogin.status, 200, 'member should also be able to log in with a normalized phone number');
+
     const adminLogin = await postJson(base, '/api/login', {
       id: 'ci-admin@example.com',
       password: 'TestAdminPass123!'
@@ -295,9 +301,38 @@ async function main() {
       headers: { cookie: adminCookieHeader.split(';')[0] }
     });
     assert.equal(adminSummary.status, 200, 'admin route should work for the bootstrapped admin');
+    const memberAdminSummary = await fetch(base + '/api/admin/summary', {
+      headers: { cookie: memberCookie }
+    });
+    assert.equal(memberAdminSummary.status, 403, 'ordinary member should not access admin routes');
+
+    // Restart the modular server on the same isolated database and verify the
+    // account, session, profile, and uploaded photo still work after reopening.
+    const userCountBeforeRestart = app.db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
+    await app.close();
+    app = null;
+    app = modularServer.start({ dataDir, secure: false, dev: false });
+    const restartBoot = await app.adminBoot;
+    assert.equal(restartBoot.ok, true, 'admin bootstrap should remain healthy after restart');
+    assert.equal(app.db.prepare('SELECT COUNT(*) AS n FROM users').get().n, userCountBeforeRestart,
+      'restarting should not add or remove user accounts');
+    assert.ok(app.db.prepare('SELECT 1 FROM users WHERE email=?').get('ci-member@example.com'),
+      'registered account should remain after restart');
+    assert.ok(app.db.prepare('SELECT 1 FROM profiles WHERE pid=?').get(registrationResult.profile.pid),
+      'registered profile should remain after restart');
+    const restartedPort = await app.listen(0);
+    const restartedBase = 'http://127.0.0.1:' + restartedPort;
+    const persistedSession = await fetch(restartedBase + '/api/me', {
+      headers: { cookie: memberCookie }
+    });
+    assert.equal(persistedSession.status, 200, 'session should remain usable after restart');
+    const persistedPhoto = await fetch(restartedBase + registrationResult.profile.photos[0]);
+    assert.equal(persistedPhoto.status, 200, 'uploaded photo should remain readable after restart');
+    assert.deepEqual(Buffer.from(await persistedPhoto.arrayBuffer()), photoFixture,
+      'photo bytes should remain unchanged after restart');
 
     assert.equal(mailRequests.length, 2, 'only the two successful signups should send emails in this test');
-    console.log('PASS: byte-identical assets vs original, old DB rows preserved, health/config, registration parity, phone/email uniqueness, welcome-email relay, member login, and admin route.');
+    console.log('PASS: byte-identical assets vs original, old DB rows preserved, startup/restart, registration parity, phone/email uniqueness and login, photo storage, welcome-email relay, member session, and admin permissions.');
   } finally {
     if (app) {
       try { await app.close(); } catch (error) {}
