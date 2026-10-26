@@ -438,7 +438,7 @@ async function main() {
       item.body.subject === 'AHABONA: kugarura ijambobanga'
     );
     assert.ok(resetMail && typeof resetMail.body.text === 'string', 'password-reset email should be sent to relay');
-    const resetMatch = resetMail.body.text.match(/\\/reset\\/([A-Za-z0-9_-]+)/);
+    const resetMatch = resetMail.body.text.match(/\/reset\/([A-Za-z0-9_-]+)/);
     assert.ok(resetMatch, 'reset email should contain a valid reset URL token');
     const resetToken = resetMatch[1];
     const resetPassword = 'NewTestMemberPass456!';
