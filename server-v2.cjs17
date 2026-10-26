@@ -1197,7 +1197,7 @@ async function apiReport(ctx,req,res){
   ctx.newSession(res,uid,req);
   try{
     await ctx.mailer.send(f.email,'AHABONA: Murakaza neza / Welcome',
-      'Murakaza neza kuri AHABONA!\n\nUmwirondoro wawe wabitswe. Abakeneye ubushobozi bwawe bazakubona.\n\nWelcome to AHABONA! Your profile is live. People who need your skills can now find you.\n\n— AHABONA');
+      '☀️ Murakaza neza kuri AHABONA!\n\nUmwirondoro wawe wabitswe. Abakeneye ubushobozi bwawe bazakubona.\n\nWelcome to AHABONA! Your profile is live. People who need your skills can now find you.\n\n❤️ — AHABONA');
   }catch(e){}
   const r=ctx.Q('SELECT p.*,u.phone,u.email,u.status,u.id_verified AS owner_verified FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=?').get(uid);
   sendJson(req,res,201,{profile:pubProfile(r,null,{own:true,email:f.email,status:'active'})});
@@ -1333,8 +1333,8 @@ async function apiPasswordForgot(ctx,req,res){
       }else{
         const tok=crypto.randomBytes(32).toString('base64url');
         ctx.Q('DELETE FROM resets WHERE user_id=?').run(us.id);
-        ctx.Q('INSERT INTO resets(th,user_id,expires) VALUES(?,?,?)').run(sha(tok),us.id,Date.now()+HOUR);
-        try{await ctx.mailer.send(em,'AHABONA: kugarura ijambobanga','Kanda hano ushyireho ijambobanga rishya (rimara isaha imwe): '+base+'/reset/'+tok)}
+        ctx.Q('INSERT INTO resets(th,user_id,expires) VALUES(?,?,?)').run(sha(tok),us.id,Date.now()+48*HOUR);
+        try{await ctx.mailer.send(em,'AHABONA: kugarura ijambobanga','Kanda hano ushyireho ijambobanga rishya (rimara amasaha 48): '+base+'/reset/'+tok)}
         catch(e){console.error('[password-reset] mail send failed:',e&&e.message||e)}
       }
     }
@@ -2526,15 +2526,15 @@ async function adminUserResetPw(ctx,req,res,id,admin){
   if(!t)return sendError(req,res,404,'err.notfound');
   const tLv=staffLevelRaw(t);
   if(tLv&&t.id!==admin.id&&!(ctx.can(admin,'staff.manage')&&staffMayManage(admin,tLv)))return sendError(req,res,403,'staff.err.rank');
-  // 1-hour password-reset token (not the 3-day staff invite)
+  // 48-hour password-reset token (not the 3-day staff invite)
   const base=trustedBaseUrl();
   if(!base)return sendError(req,res,503,'err.server');
   const tok=crypto.randomBytes(32).toString('base64url');
   ctx.Q('DELETE FROM resets WHERE user_id=?').run(t.id);
-  ctx.Q('INSERT INTO resets(th,user_id,expires) VALUES(?,?,?)').run(sha(tok),t.id,Date.now()+HOUR);
+  ctx.Q('INSERT INTO resets(th,user_id,expires) VALUES(?,?,?)').run(sha(tok),t.id,Date.now()+48*HOUR);
   const link=base+'/reset/'+tok;
   if(ctx.mailer.isLive||ctx.mailer.isDev){
-    try{await ctx.mailer.send(t.email,'AHABONA: reset password','Link (1 hour): '+link)}catch(e){}
+    try{await ctx.mailer.send(t.email,'AHABONA: reset password','Link (48 hours): '+link)}catch(e){}
   }
   ctx.adminLog(admin.id,'user.resetpw','user',String(id),null,ctx.ipOf(req));
   sendJson(req,res,200,{ok:true,link:link});
