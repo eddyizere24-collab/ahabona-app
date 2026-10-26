@@ -101,6 +101,8 @@ async function main() {
       await page.locator('[data-rg="terms"]').waitFor({ state: 'visible' });
       assert.equal(await page.locator('[data-rg="terms"]').isChecked(), false,
         viewport.name + ' should be on the terms step without asking for phone consent again');
+      assert.equal(await page.locator('[data-rg="phone-agree"]').count(), 0,
+        viewport.name + ' must not render a second phone visibility consent checkbox on step six');
 
       // Browser Back must step back within the registration form, not close the
       // modal or navigate away from the website.
