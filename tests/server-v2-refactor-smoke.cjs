@@ -487,12 +487,28 @@ async function main() {
     });
     assert.equal(newPasswordLogin.status, 200, 'new password should work after reset');
     const newCookieHeader = newPasswordLogin.headers.get('set-cookie') || '';
+    const newCookie = newCookieHeader.split(';')[0];
     assert.ok(newCookieHeader.includes('ahs='), 'login after reset should create a session');
 
-    const logoutResponse = await postJson(restartedBase, '/api/logout', {}, newCookieHeader.split(';')[0]);
+    // Account deletion is reversible during the retention window and must not
+    // remove profile data; restore should work with the existing session.
+    const deleteAccount = await postJson(restartedBase, '/api/me/delete', {
+      password: resetPassword
+    }, newCookie);
+    assert.equal(deleteAccount.status, 200, 'member should be able to request account deletion');
+    const deletedMe = await fetch(restartedBase + '/api/me', { headers: { cookie: newCookie } });
+    assert.equal((await deletedMe.json()).user, null, 'deleted account should no longer be active');
+    const restoreAccount = await postJson(restartedBase, '/api/me/restore', {}, newCookie);
+    assert.equal(restoreAccount.status, 200, 'member should be able to restore account within retention period');
+    const restoredMe = await fetch(restartedBase + '/api/me', { headers: { cookie: newCookie } });
+    assert.ok((await restoredMe.json()).user, 'restored account should authenticate again');
+    assert.ok(app.db.prepare('SELECT 1 FROM profiles WHERE pid=?').get(registrationResult.profile.pid),
+      'account delete/restore should preserve the profile');
+
+    const logoutResponse = await postJson(restartedBase, '/api/logout', {}, newCookie);
     assert.equal(logoutResponse.status, 200, 'member should be able to log out');
     const afterLogout = await fetch(restartedBase + '/api/me', {
-      headers: { cookie: newCookieHeader.split(';')[0] }
+      headers: { cookie: newCookie }
     });
     assert.equal((await afterLogout.json()).user, null, 'logged-out session must no longer authenticate');
 
