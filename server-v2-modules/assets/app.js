@@ -47,10 +47,10 @@ var I18N={
     'reg.title':'Iyandikishe','reg.edit':'Hindura umwirondoro','reg.next':'Komeza','reg.prev':'Subira',
     'reg.submit':'Emeza','reg.saving':'Tegereza…','reg.step':'Intambwe {{n}} kuri {{total}}',
     'reg.s1':'Abo uri bo','reg.s2':'Umwirondoro','reg.s3':'Icyo ushoboye','reg.s4':'Kuvugana','reg.s5':'Konti','reg.s6':'Amabwiriza',
-    'reg.name':'Izina ryawe','reg.birthdate':'Itariki yavukiye','reg.gender':'Igitsina',
+    'reg.name':'Izina ryawe','reg.name.ph':'Urugero: Jean Mukamana','reg.birthdate':'Itariki yavukiye','reg.gender':'Igitsina',
     'reg.gender.pick':'Hitamo igitsina','reg.province':'Intara utuyemo','reg.province.pick':'Hitamo intara',
     'reg.district':'Akarere utuyemo','reg.district.pick':'Hitamo akarere','reg.service':'Aho ukorera (ihitamo)',
-    'reg.service.hint':'Hitamo kugeza ku turere 5.','reg.photo':'Ifoto yawe',
+    'reg.service.hint':'Hitamo kugeza ku turere 5.','reg.service.max':'Ntushobora guhitamo uturere turenze 5.','reg.photo':'Ifoto yawe',
     'reg.photo.hint':'Ifoto ni ihitamo. Ushobora kongeraho amafoto atarenze atatu.','reg.photo.add':'Shyiraho ifoto','reg.photo.working':'Ifoto iri gutunganywa…','reg.photo.fail':'Iyi foto ntishobora gusomwa. Gerageza indi, cyangwa uyifotore na none.','reg.photo.max':'Amafoto atatu ni yo ntarengwa.','reg.bio.ph':'Urugero: Mfite uburambe bw’imyaka 5','reg.youtube':'Video ya YouTube (si ngombwa)','reg.youtube.hint':'Link ya video yawe. Igaragara ku mwirondoro wuzuye gusa.','profile.video':'Video','profile.watchVideo':'Reba kuri YouTube','profile.link':'Link',
     'reg.edu':'Amashuri','reg.edu.pick':'Hitamo urwego','reg.bio':'Ubwiyerekane bugufi',
     'reg.exp':'Uburambe bw’akazi','reg.exp.hint':'Andika akazi wakoze (ihitamo).',
@@ -149,10 +149,10 @@ var I18N={
     'reg.title':'Sign up','reg.edit':'Edit profile','reg.next':'Continue','reg.prev':'Back',
     'reg.submit':'Submit','reg.saving':'Please wait…','reg.step':'Step {{n}} of {{total}}',
     'reg.s1':'Who you are','reg.s2':'Profile','reg.s3':'What you can do','reg.s4':'Contact','reg.s5':'Account','reg.s6':'Terms',
-    'reg.name':'Your name','reg.birthdate':'Date of birth','reg.gender':'Gender',
+    'reg.name':'Your name','reg.name.ph':'e.g. Jean Mukamana','reg.birthdate':'Date of birth','reg.gender':'Gender',
     'reg.gender.pick':'Choose gender','reg.province':'Province you live in','reg.province.pick':'Choose province',
     'reg.district':'District you live in','reg.district.pick':'Choose district','reg.service':'Service areas (optional)',
-    'reg.service.hint':'Choose up to 5 districts.','reg.photo':'Your photo',
+    'reg.service.hint':'Choose up to 5 districts.','reg.service.max':'You can choose up to 5 service districts.','reg.photo':'Your photo',
     'reg.photo.hint':'A photo is optional. You can add up to three photos.','reg.photo.add':'Add photo','reg.photo.working':'Processing photo…','reg.photo.fail':'This photo cannot be read. Try another one, or take a new photo.','reg.photo.max':'Maximum 3 photos.','reg.bio.ph':'e.g. 5 years of experience','reg.youtube':'YouTube video (optional)','reg.youtube.hint':'Link to your video. Shown on your full profile only.','profile.video':'Video','profile.watchVideo':'Watch on YouTube','profile.link':'Link',
     'reg.edu':'Education','reg.edu.pick':'Choose level','reg.bio':'Short headline',
     'reg.exp':'Work experience','reg.exp.hint':'Describe the work you did (optional).',
@@ -1035,7 +1035,7 @@ function renderRegister(){
   if(!RG.editing){
     if(s===1){
       body+='<h3>'+esc(t('reg.s1'))+'</h3><div class="f">'+
-        '<label>'+esc(t('reg.name'))+'</label><input data-rg="name" value="'+esc(d.name)+'" autocomplete="name" placeholder="Izere Eddy">'+
+        '<label>'+esc(t('reg.name'))+'</label><input data-rg="name" value="'+esc(d.name)+'" autocomplete="name" placeholder="'+esc(t('reg.name.ph'))+'">'+
         '<label>'+esc(t('reg.birthdate'))+' <span class="muted">'+(LANG==='en'?'(optional)':'(si ngombwa)')+'</span></label><input data-rg="birthdate" type="date" value="'+esc(d.birthdate)+'">'+
         '<label>'+esc(t('reg.gender'))+' <span class="muted">'+(LANG==='en'?'(optional)':'(si ngombwa)')+'</span></label><select data-rg="gender"><option value="">'+esc(t('reg.gender.pick'))+'</option>'+
         ((ST.cfg&&ST.cfg.genders)||[]).map(function(g){return '<option value="'+g.id+'"'+(d.gender===g.id?' selected':'')+'>'+esc(LANG==='en'?g.en:g.rw)+'</option>'}).join('')+
@@ -1347,7 +1347,7 @@ function wireSvc(){
       var arr=(RG.data.svc||[]).slice();
       var i=arr.indexOf(dd);
       if(cb.checked&&i===-1){
-        if(arr.length>=5){cb.checked=false;toast('Max 5');return}
+        if(arr.length>=5){cb.checked=false;toast(t('reg.service.max'));return}
         arr.push(dd);
       }else if(!cb.checked&&i!==-1){
         arr.splice(i,1);
