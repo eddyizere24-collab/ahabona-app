@@ -163,7 +163,7 @@ async function main() {
       ['/', ['name="viewport"', '@media(min-width:640px)', '@media(min-width:900px)', 'id="bReg"']],
       ['/admin', ['data-admin-lang="rw"', 'data-admin-lang="en"']],
       ['/admin.html', ['name="viewport"', '@media(max-width:800px)', 'data-admin-lang="rw"', 'data-admin-lang="en"']],
-      ['/admin.js', ['ADMIN_EN', 'Object.assign(ADMIN_EN', 'function setAdminLanguage', 'setupAdminLanguage', 'AHABONA — Admin', 'No users.', 'Please wait…']],
+      ['/admin.js', ['ADMIN_EN', 'Object.assign(ADMIN_EN', 'function setAdminLanguage', 'setupAdminLanguage', 'AHABONA — Admin', 'No users.', 'Please wait…', 'New requests', 'Sunrise Home']],
       ['/terms', ['id="rwContent"', 'id="enContent"', 'AHABONA Terms of Use', 'data-lang="en"', 'data-lang="rw"']],
       ['/terms.html', ['id="rwContent"', 'id="enContent"', 'AHABONA Terms of Use']],
       ['/privacy', ['id="rwContent"', 'id="enContent"', 'AHABONA Privacy Notice', 'data-lang="en"', 'data-lang="rw"']],
