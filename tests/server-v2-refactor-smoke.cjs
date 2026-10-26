@@ -134,11 +134,13 @@ async function main() {
 
     const healthResponse = await fetch(base + '/api/health');
     assert.equal(healthResponse.status, 200, 'health endpoint should respond');
-    assert.doesNotThrow(() => JSON.parse(awaitableTextPlaceholder), 'placeholder');
+    const healthText = await healthResponse.text();
+    assert.doesNotThrow(() => JSON.parse(healthText), 'health endpoint should return JSON');
 
     const configResponse = await fetch(base + '/api/config');
     assert.equal(configResponse.status, 200, 'config endpoint should respond');
-    assert.doesNotThrow(() => JSON.parse(await configResponse.text()));
+    const configText = await configResponse.text();
+    assert.doesNotThrow(() => JSON.parse(configText), 'config endpoint should return JSON');
 
     const invalid = await postJson(base, '/api/register', {});
     assert.equal(invalid.status, 400, 'invalid registration should be rejected');
