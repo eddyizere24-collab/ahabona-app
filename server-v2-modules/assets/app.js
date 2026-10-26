@@ -337,6 +337,16 @@ function setupHistoryBack(){
     if(AH_HIST.skip){AH_HIST.skip=false;return}
     var ov=$('ov');
     if(ov&&ov.classList.contains('on')){
+      var sheet=$('sh')||(ov.querySelector&&ov.querySelector('.sh'));
+      var isRegisterStep=!!(sheet&&sheet.querySelector&&sheet.querySelector('[data-act="rgNext"],[data-act="rgSubmit"],[data-act="rgPrev"]'));
+      if(isRegisterStep&&typeof RG!=='undefined'&&RG.step>1){
+        RG.step=Math.max(1,RG.step-1);
+        if(!RG.editing)saveDraft();
+        renderRegister();
+        /* Keep the form open while making the next browser Back return to the previous step. */
+        try{history.pushState({ahabona_modal:1},'')}catch(e){}
+        return;
+      }
       closeModal(true);
       return;
     }
@@ -883,7 +893,7 @@ var RG={
     name:'',birthdate:'',gender:'',province:'',district:'',svc:[],
     photos:[],thumbs:[],jobs:[],other:'',intro:'',
     edu:'',soc:'',experience:'',languages:[],availability:[],
-    phone:'',wa:'',phones:[],email:'',password:'',terms:false,email_public:'',facebook:'',instagram:'',tiktok:'',linkedin:'',telegram:'',twitter:'',
+    phone:'',phone_visible:false,wa:'',phones:[],email:'',password:'',terms:false,email_public:'',facebook:'',instagram:'',tiktok:'',linkedin:'',telegram:'',twitter:'',
     _photosUnchanged:false
   }
 };
@@ -912,7 +922,7 @@ function resetRG(){
     name:'',birthdate:'',gender:'',province:'',district:'',svc:[],
     photos:[],thumbs:[],jobs:[],other:'',intro:'',
     edu:'',soc:'',experience:'',languages:[],availability:[],
-    phone:'',wa:'',phones:[],email:'',password:'',terms:false,email_public:'',facebook:'',instagram:'',tiktok:'',linkedin:'',telegram:'',twitter:'',
+    phone:'',phone_visible:false,wa:'',phones:[],email:'',password:'',terms:false,email_public:'',facebook:'',instagram:'',tiktok:'',linkedin:'',telegram:'',twitter:'',
     _photosUnchanged:false
   };
 }
@@ -1067,7 +1077,7 @@ function renderRegister(){
       body+='<h3>'+esc(t('reg.s4'))+'</h3><div class="f">'+
         '<label>'+esc(t('reg.phone'))+'</label><div class="note">'+esc(t('reg.phone.hint'))+'</div>'+
         '<input data-rg="phone" type="tel" inputmode="tel" placeholder="'+esc(t('reg.phone.ph'))+'" value="'+esc(d.phone)+'">'+
-        '<label class="ck"><input type="checkbox" data-rg="phone-agree"><span>'+esc(t('reg.phone.agree'))+'</span></label>'+
+        '<label class="ck"><input type="checkbox" data-rg="phone-agree"'+(d.phone_visible?' checked':'')+'><span>'+esc(t('reg.phone.agree'))+'</span></label>'+
         '<label>'+esc(t('reg.wa'))+'</label><input data-rg="wa" type="tel" inputmode="tel" placeholder="'+esc(t('reg.phone.ph'))+'" value="'+esc(d.wa)+'">'+
         '<label>'+esc(t('reg.phones'))+'</label><div class="note">'+esc(t('reg.phones.hint'))+'</div>'+
         '<div id="rg-phones-extra"></div>'+
@@ -1119,7 +1129,7 @@ function renderRegister(){
     }else if(s===4){
       body+='<h3>'+esc(t('reg.s4'))+'</h3><div class="f">'+
         '<label>'+esc(t('reg.phone'))+'</label><input value="'+esc(d.phone)+'" readonly style="background:var(--pl)">'+
-        '<label class="ck"><input type="checkbox" data-rg="phone-agree"'+(d.phone_visible?' checked':'')+'><span>'+(LANG==='en'?'Allow other users to see my phone number':'Nemera ko nimero yanjye ya telefoni igaragara ku bandi')+'</span></label>'+
+        '<label class="ck"><input type="checkbox" data-rg="phone-agree"'+(d.phone_visible?' checked':'')+'><span>'+esc(t('reg.phone.agree'))+'</span></label>'+
         '<label>'+esc(t('reg.wa'))+'</label><input data-rg="wa" type="tel" value="'+esc(d.wa)+'">'+
         '<label>'+esc(t('reg.phones'))+'</label><div class="note">'+esc(t('reg.phones.hint'))+'</div>'+
         '<div id="rg-phones-extra"></div>'+
@@ -1282,7 +1292,8 @@ function wireRegInputs(){
       return;
     }
     if(key==='phone-agree'){
-      el._agree=true;
+      el.checked=!!RG.data.phone_visible;
+      el.addEventListener('change',function(){rgSet('phone_visible',!!el.checked)});
       return;
     }
     if(key.indexOf('phone-')===0){
@@ -1485,7 +1496,7 @@ function rgValidate(step){
   if(step===4&&!RG.editing){
     var ph=d.phone.replace(/[\s-]/g,'').replace(/^\+?250/,'0');
     if(!/^07[2389]\d{7}$/.test(ph))return 'reg.err.phone';
-    if(!d._agree&&!document.querySelector('[data-rg="phone-agree"]:checked'))return 'reg.err.phone.agree';
+    if(!d.phone_visible)return 'reg.err.phone.agree';
   }
   if(step===5&&!RG.editing){
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.email.trim()))return 'reg.err.email';
@@ -1602,14 +1613,14 @@ async function rgSubmit(){
     body.birthdate=d.birthdate;
     body.gender=d.gender;
     body.phone=d.phone.trim();
-    body.phone_visible=!!document.querySelector('[data-rg="phone-agree"]:checked');
+    body.phone_visible=!!d.phone_visible;
     body.email=d.email.trim().toLowerCase();
     body.password=d.password;
     body.terms=d.terms;
   }else{
     body.birthdate=d.birthdate||undefined;
     body.gender=d.gender||undefined;
-    body.phone_visible=!!document.querySelector('[data-rg="phone-agree"]:checked');
+    body.phone_visible=!!d.phone_visible;
   }
   if(d.photos.length){
     body.photos=d.photos.slice();
