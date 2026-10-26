@@ -8,7 +8,8 @@ function t(k){return k}
 /* UI translations for the separate admin dashboard. User-supplied names and content
    remain unchanged; only known interface labels and prompts are translated. */
 var ADMIN_EN={
-  "Ubuyobozi":"Admin","Injira":"Log in","Injira kugira ngo ukomeze":"Sign in to continue",
+  "Ubuyobozi":"Admin","AHABONA — Ubuyobozi":"AHABONA — Admin","Injira":"Log in","Injira kugira ngo ukomeze":"Sign in to continue",
+  "Abakozi bafasha kuyobora urubuga. Buri wese afite gusa ibyo yemerewe.":"Staff who help manage the website. Each person has only the permissions granted to them.",
   "Email cyangwa telefoni":"Email or phone","Ijambobanga":"Password",
   "Email, telefoni cyangwa ijambobanga si byo.":"Email, phone number or password is incorrect.",
   "Iyi konti si iy’umuyobozi.":"This account is not an administrator.",
@@ -92,7 +93,8 @@ function translateAdminTextNode(node){
   var current=node.nodeValue||'';
   var rec=ADMIN_TEXT_SOURCE.get(node);
   var source=rec&&current===rec.output?rec.source:current;
-  var output=LANG==='en'?adminEnglishText(source):source;
+  var parent=node.parentElement;
+  var output=LANG==='en'&&source==='Ubutumwa'?((parent&&(parent.tagName==='LABEL'||parent.tagName==='TH'))?'Message':'Messages'):(LANG==='en'?adminEnglishText(source):source);
   ADMIN_TEXT_SOURCE.set(node,{source:source,output:output});
   if(current!==output)node.nodeValue=output;
 }
