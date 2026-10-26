@@ -45,14 +45,22 @@ function closeServer(server) {
   });
 }
 
-async function postJson(base, route, body, cookie) {
+async function requestJson(base, route, method, body, cookie) {
   const headers = { 'content-type': 'application/json' };
   if (cookie) headers.cookie = cookie;
   return fetch(base + route, {
-    method: 'POST',
+    method,
     headers,
-    body: JSON.stringify(body)
+    body: body === undefined ? undefined : JSON.stringify(body)
   });
+}
+
+async function postJson(base, route, body, cookie) {
+  return requestJson(base, route, 'POST', body, cookie);
+}
+
+async function putJson(base, route, body, cookie) {
+  return requestJson(base, route, 'PUT', body, cookie);
 }
 
 async function main() {
@@ -361,6 +369,32 @@ async function main() {
     });
     assert.equal(memberAdminSummary.status, 403, 'ordinary member should not access admin routes');
 
+    // Exercise profile updates and the phone-visibility preference before restart.
+    const editPayload = Object.assign({}, validProfile, {
+      name: 'CI Updated Member',
+      intro: 'Updated profile fixture',
+      phone_visible: false
+    });
+    delete editPayload.password;
+    delete editPayload.email;
+    delete editPayload.phone;
+    delete editPayload.terms;
+    delete editPayload.photos;
+    delete editPayload.thumbs;
+    const profileUpdate = await putJson(base, '/api/me', editPayload, memberCookie);
+    const profileUpdateText = await profileUpdate.text();
+    assert.equal(profileUpdate.status, 200, 'member should be able to update profile: ' + profileUpdateText.slice(0, 300));
+    const updatedProfile = JSON.parse(profileUpdateText).profile;
+    assert.equal(updatedProfile.name, 'CI Updated Member');
+    assert.equal(updatedProfile.phone_visible, false, 'member should be able to change phone visibility in profile settings');
+    assert.equal(updatedProfile.phone, '', 'hidden phone should not be returned as public contact on profile response');
+
+    const revealPayload = Object.assign({}, editPayload, { phone_visible: true, name: 'CI Updated Member' });
+    const revealResponse = await putJson(base, '/api/me', revealPayload, memberCookie);
+    assert.equal(revealResponse.status, 200, 'member should be able to restore phone visibility');
+    assert.equal((await revealResponse.json()).profile.phone_visible, true,
+      'phone visibility should update when consent is restored');
+
     // Restart the modular server on the same isolated database and verify the
     // account, session, profile, and uploaded photo still work after reopening.
     const userCountBeforeRestart = app.db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
@@ -373,8 +407,11 @@ async function main() {
       'restarting should not add or remove user accounts');
     assert.ok(app.db.prepare('SELECT 1 FROM users WHERE email=?').get('ci-member@example.com'),
       'registered account should remain after restart');
-    assert.ok(app.db.prepare('SELECT 1 FROM profiles WHERE pid=?').get(registrationResult.profile.pid),
-      'registered profile should remain after restart');
+    const persistedProfileRow = app.db.prepare('SELECT name,phone_visible FROM profiles WHERE pid=?')
+      .get(registrationResult.profile.pid);
+    assert.ok(persistedProfileRow, 'registered profile should remain after restart');
+    assert.equal(persistedProfileRow.name, 'CI Updated Member', 'profile updates should survive restart');
+    assert.equal(persistedProfileRow.phone_visible, 1, 'phone visibility preference should survive restart');
     const restartedPort = await app.listen(0);
     const restartedBase = 'http://127.0.0.1:' + restartedPort;
     const persistedSession = await fetch(restartedBase + '/api/me', {
@@ -386,8 +423,63 @@ async function main() {
     assert.deepEqual(Buffer.from(await persistedPhoto.arrayBuffer()), photoFixture,
       'photo bytes should remain unchanged after restart');
 
-    assert.equal(mailRequests.length, 2, 'only the two successful signups should send emails in this test');
-    console.log('PASS: asset parity (except intentional app.js fix), language key parity, consent persistence/rejection, DB preservation/restart, registration parity, phone/email uniqueness, login/session, photo storage, welcome email, and admin permissions.');
+    // Forgot/reset password: the relay receives a reset link, its token is single-use,
+    // password reset invalidates existing sessions, and the new password can log in.
+    const forgotResponse = await postJson(restartedBase, '/api/password/forgot', {
+      email: 'ci-member@example.com'
+    });
+    assert.equal(forgotResponse.status, 200, 'password-reset request should respond without exposing account state');
+    const resetMail = mailRequests.find((item) =>
+      item.body && item.body.to === 'ci-member@example.com' &&
+      item.body.subject === 'AHABONA: kugarura ijambobanga'
+    );
+    assert.ok(resetMail && typeof resetMail.body.text === 'string', 'password-reset email should be sent to relay');
+    const resetMatch = resetMail.body.text.match(/\\/reset\\/([A-Za-z0-9_-]+)/);
+    assert.ok(resetMatch, 'reset email should contain a valid reset URL token');
+    const resetToken = resetMatch[1];
+    const resetPassword = 'NewTestMemberPass456!';
+    const resetResponse = await postJson(restartedBase, '/api/password/reset', {
+      token: resetToken,
+      password: resetPassword
+    });
+    assert.equal(resetResponse.status, 200, 'valid reset token should change password');
+    const reusedToken = await postJson(restartedBase, '/api/password/reset', {
+      token: resetToken,
+      password: 'AnotherTestPass789!'
+    });
+    assert.equal(reusedToken.status, 400, 'reset token must not be reusable');
+    const invalidatedSession = await fetch(restartedBase + '/api/me', {
+      headers: { cookie: memberCookie }
+    });
+    assert.equal(invalidatedSession.status, 200);
+    assert.equal((await invalidatedSession.json()).user, null,
+      'password reset should invalidate the old member session');
+
+    const oldPasswordLogin = await postJson(restartedBase, '/api/login', {
+      id: 'ci-member@example.com',
+      password: 'TestMemberPass123!'
+    });
+    assert.equal(oldPasswordLogin.status, 401, 'old password must stop working after reset');
+    const newPasswordLogin = await postJson(restartedBase, '/api/login', {
+      id: 'ci-member@example.com',
+      password: resetPassword
+    });
+    assert.equal(newPasswordLogin.status, 200, 'new password should work after reset');
+    const newCookieHeader = newPasswordLogin.headers.get('set-cookie') || '';
+    assert.ok(newCookieHeader.includes('ahs='), 'login after reset should create a session');
+
+    const logoutResponse = await postJson(restartedBase, '/api/logout', {}, newCookieHeader.split(';')[0]);
+    assert.equal(logoutResponse.status, 200, 'member should be able to log out');
+    const afterLogout = await fetch(restartedBase + '/api/me', {
+      headers: { cookie: newCookieHeader.split(';')[0] }
+    });
+    assert.equal((await afterLogout.json()).user, null, 'logged-out session must no longer authenticate');
+
+    assert.equal(mailRequests.filter((item) => item.body && item.body.subject === 'AHABONA: Murakaza neza / Welcome').length, 2,
+      'only the two successful signups should send welcome emails');
+    assert.equal(mailRequests.filter((item) => item.body && item.body.subject === 'AHABONA: kugarura ijambobanga').length, 1,
+      'password reset should send exactly one reset email');
+    console.log('PASS: asset parity, language key parity, phone consent and visibility, registration parity, duplicate checks, profile updates, DB/session/photo restart persistence, password reset, logout, welcome email, and admin permissions.');
   } finally {
     if (app) {
       try { await app.close(); } catch (error) {}
