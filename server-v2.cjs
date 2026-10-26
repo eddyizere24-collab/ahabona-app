@@ -348,6 +348,7 @@ function rolesCatalog(){return STAFF_LEVELS.map(k=>({id:k,rw:ROLES[k].rw,en:ROLE
     "forgot.email":"Email yawe","forgot.submit":"Ohereza",
     "forgot.sent":"Niba iyi email ibaho, twohereje ubutumwa bufite link. Reba inbox na spam.",
     "forgot.hint":"Tuzakoherereza link yo gushyiraho irindi jambobanga.",
+    "forgot.already_sent":"Ufite link iracyakora yoherejwe kuri email yawe. Reba Inbox na Spam. Ushobora gusaba iyindi nyuma y'amasaha 48.",
     "reset.title":"Ijambobanga rishya","reset.new":"Ijambobanga rishya",
     "reset.submit":"Bika","reset.ok":"Ijambobanga ryabitswe. Injira.",
     "reset.err":"Link yarangiye cyangwa ntiyemewe.",
@@ -494,6 +495,7 @@ function rolesCatalog(){return STAFF_LEVELS.map(k=>({id:k,rw:ROLES[k].rw,en:ROLE
     "forgot.email":"Your email","forgot.submit":"Send",
     "forgot.sent":"If this email exists, we sent a link. Check inbox and spam.",
     "forgot.hint":"We will send a link to set a new password.",
+    "forgot.already_sent":"You already have a working link in your email. Check Inbox and Spam. You can request another after 48 hours.",
     "reset.title":"New password","reset.new":"New password",
     "reset.submit":"Save","reset.ok":"Password saved. Log in.",
     "reset.err":"Link expired or invalid.",
@@ -1235,8 +1237,8 @@ function validateProfile(b,opts){
   if(f.svc.some(x=>!DIST.includes(x)))bad('svc','val.svc');
   if(f.svc.length>MAXSVC)bad('svc','val.svc5');
   const phoneConsent=b.phone_visible===true||b.phone_visible===1||b.phone_visible==='1'||b.phone_visible==='true';
-  f.phone_visible=b.phone_visible===undefined||b.phone_visible===null?(creating?0:null):(phoneConsent?1:0);
-  if(creating&&f.phone_visible!==1)bad('phone_visible','reg.err.phone.agree');
+  f.phone_visible=creating?1:b.phone_visible===undefined||b.phone_visible===null?(creating?0:null):(phoneConsent?1:0);
+  /* phone_visible optional */;
   f.languages=[...new Set((Array.isArray(b.languages)?b.languages:[]).map(x=>clean(x,3)).filter(x=>['rw','en','fr','sw'].includes(x)))];
   f.availability=[...new Set((Array.isArray(b.availability)?b.availability:[]).map(x=>clean(x,20)))].slice(0,6);
   f.experience=clean(b.experience,500);
@@ -2285,8 +2287,7 @@ async function apiReport(ctx,req,res){
   }
   ctx.newSession(res,uid,req);
   try{
-    await ctx.mailer.send(f.email,'AHABONA: Murakaza neza / Welcome',
-      'Murakaza neza kuri AHABONA!\n\nUmwirondoro wawe wabitswe. Abakeneye ubushobozi bwawe bazakubona.\n\nWelcome to AHABONA! Your profile is live. People who need your skills can now find you.\n\n— AHABONA');
+    await ctx.mailer.send(f.email,"AHABONA: Murakaza neza","☀️ MURAKAZA NEZA KURI AHABONA!\n\nUmwirondoro wawe uri kuri AHABONA! Abantu bakeneye serivisi utanga bashobora kuwureba, bakakuvugisha.\n\n������ Nawe gira uruhare mu gukura kwa AHABONA! Bwira nibura abantu 3 uzi biyandikishe, bagaragaze ibyo bashoboye. Bashobora kuba inshuti, abaturanyi cyangwa abandi, nk’abadozi, abafundi, abashoferi, abarimu n’abandi bafite ibyo bakora.\n\n������ https://ahabona.duckdns.org\n\n✅ Kwiyandikisha ni ubuntu!\n✅ No gushaka umuntu wo kugukorera serivisi kuri AHABONA ni ubuntu!\n\n������ Ukeneye ubufasha? Duhamagare cyangwa utwandikire kuri WhatsApp kuri 0792 053 086, tugufashe.\n\n❤️ Sangiza abandi AHABONA, kuko uko tugenda twiyongera, ni ko turushaho gufashanya kubona abo dukeneye.\n\n☀️ AHABONA — Uko turushaho kuba benshi, ni ko turushaho kubonana!\n\nMurakoze kuba muri kumwe natwe! ❤️");
   }catch(e){}
   const r=ctx.Q('SELECT p.*,u.phone,u.email,u.status,u.id_verified AS owner_verified FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=?').get(uid);
   sendJson(req,res,201,{profile:pubProfile(r,null,{own:true,email:f.email,status:'active'})});
@@ -2422,8 +2423,8 @@ async function apiPasswordForgot(ctx,req,res){
       }else{
         const tok=crypto.randomBytes(32).toString('base64url');
         ctx.Q('DELETE FROM resets WHERE user_id=?').run(us.id);
-        ctx.Q('INSERT INTO resets(th,user_id,expires) VALUES(?,?,?)').run(sha(tok),us.id,Date.now()+HOUR);
-        try{await ctx.mailer.send(em,'AHABONA: kugarura ijambobanga','Kanda hano ushyireho ijambobanga rishya (rimara isaha imwe): '+base+'/reset/'+tok)}
+        ctx.Q('INSERT INTO resets(th,user_id,expires) VALUES(?,?,?)').run(sha(tok),us.id,Date.now()+48*HOUR);
+        try{await ctx.mailer.send(em,'AHABONA: kugarura ijambobanga','Kanda hano ushyireho ijambobanga rishya (rimara amasaha 48): '+base+'/reset/'+tok)}
         catch(e){console.error('[password-reset] mail send failed:',e&&e.message||e)}
       }
     }
@@ -4550,6 +4551,7 @@ var RG={
     photos:[],thumbs:[],jobs:[],other:'',intro:'',
     edu:'',soc:'',experience:'',languages:[],availability:[],
     phone:'',wa:'',phones:[],email:'',password:'',terms:false,email_public:'',facebook:'',instagram:'',tiktok:'',linkedin:'',telegram:'',twitter:'',
+    phone_visible:false,
     _photosUnchanged:false
   }
 };
@@ -4579,6 +4581,7 @@ function resetRG(){
     photos:[],thumbs:[],jobs:[],other:'',intro:'',
     edu:'',soc:'',experience:'',languages:[],availability:[],
     phone:'',wa:'',phones:[],email:'',password:'',terms:false,email_public:'',facebook:'',instagram:'',tiktok:'',linkedin:'',telegram:'',twitter:'',
+    phone_visible:false,
     _photosUnchanged:false
   };
 }
@@ -4733,7 +4736,7 @@ function renderRegister(){
       body+='<h3>'+esc(t('reg.s4'))+'</h3><div class="f">'+
         '<label>'+esc(t('reg.phone'))+'</label><div class="note">'+esc(t('reg.phone.hint'))+'</div>'+
         '<input data-rg="phone" type="tel" inputmode="tel" placeholder="'+esc(t('reg.phone.ph'))+'" value="'+esc(d.phone)+'">'+
-        '<label class="ck"><input type="checkbox" data-rg="phone-agree"><span>'+esc(t('reg.phone.agree'))+'</span></label>'+
+        '<label class="ck"><input type="checkbox" data-rg="phone-agree"'+(d.phone_visible?' checked':'')+'><span>'+esc(t('reg.phone.agree'))+'</span></label>'+
         '<label>'+esc(t('reg.wa'))+'</label><input data-rg="wa" type="tel" inputmode="tel" placeholder="'+esc(t('reg.phone.ph'))+'" value="'+esc(d.wa)+'">'+
         '<label>'+esc(t('reg.phones'))+'</label><div class="note">'+esc(t('reg.phones.hint'))+'</div>'+
         '<div id="rg-phones-extra"></div>'+
@@ -4948,7 +4951,7 @@ function wireRegInputs(){
       return;
     }
     if(key==='phone-agree'){
-      el._agree=true;
+      el.addEventListener('change',function(){rgSet('phone_visible',!!el.checked)});
       return;
     }
     if(key.indexOf('phone-')===0){
@@ -5151,7 +5154,7 @@ function rgValidate(step){
   if(step===4&&!RG.editing){
     var ph=d.phone.replace(/[\\s-]/g,'').replace(/^\\+?250/,'0');
     if(!/^07[2389]\\d{7}$/.test(ph))return 'reg.err.phone';
-    if(!d._agree&&!document.querySelector('[data-rg="phone-agree"]:checked'))return 'reg.err.phone.agree';
+    if(!d.phone_visible)return 'reg.err.phone.agree';
   }
   if(step===5&&!RG.editing){
     if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$/.test(d.email.trim()))return 'reg.err.email';
@@ -5275,7 +5278,7 @@ async function rgSubmit(){
   }else{
     body.birthdate=d.birthdate||undefined;
     body.gender=d.gender||undefined;
-    body.phone_visible=!!document.querySelector('[data-rg="phone-agree"]:checked');
+    body.phone_visible=!!RG.data.phone_visible;
   }
   if(d.photos.length){
     body.photos=d.photos.slice();
@@ -5400,9 +5403,12 @@ function openForgot(){
 }
 async function doForgot(){
   var fe=document.getElementById('fe');if(!fe)return;
-  await api('POST','/api/password/forgot',{email:fe.value.trim()});
+  var _r=await api('POST','/api/password/forgot',{email:fe.value.trim()});
   var fm=document.getElementById('fm');
-  if(fm)fm.textContent=t('forgot.sent');
+  if(fm){
+    if(_r&&_r.data&&_r.data.has_existing)fm.textContent=t('forgot.already_sent');
+    else fm.textContent=t('forgot.sent');
+  }
 }
 
 function openReset(token){
@@ -7877,7 +7883,7 @@ async function adminUserResetPw(ctx,req,res,id,admin){
   if(!base)return sendError(req,res,503,'err.server');
   const tok=crypto.randomBytes(32).toString('base64url');
   ctx.Q('DELETE FROM resets WHERE user_id=?').run(t.id);
-  ctx.Q('INSERT INTO resets(th,user_id,expires) VALUES(?,?,?)').run(sha(tok),t.id,Date.now()+HOUR);
+  ctx.Q('INSERT INTO resets(th,user_id,expires) VALUES(?,?,?)').run(sha(tok),t.id,Date.now()+48*HOUR);
   const link=base+'/reset/'+tok;
   if(ctx.mailer.isLive||ctx.mailer.isDev){
     try{await ctx.mailer.send(t.email,'AHABONA: reset password','Link (1 hour): '+link)}catch(e){}
@@ -7918,9 +7924,9 @@ EMBED['splash.js'] = `(function(){
 `;
 
 EMBED['sw.js'] = `/* AHABONA Service Worker v2 */
-const SHELL='ahabona-shell-v6';
-const DATA='ahabona-data-v6';
-const PHOTOS='ahabona-photos-v6';
+const SHELL='ahabona-shell-v9';
+const DATA='ahabona-data-v9';
+const PHOTOS='ahabona-photos-v9';
 const SHELL_URLS=['/','/manifest.webmanifest','/icon.svg','/splash.js'];
 const DATA_LIMIT=60;
 const PHOTO_LIMIT=120;
