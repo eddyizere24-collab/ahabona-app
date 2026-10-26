@@ -99,7 +99,7 @@ async function main() {
     process.env.ADMIN_EMAIL = 'ci-admin@example.com';
     process.env.ADMIN_PHONE = '0790000000';
     process.env.ADMIN_PASSWORD = 'TestAdminPass123!';
-    process.env.AHABONA_URL = 'http://127.0.0.1';
+    process.env.AHABONA_URL = 'https://ahabona.example.test';
     process.env.AHABONA_DATA = dataDir;
 
     // Create a scratch database with the original server, then reopen it using
