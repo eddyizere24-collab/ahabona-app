@@ -169,6 +169,11 @@ async function main() {
     assert.equal(originalInvalid.status, invalid.status, 'invalid registration status must match the original server');
     assert.deepEqual(await originalInvalid.json(), await invalid.clone().json(), 'invalid registration error shape must match the original server');
 
+    const photoFixture = Buffer.alloc(256, 0x5a);
+    photoFixture[0] = 0xff;
+    photoFixture[1] = 0xd8;
+    const photoData = 'data:image/jpeg;base64,' + photoFixture.toString('base64');
+
     const validProfile = {
       name: 'CI Test Member',
       birthdate: '1992-02-02',
@@ -186,8 +191,8 @@ async function main() {
       email: 'ci-member@example.com',
       password: 'TestMemberPass123!',
       terms: true,
-      photos: [],
-      thumbs: [],
+      photos: [photoData],
+      thumbs: [photoData],
       languages: ['rw'],
       availability: []
     };
@@ -215,6 +220,21 @@ async function main() {
     assert.deepEqual(registrationResult.profile.svc, originalRegistrationResult.profile.svc);
     assert.deepEqual(registrationResult.profile.languages, originalRegistrationResult.profile.languages);
     assert.deepEqual(registrationResult.profile.availability, originalRegistrationResult.profile.availability);
+    assert.equal(registrationResult.profile.photos.length, 1, 'modular signup should store the uploaded photo');
+    assert.equal(originalRegistrationResult.profile.photos.length, 1, 'original signup should store the uploaded photo');
+    const [modularPhotoResponse, originalPhotoResponse] = await Promise.all([
+      fetch(base + registrationResult.profile.photos[0]),
+      fetch(baseline + originalRegistrationResult.profile.photos[0])
+    ]);
+    assert.equal(modularPhotoResponse.status, 200, 'modular photo should be readable');
+    assert.equal(originalPhotoResponse.status, 200, 'original photo should be readable');
+    const [modularPhotoBytes, originalPhotoBytes] = await Promise.all([
+      modularPhotoResponse.arrayBuffer(),
+      originalPhotoResponse.arrayBuffer()
+    ]);
+    assert.deepEqual(Buffer.from(modularPhotoBytes), Buffer.from(originalPhotoBytes),
+      'stored photo bytes should match between the original and modular servers');
+    assert.deepEqual(Buffer.from(modularPhotoBytes), photoFixture, 'stored photo bytes should match the submitted image');
 
     const welcome = mailRequests.find((item) =>
       item.body && item.body.to === 'ci-member@example.com' &&
