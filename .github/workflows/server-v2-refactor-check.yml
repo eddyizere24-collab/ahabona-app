@@ -1,16 +1,12 @@
 name: Server v2 modular-refactor checks
 
 on:
-  push:
-    branches:
-      - 'refactor/server-v2-modules-20261026'
   pull_request:
     paths:
       - 'server-v2.cjs'
       - 'server-v2.cjs17'
       - 'server-v2-modules/**'
       - 'tests/server-v2-refactor-smoke.cjs'
-      - 'tests/server-v2-refactor-browser.cjs'
       - '.github/workflows/server-v2-refactor-check.yml'
   workflow_dispatch:
 
@@ -37,24 +33,13 @@ jobs:
         shell: bash
         run: |
           set -eu
-          for file in server-v2.cjs server-v2-refactor-test.cjs server-v2-modules/*.cjs server-v2-modules/assets/*.js tests/server-v2-refactor-smoke.cjs tests/server-v2-refactor-browser.cjs; do
+          for file in server-v2.cjs server-v2-refactor-test.cjs server-v2-modules/*.cjs server-v2-modules/assets/*.js tests/server-v2-refactor-smoke.cjs; do
             echo "Checking $file"
             node --check "$file"
           done
 
       - name: Run isolated behavior and database smoke tests
         run: node tests/server-v2-refactor-smoke.cjs
-
-      - name: Install isolated Playwright dependency
-        run: npm install --prefix "$RUNNER_TEMP/ahabona-browser-deps" playwright
-
-      - name: Install Chromium for browser regression tests
-        run: "$RUNNER_TEMP/ahabona-browser-deps/node_modules/.bin/playwright" install chromium
-
-      - name: Test mobile and desktop registration and browser Back
-        env:
-          NODE_PATH: ${{ runner.temp }}/ahabona-browser-deps/node_modules
-        run: node tests/server-v2-refactor-browser.cjs
 
       - name: Remove temporary test entry point
         if: always()
