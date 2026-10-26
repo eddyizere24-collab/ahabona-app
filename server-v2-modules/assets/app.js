@@ -56,7 +56,7 @@ var I18N={
     'reg.exp':'Uburambe bw’akazi','reg.exp.hint':'Andika akazi wakoze (ihitamo).',
     'reg.langs':'Indimi (ihitamo)','reg.avail':'Igihe ariho (ihitamo)',
     'reg.avail.morning':'Mu gitondo','reg.avail.afternoon':'Ku manywa','reg.avail.evening':'Nimugoroba',
-    'reg.avail.weekday':'Ku wa mbere - Ku wa gatanu','reg.avail.weekend':'Weekend',
+    'reg.avail.weekday':'Ku wa mbere - Ku wa gatanu','reg.avail.weekend':'Mu mpera z’icyumweru',
     'reg.jobs':'Icyo ushoboye','reg.jobs.hint':'Hitamo kugeza kuri 3.','reg.jobs.find':'Shaka umurimo',
     'reg.jobs.other':'Ntabona umurimo wanjye','reg.jobs.otherText':'Andika umurimo wawe',
     'reg.phone':'Telefoni','reg.phone.hint':'Izagaragara ku mwirondoro wawe.','reg.phone.ph':'0792053086',
@@ -1041,7 +1041,7 @@ function renderRegister(){
         ((ST.cfg&&ST.cfg.genders)||[]).map(function(g){return '<option value="'+g.id+'"'+(d.gender===g.id?' selected':'')+'>'+esc(LANG==='en'?g.en:g.rw)+'</option>'}).join('')+
         '</select>'+
         '<label>'+esc(t('reg.province'))+'</label><select data-rg="province"><option value="">'+esc(t('reg.province.pick'))+'</option>'+
-        Object.keys((ST.cfg&&ST.cfg.provinces)||{}).map(function(p){return '<option value="'+esc(p)+'"'+(d.province===p?' selected':'')+'>'+esc(p)+'</option>'}).join('')+
+        Object.keys((ST.cfg&&ST.cfg.provinces)||{}).map(function(p){return '<option value="'+esc(p)+'"'+(d.province===p?' selected':'')+'>'+esc(displayProv(p))+'</option>'}).join('')+
         '</select>'+
         '<label>'+esc(t('reg.district'))+'</label><select data-rg="district"><option value="">'+esc(t('reg.district.pick'))+'</option>'+
         ((ST.cfg&&ST.cfg.provinces&&ST.cfg.provinces[d.province])||[]).map(function(dd){return '<option value="'+esc(dd)+'"'+(d.district===dd?' selected':'')+'>'+esc(dd)+'</option>'}).join('')+
@@ -1105,7 +1105,7 @@ function renderRegister(){
       body+='<h3>'+esc(t('reg.s1'))+'</h3><div class="f">'+
         '<label>'+esc(t('reg.name'))+'</label><input data-rg="name" value="'+esc(d.name)+'">'+
         '<label>'+esc(t('reg.province'))+'</label><select data-rg="province"><option value="">'+esc(t('reg.province.pick'))+'</option>'+
-        Object.keys((ST.cfg&&ST.cfg.provinces)||{}).map(function(p){return '<option value="'+esc(p)+'"'+(d.province===p?' selected':'')+'>'+esc(p)+'</option>'}).join('')+
+        Object.keys((ST.cfg&&ST.cfg.provinces)||{}).map(function(p){return '<option value="'+esc(p)+'"'+(d.province===p?' selected':'')+'>'+esc(displayProv(p))+'</option>'}).join('')+
         '</select>'+
         '<label>'+esc(t('reg.district'))+'</label><select data-rg="district"><option value="">'+esc(t('reg.district.pick'))+'</option>'+
         ((ST.cfg&&ST.cfg.provinces&&ST.cfg.provinces[d.province])||[]).map(function(dd){return '<option value="'+esc(dd)+'"'+(d.district===dd?' selected':'')+'>'+esc(dd)+'</option>'}).join('')+
@@ -1333,7 +1333,7 @@ function wireSvc(){
     var dists=provs[p]||[];
     var anyOn=cur.some(function(d){return dists.indexOf(d)!==-1});
     html+='<details style="border-bottom:1px solid var(--b)"'+(idx===0||anyOn?' open':'')+'>'+
-      '<summary style="padding:8px 4px;min-height:40px;cursor:pointer;font-weight:600">'+esc(p)+'</summary>'+
+      '<summary style="padding:8px 4px;min-height:40px;cursor:pointer;font-weight:600">'+esc(displayProv(p))+'</summary>'+
       '<div style="padding:4px 4px 8px">'+dists.map(function(dd){
         var on=cur.indexOf(dd)!==-1;
         return '<label class="ck" style="margin:4px 0"><input type="checkbox" data-svc="'+esc(dd)+'"'+(on?' checked':'')+'><span>'+esc(dd)+'</span></label>';
@@ -1631,7 +1631,7 @@ async function rgSubmit(){
   if(btn){btn.disabled=false;btn.textContent=t('reg.submit')}
   if(!r.ok){
     if(r.data&&r.data.field){
-      var stepMap={name:1,birthdate:1,gender:1,district:1,province:1,photos:2,jobs:3,other:3,phone:4,email:5,password:5,terms:6};
+      var stepMap={name:1,birthdate:1,gender:1,district:1,province:1,svc:1,photos:2,edu:2,soc:2,intro:2,jobs:3,other:3,experience:3,phone:4,phone_visible:4,wa:4,phones:4,email_public:4,facebook:4,instagram:4,tiktok:4,linkedin:4,telegram:4,twitter:4,email:5,password:5,terms:6};
       var st=stepMap[r.data.field];
       if(st){RG.step=st;renderRegister();setTimeout(function(){toast(r.data.error||t('home.error'))},100);return}
     }
