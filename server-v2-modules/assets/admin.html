@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="rw">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AHABONA — Ubuyobozi</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<style>
+:root{--p:#1a9b6c;--pd:#158055;--pt:#fff;--pl:rgba(26,155,108,.10);--g:#d4a838;--gl:rgba(212,168,56,.14);--gd:#8a6100;--bg:#faf7ef;--s:#fff;--t:#1e2a32;--m:#5a6470;--b:#e8e4da;--e:#c3392c;--sh:0 1px 2px rgba(30,42,50,.06);--sh2:0 4px 14px rgba(30,42,50,.10)}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--t)}
+a{color:var(--p);text-decoration:none}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.top{position:sticky;top:0;z-index:5;background:var(--s);border-bottom:1px solid var(--b);padding:10px 16px;display:flex;align-items:center;gap:10px}
+.top .brand{font-weight:800;font-size:18px;letter-spacing:.5px}
+.top .brand .sun{width:24px;height:24px;vertical-align:middle;margin-right:6px}
+.top .spacer{flex:1}
+.top .user{color:var(--m);font-size:13px}
+.top button.b{background:var(--pl);border:0;border-radius:8px;padding:8px 12px;font-weight:600;color:var(--t)}
+.top button.b:hover{background:rgba(26,155,108,.18)}
+.layout{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 53px)}
+@media(max-width:800px){.layout{grid-template-columns:1fr}}
+.side{background:var(--s);border-right:1px solid var(--b);padding:12px}
+@media(max-width:800px){.side{border-right:0;border-bottom:1px solid var(--b);display:flex;overflow-x:auto;gap:4px;padding:8px}}
+.side button{display:flex;width:100%;align-items:center;gap:8px;background:none;border:0;padding:10px 12px;text-align:left;border-radius:8px;color:var(--t);font-weight:500;min-height:40px}
+.side button.on{background:var(--pl);color:var(--p);font-weight:700}
+.side button:hover{background:var(--pl)}
+@media(max-width:800px){.side button{flex:none;width:auto;white-space:nowrap}}
+.content{padding:20px}
+@media(max-width:800px){.content{padding:14px}}
+h1{margin:0 0 4px;font-size:22px}
+h2{margin:20px 0 10px;font-size:16px}
+h3{margin:16px 0 8px;font-size:14px;text-transform:uppercase;letter-spacing:.4px;color:var(--m)}
+.sub{color:var(--m);margin:0 0 16px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px}
+.stat{background:var(--s);border:1px solid var(--b);border-radius:12px;padding:14px;box-shadow:var(--sh)}
+.stat .num{font-size:26px;font-weight:800;color:var(--p)}
+.stat .lbl{font-size:12px;color:var(--m);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+.stat.gold .num{color:var(--g)}
+.panel{background:var(--s);border:1px solid var(--b);border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:var(--sh)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+table th{text-align:left;padding:8px 6px;border-bottom:2px solid var(--b);font-weight:700;color:var(--m);font-size:12px;text-transform:uppercase;letter-spacing:.3px}
+table td{padding:8px 6px;border-bottom:1px solid var(--b);vertical-align:top}
+table tr:hover td{background:rgba(26,155,108,.04)}
+.btn{background:var(--p);color:var(--pt);border:0;border-radius:8px;padding:8px 12px;font-weight:600;cursor:pointer;min-height:36px}
+.btn:hover{background:var(--pd)}
+.btn.ol{background:transparent;color:var(--t);border:1px solid var(--b)}
+.btn.ol:hover{background:var(--pl)}
+.btn.danger{background:var(--e);color:#fff}
+.btn.gold{background:var(--g);color:#3a2a00}
+.btn.sm{padding:4px 8px;font-size:12px;min-height:28px}
+input,select,textarea{width:100%;border:1px solid var(--b);border-radius:8px;padding:8px 10px;background:var(--s);min-height:36px;font-size:14px}
+input[type=checkbox],input[type=radio]{width:auto;min-height:auto}
+.f label{display:block;font-weight:600;margin:10px 0 4px;font-size:13px}
+.f textarea{min-height:80px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.act{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.note{font-size:12px;color:var(--m);margin-top:6px}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--pl);color:var(--p);font-size:11px;font-weight:700}
+.badge.gold{background:var(--gl);color:var(--gd)}
+.badge.red{background:rgba(195,57,44,.12);color:var(--e)}
+.badge.gray{background:rgba(90,100,112,.12);color:var(--m)}
+.login{max-width:400px;margin:80px auto;background:var(--s);border:1px solid var(--b);border-radius:12px;padding:24px;box-shadow:var(--sh2)}
+.login h1{font-size:22px;margin:0 0 6px;text-align:center}
+.login .sub{text-align:center;margin:0 0 20px}
+.login .sun{width:56px;height:56px;display:block;margin:0 auto 12px}
+.er{color:var(--e);font-size:13px;margin-top:8px;min-height:1em;text-align:center}
+.toast{position:fixed;left:16px;right:16px;bottom:16px;max-width:400px;margin:auto;background:var(--t);color:var(--bg);padding:12px 14px;border-radius:10px;display:none;box-shadow:var(--sh2);border-left:3px solid var(--g);z-index:999}
+.flag{padding:10px 0;border-bottom:1px solid var(--b);display:flex;align-items:center;gap:10px}
+.flag:last-child{border-bottom:0}
+.flag .nm{flex:1;font-weight:600}
+.flag .needs{color:var(--m);font-size:12px}
+.sw{position:relative;display:inline-block;width:44px;height:24px;flex:none}
+.sw input{opacity:0;width:0;height:0}
+.sw .sl{position:absolute;cursor:pointer;inset:0;background:var(--b);border-radius:24px;transition:.2s}
+.sw .sl:before{content:"";position:absolute;height:18px;width:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.sw input:checked+.sl{background:var(--p)}
+.sw input:checked+.sl:before{transform:translateX(20px)}
+@media(max-width:640px){table{font-size:12px}table th,table td{padding:6px 4px}}
+</style>
+</head>
+<body>
+<div class="top">
+<div class="brand"><span id="sunTop"></span>AHABONA</div>
+<div class="spacer"></div>
+<span class="user" id="whoAmI"></span>
+<button class="b" id="btnLogout">Sohoka</button>
+</div>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+<script src="/admin.js" defer></script>
+</body>
+</html>
