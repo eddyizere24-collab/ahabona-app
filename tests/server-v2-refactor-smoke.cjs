@@ -201,6 +201,14 @@ async function main() {
       'phone visibility consent must be saved when the checkbox changes');
     assert.match(clientAppSource, /if\(!d\.phone_visible\)return 'reg\.err\.phone\.agree';/,
       'registration must require explicit phone visibility consent');
+    const validationBlock = clientAppSource.match(/function rgValidate\(step\)\s*\{([\s\S]*?)\n\}/);
+    assert.ok(validationBlock, 'registration validation function should exist');
+    const stepSixValidation = validationBlock[1].match(/if\(step===6&&!RG\.editing\)\s*\{([^}]+)\}/);
+    assert.ok(stepSixValidation, 'registration step six should have a dedicated validation block');
+    assert.match(stepSixValidation[1], /d\.terms/,
+      'step six should validate acceptance of terms');
+    assert.doesNotMatch(stepSixValidation[1], /phone_visible|reg\.err\.phone\.agree/,
+      'step six must not ask users to reconfirm phone visibility after step four');
     assert.equal(
       (clientAppSource.match(/body\.phone_visible=!!d\.phone_visible/g) || []).length,
       2,
