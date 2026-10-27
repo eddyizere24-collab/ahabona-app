@@ -7787,9 +7787,11 @@ async function adminStudioUpload(ctx,req,res,admin,kind){
     if(rb.over)return sendError(req,res,413,'err.big');
     if(rb.fail)return sendError(req,res,400,'err.server');
     if(!rb.buf||!rb.buf.length)return sendError(req,res,400,'common.required');
-    const result=kind==='image'
-      ?await ctx.studioMedia.uploadImage(ctx.db,rb.buf,admin.id,Date.now())
-      :await ctx.studioMedia.uploadVideo(ctx.db,rb.buf,ct,admin.id,Date.now());
+    const pending=kind==='image'
+      ?ctx.studioMedia.uploadImage(ctx.db,rb.buf,admin.id,Date.now())
+      :ctx.studioMedia.uploadVideo(ctx.db,rb.buf,ct,admin.id,Date.now());
+    rb.buf=null;
+    const result=await pending;
     ctx.adminLog(admin.id,'studio.asset.upload','studio_asset',String(result.asset.id),JSON.stringify({kind:kind,bytes:result.asset.bytes}),ctx.ipOf(req));
     sendJson(req,res,201,{ok:true,asset:studioAssetSummary(result.asset),poster:studioAssetSummary(result.poster)});
   }catch(e){studioApiError(req,res,e)}
