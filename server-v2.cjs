@@ -7602,6 +7602,8 @@ function handleRequest(ctx,req,res){
       '/admin/studio':'editor.html',
       '/admin/studio/':'editor.html',
       '/admin/studio/editor.css':'editor.css',
+      '/admin/studio/renderer.css':'renderer.css',
+      '/admin/studio/renderer.js':'renderer.js',
       '/admin/studio/editor.js':'editor.js'
     };
     const file=files[p];
@@ -7648,6 +7650,13 @@ function handleRequest(ctx,req,res){
     res.writeHead(200,{'Content-Type':'application/manifest+json; charset=utf-8','Cache-Control':'public, max-age=3600','Content-Length':mb.length});
     return res.end(mb);
   }
+  if(p==='/studio-renderer.js'||p==='/studio-renderer.css'){
+    if(!ctx.studio)return sendError(req,res,404,'err.notfound');
+    const file=p.endsWith('.js')?'renderer.js':'renderer.css';
+    const type=file.endsWith('.js')?'text/javascript; charset=utf-8':'text/css; charset=utf-8';
+    try{return sendText(req,res,200,fs.readFileSync(path.join(__dirname,'server-v2-modules','studio',file)),type,{noCache:true})}
+    catch(e){return sendError(req,res,404,'err.notfound')}
+  }
   var studioMediaMatch=p.match(/^\/studio-media\/(\d+)$/);
   if(studioMediaMatch){
     if(!ctx.studio||!ctx.studioMedia)return sendError(req,res,404,'err.notfound');
@@ -7663,7 +7672,8 @@ function handleRequest(ctx,req,res){
     if(!live&&!authorizedAdmin)return sendError(req,res,404,'err.notfound');
     const fp=path.join(ctx.studioMedia.root,asset.storage_key);
     if(path.dirname(fp)!==ctx.studioMedia.root)return sendError(req,res,404,'err.notfound');
-    return sendMediaFile(req,res,fp,mt,'public, max-age=31536000, immutable');
+    const mediaCache=live?'public, max-age=31536000, immutable':'private, no-store';
+    return sendMediaFile(req,res,fp,mt,mediaCache);
   }
   if(p.startsWith('/photos/')){
     var f=p.slice(8);
