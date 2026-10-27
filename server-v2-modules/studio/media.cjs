@@ -48,7 +48,7 @@ function videoContainer(buf) {
 function key(ext) { return 'studio-'+crypto.randomBytes(16).toString('hex')+'.'+ext; }
 function dimensions(probe) {
   const stream=(probe.streams||[]).find(x=>x.codec_type==='video');
-  if(!stream||!Number.isInteger(stream.width)||!Number.isInteger(stream.height)||stream.width<1||stream.height<1||stream.width>20000||stream.height>20000)fail('studio.err.media_dimensions');
+  if(!stream||!Number.isInteger(stream.width)||!Number.isInteger(stream.height)||stream.width<1||stream.height<1||stream.width>20000||stream.height>20000||stream.width*stream.height>20000000)fail('studio.err.media_dimensions');
   return {stream,width:stream.width,height:stream.height};
 }
 function durationMs(probe,stream) {
@@ -112,11 +112,9 @@ function makeStudioMediaPipeline(dataDir) {
     }
   }
   function probeImageMetadata(file) {
-    // ffprobe's video stream entry also describes still-image dimensions.
-    const r=fs.readFileSync(file);
-    if(!r.length)fail('studio.err.media_invalid');
-    // Actual metadata is validated asynchronously before this helper is used.
-    return imageMetadataCache.get(file);
+    const info=imageMetadataCache.get(file);
+    if(!info)fail('studio.err.media_invalid');
+    return info;
   }
   const imageMetadataCache=new Map();
 
@@ -128,7 +126,10 @@ function makeStudioMediaPipeline(dataDir) {
     let saved=null;
     try {
       fs.writeFileSync(input,buffer,{flag:'wx',mode:0o600});
-      await exec('ffmpeg',['-y','-hide_banner','-loglevel','error','-i',input,'-frames:v','1','-vf',"scale='trunc(min(1280,iw)/2)*2':-2",'-q:v','5','-map_metadata','-1','-threads','1',out],90000);
+      buffer=null;
+      const source=await probe(input), sourceDim=dimensions(source);
+      if(sourceDim.width*sourceDim.height>20000000)fail('studio.err.media_dimensions');
+      await exec('ffmpeg',['-y','-hide_banner','-loglevel','error','-i',input,'-frames:v','1','-update','1','-vf',"scale='trunc(min(1280,iw)/2)*2':-2",'-q:v','5','-map_metadata','-1','-threads','1',out],90000);
       const p=await probe(out), d=dimensions(p);
       if((p.streams||[]).some(x=>x.codec_type==='video'&&x.codec_name&&x.codec_name!=='mjpeg'))fail('studio.err.media_invalid');
       imageMetadataCache.set(out,{width:d.width,height:d.height});
@@ -150,6 +151,7 @@ function makeStudioMediaPipeline(dataDir) {
     let mediaAsset=null,posterAsset=null,mediaKey=null,posterKey=null;
     try {
       fs.writeFileSync(input,buffer,{flag:'wx',mode:0o600});
+      buffer=null;
       const source=await probe(input), sourceDim=dimensions(source);
       const sourceDuration=durationMs(source,sourceDim.stream);
       // Reject overlong input; do not silently truncate user content.
@@ -157,7 +159,7 @@ function makeStudioMediaPipeline(dataDir) {
       await exec('ffmpeg',['-y','-hide_banner','-loglevel','error','-i',input,'-t','90','-map','0:v:0','-vf',"scale='trunc(min(960,iw)/2)*2':-2",'-c:v','libx264','-preset','veryfast','-crf','29','-maxrate','1200k','-bufsize','2400k','-pix_fmt','yuv420p','-profile:v','main','-level','3.1','-threads','1','-an','-sn','-dn','-map_metadata','-1','-movflags','+faststart','-f','mp4',out],180000);
       const processed=await probe(out), pd=dimensions(processed), dur=durationMs(processed,pd.stream);
       if(pd.stream.codec_name!=='h264'||dur>MAX_DURATION_MS)fail('studio.err.video_not_ready');
-      await exec('ffmpeg',['-y','-hide_banner','-loglevel','error','-i',out,'-frames:v','1','-vf',"scale='trunc(min(640,iw)/2)*2':-2",'-q:v','4','-map_metadata','-1','-threads','1',posterFile],60000);
+      await exec('ffmpeg',['-y','-hide_banner','-loglevel','error','-i',out,'-frames:v','1','-update','1','-vf',"scale='trunc(min(640,iw)/2)*2':-2",'-q:v','4','-map_metadata','-1','-threads','1',posterFile],60000);
       const mp4stat=statFile(out,MAX_VIDEO), posterStat=statFile(posterFile,MAX_IMAGE);
       const pp=await probe(posterFile), posterDim=dimensions(pp);
       mediaKey=key('mp4');posterKey=key('jpg');
