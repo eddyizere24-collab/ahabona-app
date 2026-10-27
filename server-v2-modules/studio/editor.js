@@ -160,7 +160,7 @@
     } catch (error) {
       $('scene-list').innerHTML = '<div class="empty-state">Studio backend ntirahuzwa n’iyi editor.<br><br><small>' + esc(error.message) + '</small></div>';
       $('system-status').textContent = 'Ntihujwe'; $('system-status').className = 'status-pill neutral';
-      message('Iyi ni editor ya test; API routes zizahuzwa mu cyiciro cyo guhuza backend.', '');
+      message('Studio API ntibashije guhuza. Reba ko winjiye nka admin ufite uburenganzira bwa content.edit, hanyuma wongere ugerageze.', 'error');
     } finally { state.loading = false; $('refresh-btn').disabled = false; }
   }
   function fillSettings() {
