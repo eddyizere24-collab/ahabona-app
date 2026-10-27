@@ -10,6 +10,7 @@ on:
       - 'tests/studio-store-smoke.cjs'
       - 'tests/studio-media-validation-smoke.cjs'
       - 'tests/studio-integration-smoke.cjs'
+      - 'tests/studio-browser-smoke.cjs'
       - '.github/workflows/studio-isolated-checks.yml'
   pull_request:
     paths:
@@ -18,6 +19,7 @@ on:
       - 'tests/studio-store-smoke.cjs'
       - 'tests/studio-media-validation-smoke.cjs'
       - 'tests/studio-integration-smoke.cjs'
+      - 'tests/studio-browser-smoke.cjs'
       - '.github/workflows/studio-isolated-checks.yml'
   workflow_dispatch:
 
@@ -27,7 +29,7 @@ permissions:
 jobs:
   isolated-studio:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 12
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -44,6 +46,11 @@ jobs:
           ffmpeg -version | head -n 1
           ffprobe -version | head -n 1
 
+      - name: Install Playwright Chromium for responsive browser checks
+        run: |
+          npm install --no-save --no-package-lock playwright
+          npx playwright install --with-deps chromium
+
       - name: Check JavaScript syntax
         shell: bash
         run: |
@@ -57,6 +64,7 @@ jobs:
           node --check tests/studio-store-smoke.cjs
           node --check tests/studio-media-validation-smoke.cjs
           node --check tests/studio-integration-smoke.cjs
+          node --check tests/studio-browser-smoke.cjs
 
       - name: Test isolated Studio storage
         run: node --no-warnings tests/studio-store-smoke.cjs
@@ -66,3 +74,6 @@ jobs:
 
       - name: Test opt-in Studio server integration
         run: node --no-warnings tests/studio-integration-smoke.cjs
+
+      - name: Test Studio editor in Chromium at mobile and desktop widths
+        run: node --no-warnings tests/studio-browser-smoke.cjs
