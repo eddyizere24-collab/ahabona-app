@@ -171,6 +171,57 @@ let browser=null;
     assert.ok(publicHeroText.includes('Igenzura rya telefoni'),
       'anonymous public hero should render the same published text as admin preview');
 
+    // Publish the uploaded H.264 video and verify that anonymous visitors can
+    // fetch its public poster/video and that the public hero mounts the video.
+    await page.locator('#new-scene').click();
+    await page.locator('#scene-kind').selectOption('video');
+    await page.locator('#title-rw').fill('Video yo kugerageza');
+    await page.locator('#asset-select').selectOption(videoId);
+    await page.locator('#poster-select').selectOption(posterId);
+    await page.locator('#scene-fit-status').selectOption('published');
+    await page.locator('#publish-scene').click();
+    await page.waitForFunction(()=>{
+      const n=document.querySelector('#form-message');
+      return !!n&&(n.classList.contains('success')||n.classList.contains('error'));
+    },null,{timeout:10000});
+    const videoSave=await page.locator('#form-message').evaluate(n=>({text:n.textContent,className:n.className}));
+    assert.ok(videoSave.className.includes('success')&&videoSave.text.includes('Byabitswe kandi byatangajwe'),
+      'Publishing the uploaded video failed: '+JSON.stringify(videoSave));
+    const videoSceneId=Number(await page.locator('#scene-id').inputValue());
+    assert.ok(Number.isSafeInteger(videoSceneId)&&videoSceneId>0,'published video scene should have an ID');
+
+    // Put the video first so the anonymous homepage exercises its public renderer.
+    const videoRow=page.locator('#scene-list .scene-item').filter({hasText:'Video yo kugerageza'});
+    await videoRow.locator('[data-move][data-delta="-1"]').click();
+    await page.waitForFunction(()=>document.querySelector('#toast')?.textContent.includes('Itondekanya ryahindutse'),
+      null,{timeout:10000});
+    const videoPlaylist=await (await context.request.get(base+'/api/studio/playlist')).json();
+    const publicVideoScene=videoPlaylist.scenes.find(scene=>scene.id===videoSceneId);
+    assert.ok(publicVideoScene&&publicVideoScene.scene_kind==='video',
+      'published video scene should appear in the public playlist');
+
+    // These requests use a separate visitor context with no admin cookie.
+    const publicVideoRange=await visitorContext.request.get(base+'/studio-media/'+videoId,
+      {headers:{Range:'bytes=0-99'}});
+    assert.equal(publicVideoRange.status(),206,'anonymous public video should support byte-range streaming');
+    assert.match(publicVideoRange.headers()['content-range']||'',/^bytes 0-99\//);
+    assert.equal(publicVideoRange.headers()['cache-control'],'public, max-age=31536000, immutable',
+      'published video should use the public media cache policy');
+    const publicPoster=await visitorContext.request.get(base+'/studio-media/'+posterId);
+    assert.equal(publicPoster.status(),200,'anonymous visitor should receive the published poster');
+    assert.match(publicPoster.headers()['content-type']||'',/^image\/jpeg/);
+    assert.equal(publicPoster.headers()['cache-control'],'public, max-age=31536000, immutable',
+      'published poster should use the public media cache policy');
+
+    await visitorPage.reload({waitUntil:'domcontentloaded'});
+    await visitorPage.locator('#hero .studio-video').waitFor({state:'attached',timeout:10000});
+    assert.equal(await visitorPage.locator('#hero .studio-video').getAttribute('src'),
+      '/studio-media/'+videoId,'public hero should mount the published video source');
+    await visitorPage.waitForFunction(()=>{
+      const img=document.querySelector('#hero .studio-poster');
+      return !!img&&img.complete&&img.naturalWidth>0;
+    },null,{timeout:10000});
+
     // Scheduling: a published scene beginning tomorrow must stay out of the
     // public playlist until its start time, then appear after moving its start
     // into the past. All changes remain in this temporary test database.
