@@ -1722,16 +1722,16 @@ function makeCtx(opts){
   const dbFile=path.join(dataDir,'ahabona.db');
   const db=new DatabaseSync(dbFile);
   let studioStore=null;
-  if(STUDIO_BETA){
-    studioStore=StudioStore;
-    studioStore.initStudioSchema(db);
-  }
   db.exec('PRAGMA journal_mode=WAL;');
   db.exec('PRAGMA foreign_keys=OFF;');
   db.exec(SCHEMA);
   migrate(db);
   db.exec(SCHEMA_V2_TABLES);
   migrate(db);
+  if(STUDIO_BETA){
+    studioStore=StudioStore;
+    studioStore.initStudioSchema(db);
+  }
   seedCapabilities(db);
   const nowTs=Date.now();
   seedStrip(db,nowTs);
