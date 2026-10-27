@@ -163,6 +163,95 @@ let browser=null;
       'anonymous public hero should render the same published text as admin preview');
     await visitorContext.close();
 
+    // Scheduling: a published scene beginning tomorrow must stay out of the
+    // public playlist until its start time, then appear after moving its start
+    // into the past. All changes remain in this temporary test database.
+    await page.locator('#new-scene').click();
+    await page.locator('#title-rw').fill('Igenzura ry’igihe');
+    await page.locator('#body-rw').fill('Iki kibaho kigerageza gahunda y’igihe.');
+    const futureLocal=await page.evaluate(()=>{
+      const date=new Date(Date.now()+24*60*60*1000);
+      date.setMinutes(date.getMinutes()-date.getTimezoneOffset());
+      return date.toISOString().slice(0,16);
+    });
+    await page.locator('#start-at').fill(futureLocal);
+    await page.locator('#scene-fit-status').selectOption('published');
+    await page.locator('#publish-scene').click();
+    await page.waitForFunction(()=>{
+      const n=document.querySelector('#form-message');
+      return !!n&&(n.classList.contains('success')||n.classList.contains('error'));
+    },null,{timeout:10000});
+    const futureSave=await page.locator('#form-message').evaluate(n=>({text:n.textContent,className:n.className}));
+    assert.ok(futureSave.className.includes('success')&&futureSave.text.includes('Byabitswe kandi byatangajwe'),
+      'Scheduled scene publish failed: '+JSON.stringify(futureSave));
+    let scheduledPlaylist=await (await context.request.get(base+'/api/studio/playlist')).json();
+    assert.ok(!scheduledPlaylist.scenes.some(scene=>scene.title_rw==='Igenzura ry’igihe'),
+      'a future-scheduled scene must not appear in the public playlist yet');
+
+    await page.locator('#scene-list').getByText('Igenzura ry’igihe').click();
+    const pastLocal=await page.evaluate(()=>{
+      const date=new Date(Date.now()-5*60*1000);
+      date.setMinutes(date.getMinutes()-date.getTimezoneOffset());
+      return date.toISOString().slice(0,16);
+    });
+    await page.locator('#start-at').fill(pastLocal);
+    await page.locator('#publish-scene').click();
+    await page.waitForFunction(()=>{
+      const n=document.querySelector('#form-message');
+      return !!n&&(n.classList.contains('success')||n.classList.contains('error'));
+    },null,{timeout:10000});
+    const pastSave=await page.locator('#form-message').evaluate(n=>({text:n.textContent,className:n.className}));
+    assert.ok(pastSave.className.includes('success')&&pastSave.text.includes('Byabitswe kandi byatangajwe'),
+      'Scheduled scene update failed: '+JSON.stringify(pastSave));
+    scheduledPlaylist=await (await context.request.get(base+'/api/studio/playlist')).json();
+    assert.ok(scheduledPlaylist.scenes.some(scene=>scene.title_rw==='Igenzura ry’igihe'),
+      'a published scene whose start time has passed should appear in the public playlist');
+
+    // Reorder a newly saved draft via the actual ↑ control, then delete that
+    // draft via the editor confirmation dialog and verify it disappears.
+    await page.locator('#new-scene').click();
+    await page.locator('#title-rw').fill('Itondekanya rya kabiri');
+    await page.locator('#body-rw').fill('Draft yo kugerageza itondeka.');
+    await page.locator('#save-draft').click();
+    await page.waitForFunction(()=>{
+      const n=document.querySelector('#form-message');
+      return !!n&&(n.classList.contains('success')||n.classList.contains('error'));
+    },null,{timeout:10000});
+    const reorderSave=await page.locator('#form-message').evaluate(n=>({text:n.textContent,className:n.className}));
+    assert.ok(reorderSave.className.includes('success')&&reorderSave.text.includes('Draft yabitswe'),
+      'Reorder test draft save failed: '+JSON.stringify(reorderSave));
+    const titlesBefore=await page.locator('#scene-list .scene-item .scene-copy strong').allTextContents();
+    const beforeIndex=titlesBefore.indexOf('Itondekanya rya kabiri');
+    assert.ok(beforeIndex>0,'new draft should appear after the existing scenes before reordering');
+    const reorderRow=page.locator('#scene-list .scene-item').filter({hasText:'Itondekanya rya kabiri'});
+    const reorderId=await reorderRow.locator('[data-edit]').getAttribute('data-edit');
+    await reorderRow.locator('[data-move][data-delta="-1"]').click();
+    await page.waitForFunction(()=>document.querySelector('#toast')?.textContent.includes('Itondekanya ryahindutse'),null,{timeout:10000});
+    const titlesAfter=await page.locator('#scene-list .scene-item .scene-copy strong').allTextContents();
+    assert.equal(titlesAfter.indexOf('Itondekanya rya kabiri'),beforeIndex-1,
+      'move-up control should shift the selected draft up exactly one position');
+
+    page.once('dialog',dialog=>dialog.accept());
+    await page.locator('#scene-list [data-edit="'+reorderId+'"]').click();
+    await page.locator('#delete-scene').click();
+    await page.waitForFunction(title=>
+      !Array.from(document.querySelectorAll('#scene-list .scene-item')).some(row=>row.textContent.includes(title)),
+      'Itondekanya rya kabiri', {timeout:10000});
+    assert.equal(app.db.prepare('SELECT COUNT(*) n FROM studio_scenes WHERE title_rw=?').get('Itondekanya rya kabiri').n,0,
+      'deleted draft should be removed from the isolated database');
+
+    // Turning Studio off again should restore the legacy hero for visitors.
+    await page.locator('#setting-enabled').uncheck();
+    await page.locator('#settings-save').click();
+    await page.waitForFunction(()=>document.querySelector('#settings-note')?.textContent.includes('Byabitswe'),null,{timeout:10000});
+    const disabledPlaylist=await (await context.request.get(base+'/api/studio/playlist')).json();
+    assert.equal(disabledPlaylist.enabled,false,'Studio should turn off cleanly');
+    assert.deepEqual(disabledPlaylist.scenes,[],'disabled Studio should expose no public scenes');
+    await visitorPage.reload({waitUntil:'domcontentloaded'});
+    await visitorPage.locator('#hero .hero-slide').first().waitFor({timeout:10000});
+    assert.equal(await visitorPage.locator('#hero .studio-slide').count(),0,
+      'after Studio is disabled, anonymous homepage should return to the legacy hero');
+
     // Verify responsive layout at phone, small phone, tablet and desktop widths.
     for(const size of [
       {width:360,height:800},
