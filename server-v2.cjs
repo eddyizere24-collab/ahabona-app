@@ -6162,16 +6162,60 @@ function heroAct(a,v){
   }
 }
 function heroLoad(first){
-  return api('GET','/api/strip',undefined,{retry:false}).then(function(r){
-    if(!(r&&r.ok&&r.data&&Array.isArray(r.data.ads)&&r.data.ads.length))return;
-    var ads=r.data.ads.slice(0,30);
-    var sig=JSON.stringify(ads);
-    if(!first&&sig===HERO.sig)return;
-    HERO.sig=sig;
-    HERO.ads=ads;
-    if(first||HERO.idx>=ads.length)HERO.idx=0;
-    renderHero();
-    heroStart();
+  function loadLegacy(){
+    return api('GET','/api/strip',undefined,{retry:false}).then(function(r){
+      if(!(r&&r.ok&&r.data&&Array.isArray(r.data.ads)&&r.data.ads.length))return;
+      var ads=r.data.ads.slice(0,30);
+      var sig=JSON.stringify(ads);
+      if(!first&&sig===HERO.sig)return;
+      HERO.sig=sig;
+      HERO.ads=ads;
+      if(first||HERO.idx>=ads.length)HERO.idx=0;
+      renderHero();
+      heroStart();
+    });
+  }
+  function stopStudio(){
+    if(window.AhabonaStudioRenderer){
+      try{window.AhabonaStudioRenderer.stop($('hero'))}catch(e){}
+    }
+  }
+  function useStudio(playlist){
+    return new Promise(function(resolve){
+      function mount(){
+        try{
+          var host=$('hero');
+          if(!host||!window.AhabonaStudioRenderer)return resolve(false);
+          heroStop();
+          HERO.ads=[];
+          HERO.sig='';
+          var player=window.AhabonaStudioRenderer.mount(host,playlist);
+          resolve(!!player);
+        }catch(e){resolve(false)}
+      }
+      if(window.AhabonaStudioRenderer)return mount();
+      var script=document.createElement('script');
+      script.src='/studio-renderer.js';
+      script.async=true;
+      script.onload=mount;
+      script.onerror=function(){resolve(false)};
+      document.head.appendChild(script);
+    }).then(function(ok){
+      if(ok)return true;
+      stopStudio();
+      return loadLegacy().then(function(){return false});
+    });
+  }
+  return api('GET','/api/studio/playlist',undefined,{retry:false}).then(function(r){
+    var playlist=r&&r.ok&&r.data;
+    if(playlist&&playlist.enabled&&Array.isArray(playlist.scenes)&&playlist.scenes.length){
+      return useStudio(playlist);
+    }
+    stopStudio();
+    return loadLegacy();
+  }).catch(function(){
+    stopStudio();
+    return loadLegacy();
   });
 }
 function setupStrip(){
