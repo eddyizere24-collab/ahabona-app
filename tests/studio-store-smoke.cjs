@@ -25,6 +25,14 @@ try {
   expectCode(()=>studio.updateScene(db,empty.id,{status:'published'},{now:1200}),'studio.err.text_required');
   const text=studio.updateScene(db,draft.id,{status:'published',body_rw:'Menya abantu. Menya amahirwe.'},{now:1250});
   assert.equal(text.status,'published');
+
+  const image=studio.createAsset(db,{asset_kind:'image',storage_key:'studio-image12345.jpg',mime_type:'image/jpeg',bytes:3000,width:800,height:600},{now:1260});
+  const imageDraft=studio.createScene(db,{scene_kind:'image',title_rw:'Ifoto',asset_id:image.id,status:'draft'},{now:1270});
+  expectCode(()=>studio.updateScene(db,imageDraft.id,{status:'published'},{now:1280}),'studio.err.asset_not_ready');
+  studio.updateAssetStatus(db,image.id,'ready',{width:800,height:600},{now:1290});
+  const pubImage=studio.updateScene(db,imageDraft.id,{status:'published'},{now:1295});
+  assert.equal(pubImage.status,'published');
+
   expectCode(()=>studio.createScene(db,{scene_kind:'text',title_rw:'link',body_rw:'x',cta_action:'link',cta_value:'http://example.org'}),'studio.err.cta_url');
   expectCode(()=>studio.createScene(db,{scene_kind:'text',title_rw:'x',body_rw:'x',text_style:{color:'url(javascript:alert(1))'}}),'studio.err.style_value');
   expectCode(()=>studio.createAsset(db,{asset_kind:'image',storage_key:'../../evil.jpg',mime_type:'image/jpeg',bytes:100,width:10,height:10}),'studio.err.asset_key');
@@ -41,8 +49,10 @@ try {
 
   const future=studio.createScene(db,{scene_kind:'text',title_rw:'Later',body_rw:'Scheduled',status:'published',start_at:5000,end_at:8000},{now:1700});
   studio.updateSettings(db,{enabled:true,playback_mode:'shuffle',transition_ms:600},{now:1800});
-  assert.deepEqual(studio.getPublicPlaylist(db,{now:4000}).scenes.map(x=>x.id),[text.id,pubVideo.id]);
-  assert.deepEqual(studio.getPublicPlaylist(db,{now:6000}).scenes.map(x=>x.id),[text.id,pubVideo.id,future.id]);
+  assert.deepEqual(studio.getPublicPlaylist(db,{now:4000}).scenes.map(x=>x.id),[text.id,pubImage.id,pubVideo.id]);
+  assert.deepEqual(studio.getPublicPlaylist(db,{now:6000}).scenes.map(x=>x.id),[text.id,pubImage.id,pubVideo.id,future.id]);
+  studio.initStudioSchema(db,1900); // Re-running setup must preserve settings/content.
+  assert.equal(studio.readSettings(db).enabled,true);
   assert.equal(db.prepare('SELECT COUNT(*) n FROM strip_ads').get().n,1);
   assert.equal(studio.deleteScene(db,pubVideo.id),true);
   assert.equal(studio.getAsset(db,video.id).status,'ready');
