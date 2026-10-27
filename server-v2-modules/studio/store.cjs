@@ -36,7 +36,7 @@ function safeStyle(v,overlay) {
   const keys=overlay?['position','opacity','background','x','y']:['fontSize','fontWeight','textAlign','color','backgroundColor','fontFamily'];
   for (const k of Object.keys(x)) if (!keys.includes(k)) bad('studio.err.style_key',field);
   if (!overlay) {
-    if (has(x,'fontSize')) { if (typeof x.fontSize!=='number'||x.fontSize<12||x.fontSize>48) bad('studio.err.style_value',field); o.fontSize=Math.round(x.fontSize); }
+    if (has(x,'fontSize')) { if (typeof x.fontSize!=='number'||!Number.isFinite(x.fontSize)||x.fontSize<12||x.fontSize>48) bad('studio.err.style_value',field); o.fontSize=Math.round(x.fontSize); }
     if (has(x,'fontWeight')) { if (![400,500,600,700,800].includes(x.fontWeight)) bad('studio.err.style_value',field); o.fontWeight=x.fontWeight; }
     if (has(x,'textAlign')) { if (!['left','center','right'].includes(x.textAlign)) bad('studio.err.style_value',field); o.textAlign=x.textAlign; }
     for (const k of ['color','backgroundColor']) if (has(x,k)) { if (typeof x[k]!=='string'||!/^#[0-9a-f]{6}$/i.test(x[k])) bad('studio.err.style_value',field); o[k]=x[k].toLowerCase(); }
@@ -94,6 +94,7 @@ function updateSettings(db,p={},options) {
   return readSettings(db);
 }
 function normalize(db,input={},cur={},now=Date.now(),actorId) {
+  input=input||{}; cur=cur||{};
   const val=k=>has(input,k)?input[k]:cur[k];
   const kind=val('scene_kind')||'text', status=val('status')||'draft';
   if (!['text','image','video'].includes(kind)) bad('studio.err.scene_kind','scene_kind');
