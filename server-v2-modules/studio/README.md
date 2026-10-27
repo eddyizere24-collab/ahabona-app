@@ -9,7 +9,7 @@ This branch contains the first integrated, opt-in Studio implementation. The cod
 - `media.cjs`: bounded image/video processing, strict file validation, H.264 MP4 conversion, poster generation and one-at-a-time media-job lock.
 - `renderer.js` and `renderer.css`: shared renderer for the existing top hero area and the Studio preview.
 - `editor.html`, `editor.css` and `editor.js`: responsive authoring interface with text, image and video scenes, style/overlay controls, scheduling, upload, reordering and shared-renderer preview.
-- `../../tests/studio-store-smoke.cjs` and `../../tests/studio-media-validation-smoke.cjs`: isolated SQLite and upload-validation smoke tests.
+- `../../tests/studio-store-smoke.cjs`, `../../tests/studio-media-validation-smoke.cjs`, `../../tests/studio-integration-smoke.cjs` and `../../tests/studio-browser-smoke.cjs`: isolated storage, real FFmpeg image/video conversion, server integration, authenticated UI upload/preview and responsive browser smoke tests.
 
 ## Opt-in behavior in this branch
 
@@ -32,7 +32,7 @@ The shared renderer uses the same slide builder for public playback and admin pr
 
 ## Checks and remaining work
 
-The GitHub Actions workflow `AHABONA Studio isolated checks` checks JavaScript syntax and runs isolated store/media-validation tests. A successful workflow is **not** the same as having tested a real phone browser or a full video upload with the exact runtime environment.
+The GitHub Actions workflow `AHABONA Studio isolated checks` checks JavaScript syntax, isolated storage, real FFmpeg image/video conversion and poster generation, authenticated server integration, and the editor in Chromium at 360, 390, 430, 768 and 1280 pixel viewport widths. It uploads test image/video files through the editor, saves a draft and renders the shared preview using a temporary database. A successful workflow is **not** the same as testing a physical phone or the exact target-server runtime.
 
 Before any release, still perform a separate non-production deployment and verify:
 1. Admin access and every editor operation, including publish/schedule/reorder/upload/delete.
