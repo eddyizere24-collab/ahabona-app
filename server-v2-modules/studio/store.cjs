@@ -111,6 +111,9 @@ function normalize(db,input={},cur={},now=Date.now(),actorId) {
   o.duration_ms=int(val('duration_ms'),1000,90000,7000); if(o.duration_ms===null) bad('studio.err.duration','duration_ms');
   o.transition=val('transition')||'inherit'; if(!TRANSITIONS.includes(o.transition)) bad('studio.err.transition','transition');
   o.fit=val('fit')||'cover'; if(!['cover','contain'].includes(o.fit)) bad('studio.err.fit','fit');
+  const z=Number(val('zoom')===undefined?(cur.zoom===undefined?1:cur.zoom):val('zoom'));
+  if(!Number.isFinite(z)||z<1||z>2.5) bad('studio.err.zoom','zoom');
+  o.zoom=Math.round(z*10)/10;
   for (const k of ['crop_x','crop_y']) { o[k]=int(val(k),0,100,50); if(o[k]===null) bad('studio.err.crop',k); }
   for (const k of ['start_at','end_at']) { const v=val(k); o[k]=v===undefined||v===null||v===''?null:int(v,0,Number.MAX_SAFE_INTEGER,null); if(v!==undefined&&v!==null&&v!==''&&o[k]===null) bad('studio.err.schedule',k); }
   if(o.start_at!==null&&o.end_at!==null&&o.end_at<=o.start_at) bad('studio.err.schedule','end_at');
@@ -137,15 +140,15 @@ function normalize(db,input={},cur={},now=Date.now(),actorId) {
 function getScene(db,id) { return sceneOut(rawScene(db,id)); }
 function createScene(db,input,options) {
   const now=stamp(options), o=normalize(db,input,{},now,options&&options.actorId);
-  const r=db.prepare('INSERT INTO studio_scenes (scene_kind,title_rw,title_en,body_rw,body_en,text_style_json,overlay_style_json,asset_id,poster_asset_id,cta_label_rw,cta_label_en,cta_action,cta_value,status,sort_order,duration_ms,transition,fit,crop_x,crop_y,start_at,end_at,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-    .run(o.scene_kind,o.title_rw,o.title_en,o.body_rw,o.body_en,o.text_style_json,o.overlay_style_json,o.asset_id,o.poster_asset_id,o.cta_label_rw,o.cta_label_en,o.cta_action,o.cta_value,o.status,o.sort_order,o.duration_ms,o.transition,o.fit,o.crop_x,o.crop_y,o.start_at,o.end_at,o.created_by,o.created_at,o.updated_at);
+  const r=db.prepare('INSERT INTO studio_scenes (scene_kind,title_rw,title_en,body_rw,body_en,text_style_json,overlay_style_json,asset_id,poster_asset_id,cta_label_rw,cta_label_en,cta_action,cta_value,status,sort_order,duration_ms,transition,fit,crop_x,crop_y,zoom,start_at,end_at,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(o.scene_kind,o.title_rw,o.title_en,o.body_rw,o.body_en,o.text_style_json,o.overlay_style_json,o.asset_id,o.poster_asset_id,o.cta_label_rw,o.cta_label_en,o.cta_action,o.cta_value,o.status,o.sort_order,o.duration_ms,o.transition,o.fit,o.crop_x,o.crop_y,o.zoom,o.start_at,o.end_at,o.created_by,o.created_at,o.updated_at);
   return getScene(db,Number(r.lastInsertRowid));
 }
 function updateScene(db,id,patch,options) {
   const cur=getScene(db,id); if(!cur) return null;
   const o=normalize(db,patch,cur,stamp(options),options&&options.actorId);
-  db.prepare('UPDATE studio_scenes SET scene_kind=?,title_rw=?,title_en=?,body_rw=?,body_en=?,text_style_json=?,overlay_style_json=?,asset_id=?,poster_asset_id=?,cta_label_rw=?,cta_label_en=?,cta_action=?,cta_value=?,status=?,sort_order=?,duration_ms=?,transition=?,fit=?,crop_x=?,crop_y=?,start_at=?,end_at=?,created_by=?,created_at=?,updated_at=? WHERE id=?')
-    .run(o.scene_kind,o.title_rw,o.title_en,o.body_rw,o.body_en,o.text_style_json,o.overlay_style_json,o.asset_id,o.poster_asset_id,o.cta_label_rw,o.cta_label_en,o.cta_action,o.cta_value,o.status,o.sort_order,o.duration_ms,o.transition,o.fit,o.crop_x,o.crop_y,o.start_at,o.end_at,o.created_by,o.created_at,o.updated_at,Number(id));
+  db.prepare('UPDATE studio_scenes SET scene_kind=?,title_rw=?,title_en=?,body_rw=?,body_en=?,text_style_json=?,overlay_style_json=?,asset_id=?,poster_asset_id=?,cta_label_rw=?,cta_label_en=?,cta_action=?,cta_value=?,status=?,sort_order=?,duration_ms=?,transition=?,fit=?,crop_x=?,crop_y=?,zoom=?,start_at=?,end_at=?,created_by=?,created_at=?,updated_at=? WHERE id=?')
+    .run(o.scene_kind,o.title_rw,o.title_en,o.body_rw,o.body_en,o.text_style_json,o.overlay_style_json,o.asset_id,o.poster_asset_id,o.cta_label_rw,o.cta_label_en,o.cta_action,o.cta_value,o.status,o.sort_order,o.duration_ms,o.transition,o.fit,o.crop_x,o.crop_y,o.zoom,o.start_at,o.end_at,o.created_by,o.created_at,o.updated_at,Number(id));
   return getScene(db,id);
 }
 function deleteScene(db,id) { const n=int(id,1,Number.MAX_SAFE_INTEGER,null); return n!==null&&db.prepare('DELETE FROM studio_scenes WHERE id=?').run(n).changes>0; }
