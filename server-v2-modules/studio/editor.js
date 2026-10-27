@@ -174,9 +174,11 @@
       const data = readForm(status); const id = Number($('scene-id').value);
       const reply = id ? await api(API + '/scenes/' + id, {method:'PUT',body:data}) : await api(API + '/scenes', {method:'POST',body:data});
       const scene = reply.scene || reply;
-      message(status === 'published' ? 'Byabitswe kandi byatangajwe.' : status === 'archived' ? 'Byashyizwe muri archive.' : 'Draft yabitswe.', 'success');
       toast('Byabitswe'); await refreshAll();
       const savedId = scene.id || id; if (savedId) fillForm(state.scenes.find((s) => Number(s.id) === Number(savedId)) || null);
+      // refreshAll/fillForm reset the form message, so restore confirmation
+      // afterwards; otherwise a successful save appears to have no result.
+      message(status === 'published' ? 'Byabitswe kandi byatangajwe.' : status === 'archived' ? 'Byashyizwe muri archive.' : 'Draft yabitswe.', 'success');
     } catch (error) { message(error.message, 'error'); toast(error.message); }
   }
   async function saveSettings() {
