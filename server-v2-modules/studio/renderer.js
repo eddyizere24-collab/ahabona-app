@@ -284,6 +284,13 @@
     if(player.controls)player.controls.remove();
     player.track.classList.remove('studio-track','studio-fade','studio-none');
     ['display','transform','transition-duration','transition-property','--studio-transition-ms'].forEach(function(k){player.track.style.removeProperty(k)});
+    // Do not leave old Studio content visible when it is disabled or the
+    // public hero falls back to the legacy strip with no available ads.
+    player.track.innerHTML='';
+    player.dots.innerHTML='';
+    if(player.container.getAttribute('aria-roledescription')==='carousel'){
+      player.container.removeAttribute('aria-roledescription');
+    }
   }
   function mount(container, playlist) {
     if(!container||!playlist||!Array.isArray(playlist.scenes)||!playlist.scenes.length)return null;
