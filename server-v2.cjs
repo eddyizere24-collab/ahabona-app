@@ -9,6 +9,7 @@ const {DatabaseSync}=require('node:sqlite');
 const {execFile}=require('node:child_process');
 const STUDIO_BETA=process.env.AHABONA_STUDIO_BETA==='1';
 const StudioStore=STUDIO_BETA?require('./server-v2-modules/studio/store.cjs'):null;
+const StudioMedia=STUDIO_BETA?require('./server-v2-modules/studio/media.cjs'):null;
 
 const PROV={
   "Umujyi wa Kigali":["Gasabo","Kicukiro","Nyarugenge"],
@@ -1722,7 +1723,8 @@ function makeCtx(opts){
   const dbFile=path.join(dataDir,'ahabona.db');
   const db=new DatabaseSync(dbFile);
   let studioStore=null;
-  db.exec('PRAGMA journal_mode=WAL;');
+  let studioMedia=null;
+  db.exec('PRAGMA journal_mode=WAL;')
   db.exec('PRAGMA foreign_keys=OFF;');
   db.exec(SCHEMA);
   migrate(db);
@@ -1731,6 +1733,7 @@ function makeCtx(opts){
   if(STUDIO_BETA){
     studioStore=StudioStore;
     studioStore.initStudioSchema(db);
+    studioMedia=StudioMedia.makeStudioMediaPipeline(dataDir);
   }
   seedCapabilities(db);
   const nowTs=Date.now();
@@ -1869,7 +1872,7 @@ function makeCtx(opts){
   return {
     db,Q,store,settings,rate,mailer,caps,loadCaps,capName,
     ipOf,deviceOf,parseCookies,sessionUser,newSession,destroySession,
-    isAdmin,isSuper,can,adminLog,adminBoot,featureEnabled,stripActive,mediaStore,studio:studioStore,
+    isAdmin,isSuper,can,adminLog,adminBoot,featureEnabled,stripActive,mediaStore,studio:studioStore,studioMedia:studioMedia,
     secure,dev,proxy,dataDir,pubDir,
     purge:()=>purge()
   };
@@ -7601,6 +7604,23 @@ function handleRequest(ctx,req,res){
     res.writeHead(200,{'Content-Type':'application/manifest+json; charset=utf-8','Cache-Control':'public, max-age=3600','Content-Length':mb.length});
     return res.end(mb);
   }
+  var studioMediaMatch=p.match(/^\/studio-media\/(\d+)$/);
+  if(studioMediaMatch){
+    if(!ctx.studio||!ctx.studioMedia)return sendError(req,res,404,'err.notfound');
+    const id=Number(studioMediaMatch[1]);
+    const asset=ctx.Q("SELECT id,asset_kind,storage_key,mime_type,status FROM studio_assets WHERE id=?").get(id);
+    if(!asset||asset.status!=='ready'||!ctx.studioMedia.validKey(asset.storage_key))return sendError(req,res,404,'err.notfound');
+    const mt=asset.mime_type;
+    if(!['image/jpeg','image/png','image/webp','video/mp4'].includes(mt))return sendError(req,res,404,'err.notfound');
+    const admin=ctx.sessionUser(req);
+    const authorizedAdmin=!!(admin&&ctx.isAdmin(admin)&&ctx.can(admin,'content.edit'));
+    const now=Date.now();
+    const live=ctx.Q("SELECT 1 FROM studio_scenes WHERE status='published' AND (start_at IS NULL OR start_at<=?) AND (end_at IS NULL OR end_at>?) AND (asset_id=? OR poster_asset_id=?) LIMIT 1").get(now,now,id,id);
+    if(!live&&!authorizedAdmin)return sendError(req,res,404,'err.notfound');
+    const fp=path.join(ctx.studioMedia.root,asset.storage_key);
+    if(path.dirname(fp)!==ctx.studioMedia.root)return sendError(req,res,404,'err.notfound');
+    return sendMediaFile(req,res,fp,mt,'public, max-age=31536000, immutable');
+  }
   if(p.startsWith('/photos/')){
     var f=p.slice(8);
     if(!/^[a-z0-9]+-(?:[0-5]|t)\.jpg$/.test(f))return sendError(req,res,404,'err.notfound');
@@ -7677,9 +7697,23 @@ function studioApiError(req,res,e){
     'studio.err.asset_duration':'Video igomba kuba itarengeje amasegonda 90.',
     'studio.err.not_initialized':'Studio ntiyafunguwe kuri iyi seriveri.'
   };
+  Object.assign(messages,{
+    'studio.err.video_not_ready':'Video igomba kuba MP4/H.264 ifite poster kandi itarengeje amasegonda 90.',
+    'studio.err.media_processing':'Video cyangwa ifoto ntishoboye gutunganywa.',
+    'studio.err.transcoder_missing':'Seriveri ntirabona ffmpeg/ffprobe; media ntizatangazwa.',
+    'studio.err.image_type':'Hitamo ifoto ya JPG, PNG cyangwa WebP.',
+    'studio.err.video_type':'File ntiyemewe nka video.',
+    'studio.err.media_invalid':'File ya media yangiritse cyangwa ntisomeka.',
+    'studio.err.media_duration':'Igihe cya video nticyasomwe.',
+    'studio.err.media_too_long':'Video irengeje amasegonda 90.',
+    'studio.err.media_dimensions':'Ingano y’ifoto/video ntiyemewe.',
+    'studio.err.asset_size':'File irenze ingano yemewe.',
+    'studio.err.asset_mime':'Ubwoko bwa file ntibwemewe.'
+  });
   const msg=messages[code]||((code.startsWith('studio.err.'))?'Hari amakuru atemewe. Ongera uyagenzure.':'Habaye ikibazo. Gerageza nanone.');
+  const status=Number.isInteger(e&&e.status)&&e.status>=400&&e.status<=599?e.status:(code.startsWith('studio.err.')?400:500);
   console.error('[studio-api]',code||'unexpected',e&&e.message||String(e));
-  sendJson(req,res,code.startsWith('studio.err.')?400:500,{error:msg,code:code||null,field:e&&e.field||null});
+  sendJson(req,res,status,{error:msg,code:code||null,field:e&&e.field||null});
 }
 function studioOff(req,res){
   sendError(req,res,404,'err.notfound');
@@ -7691,8 +7725,10 @@ function apiStudioPlaylist(ctx,req,res){
     const scenes=result.scenes.map(function(x){return {
       id:x.id,scene_kind:x.scene_kind,title_rw:x.title_rw,title_en:x.title_en,
       body_rw:x.body_rw,body_en:x.body_en,text_style:x.text_style,overlay_style:x.overlay_style,
-      asset_id:x.asset_id,poster_asset_id:x.poster_asset_id,cta_label_rw:x.cta_label_rw,
-      cta_label_en:x.cta_label_en,cta_action:x.cta_action,cta_value:x.cta_value,
+      asset_id:x.asset_id,poster_asset_id:x.poster_asset_id,
+      asset_url:x.asset_id?('/studio-media/'+x.asset_id):null,
+      poster_url:x.poster_asset_id?('/studio-media/'+x.poster_asset_id):null,
+      cta_label_rw:x.cta_label_rw,cta_label_en:x.cta_label_en,cta_action:x.cta_action,cta_value:x.cta_value,
       sort_order:x.sort_order,duration_ms:x.duration_ms,transition:x.transition,fit:x.fit,
       crop_x:x.crop_x,crop_y:x.crop_y,start_at:x.start_at,end_at:x.end_at
     }});
@@ -7732,6 +7768,32 @@ function adminStudioSceneDelete(ctx,req,res,id,admin){
     ctx.adminLog(admin.id,'studio.scene.delete','studio_scene',String(id),null,ctx.ipOf(req));
     sendJson(req,res,200,{ok:true});
   }catch(e){studioApiError(req,res,e)}
+}
+function studioAssetSummary(a){
+  if(!a)return null;
+  return {id:a.id,asset_kind:a.asset_kind,mime_type:a.mime_type,bytes:a.bytes,width:a.width,height:a.height,duration_ms:a.duration_ms,codec:a.codec,status:a.status,created_at:a.created_at,updated_at:a.updated_at};
+}
+async function adminStudioUpload(ctx,req,res,admin,kind){
+  if(!ctx.studio||!ctx.studioMedia)return studioOff(req,res);
+  const release=ctx.studioMedia.tryAcquire();
+  if(!release){req.resume();return sendError(req,res,429,'err.rate');}
+  const max=kind==='image'?ctx.studioMedia.maxImageBytes:ctx.studioMedia.maxVideoBytes;
+  try{
+    const ct=String(req.headers['content-type']||'application/octet-stream').split(';')[0].trim().toLowerCase();
+    if(kind==='image'&&!['image/jpeg','image/png','image/webp','application/octet-stream'].includes(ct)){
+      req.resume();return sendError(req,res,415,'studio.err.image_type');
+    }
+    const rb=await readRawBody(req,max);
+    if(rb.over)return sendError(req,res,413,'err.big');
+    if(rb.fail)return sendError(req,res,400,'err.server');
+    if(!rb.buf||!rb.buf.length)return sendError(req,res,400,'common.required');
+    const result=kind==='image'
+      ?await ctx.studioMedia.uploadImage(ctx.db,rb.buf,admin.id,Date.now())
+      :await ctx.studioMedia.uploadVideo(ctx.db,rb.buf,ct,admin.id,Date.now());
+    ctx.adminLog(admin.id,'studio.asset.upload','studio_asset',String(result.asset.id),JSON.stringify({kind:kind,bytes:result.asset.bytes}),ctx.ipOf(req));
+    sendJson(req,res,201,{ok:true,asset:studioAssetSummary(result.asset),poster:studioAssetSummary(result.poster)});
+  }catch(e){studioApiError(req,res,e)}
+  finally{release();}
 }
 function adminStudioAssets(ctx,req,res,admin){
   if(!ctx.studio)return studioOff(req,res);
@@ -7807,6 +7869,8 @@ const ADMIN_ROUTES=[
   ['GET','/api/admin/studio/scenes','content.edit',function(ctx,req,res,mt,u){return adminStudioScenes(ctx,req,res,u)}],
   ['POST','/api/admin/studio/scenes','content.edit',function(ctx,req,res,mt,u){return adminStudioSceneAdd(ctx,req,res,u)}],
   ['GET','/api/admin/studio/assets','content.edit',function(ctx,req,res,mt,u){return adminStudioAssets(ctx,req,res,u)}],
+  ['POST','/api/admin/studio/assets/image','content.edit',function(ctx,req,res,mt,u){return adminStudioUpload(ctx,req,res,u,'image')}],
+  ['POST','/api/admin/studio/assets/video','content.edit',function(ctx,req,res,mt,u){return adminStudioUpload(ctx,req,res,u,'video')}],
   ['GET','/api/admin/studio/settings','content.edit',function(ctx,req,res,mt,u){return adminStudioSettings(ctx,req,res,u)}],
   ['PUT','/api/admin/studio/settings','content.edit',function(ctx,req,res,mt,u){return adminStudioSettingsUpdate(ctx,req,res,u)}],
   ['PUT',/^\/api\/admin\/studio\/scenes\/(\d+)$/,'content.edit',function(ctx,req,res,mt,u){return adminStudioSceneUpdate(ctx,req,res,+mt[1],u)}],
