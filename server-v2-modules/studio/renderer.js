@@ -217,7 +217,8 @@
     player.pauseButton.setAttribute('aria-pressed',player.pausedByUser?'true':'false');
   }
   function isHeld(player) {
-    return player.pausedByUser||player.hovered||player.keyboardHeld||document.hidden||Date.now()<player.touchUntil;
+    const interactivePause=player.settings.pause_on_interaction!==false;
+    return player.pausedByUser||document.hidden||(interactivePause&&(player.hovered||player.keyboardHeld||Date.now()<player.touchUntil));
   }
   function durationFor(player) {
     const scene=player.scenes[player.index]||{};
@@ -239,15 +240,21 @@
   function go(player,index) {
     const n=player.scenes.length;
     if(!n)return;
-    const old=player.index;
     player.index=((index%n)+n)%n;
+    const scene=player.scenes[player.index]||{};
+    const override=['inherit','none','fade','slide'].includes(scene.transition)?scene.transition:'inherit';
+    const transition=override==='inherit'?player.settings.transition:override;
+    player.transition=['none','fade','slide'].includes(transition)?transition:'fade';
+    player.track.classList.toggle('studio-fade',player.transition==='fade');
+    player.track.classList.toggle('studio-none',player.transition==='none');
+    player.track.style.transitionProperty=player.transition==='slide'?'transform':'none';
     player.slides.forEach(function(slide,i){
       const active=i===player.index;
       slide.classList.toggle('studio-active',active);
       if(active)slide.removeAttribute('aria-hidden');else slide.setAttribute('aria-hidden','true');
       if(!active)stopVideo(slide);
     });
-    if(player.settings.transition==='slide') {
+    if(player.transition==='slide') {
       player.track.style.display='flex';
       player.track.style.transform='translateX(-'+(player.index*100)+'%)';
     } else {
