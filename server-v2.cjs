@@ -7688,7 +7688,15 @@ function apiStudioPlaylist(ctx,req,res){
   if(!ctx.studio)return sendJson(req,res,200,{enabled:false,scenes:[]},{cache:'no-store'});
   try{
     const result=ctx.studio.getPublicPlaylist(ctx.db,{now:Date.now()});
-    sendJson(req,res,200,{enabled:result.enabled,settings:result.settings,scenes:result.scenes},{cache:'no-store'});
+    const scenes=result.scenes.map(function(x){return {
+      id:x.id,scene_kind:x.scene_kind,title_rw:x.title_rw,title_en:x.title_en,
+      body_rw:x.body_rw,body_en:x.body_en,text_style:x.text_style,overlay_style:x.overlay_style,
+      asset_id:x.asset_id,poster_asset_id:x.poster_asset_id,cta_label_rw:x.cta_label_rw,
+      cta_label_en:x.cta_label_en,cta_action:x.cta_action,cta_value:x.cta_value,
+      sort_order:x.sort_order,duration_ms:x.duration_ms,transition:x.transition,fit:x.fit,
+      crop_x:x.crop_x,crop_y:x.crop_y,start_at:x.start_at,end_at:x.end_at
+    }});
+    sendJson(req,res,200,{enabled:result.enabled,settings:result.settings,scenes:scenes},{cache:'no-store'});
   }catch(e){studioApiError(req,res,e)}
 }
 function adminStudioScenes(ctx,req,res,admin){
