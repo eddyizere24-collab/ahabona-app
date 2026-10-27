@@ -148,7 +148,11 @@ let browser=null;
       'published text scene should be in the public playlist');
     await visitorPage.reload({waitUntil:'domcontentloaded'});
     await visitorPage.locator('#hero .studio-slide').waitFor({timeout:10000});
-    const publicHeroText=await visitorPage.locator('#hero').innerText();
+    await visitorPage.waitForFunction(() =>
+      Array.from(document.querySelectorAll('#hero .studio-slide')).some(slide=>
+        slide.textContent.includes('Igenzura rya telefoni')
+      ),null,{timeout:10000});
+    const publicHeroText=(await visitorPage.locator('#hero .studio-slide').allTextContents()).join(' ');
     assert.ok(publicHeroText.includes('Igenzura rya telefoni'),
       'anonymous public hero should render the same published text as admin preview');
     await visitorContext.close();
