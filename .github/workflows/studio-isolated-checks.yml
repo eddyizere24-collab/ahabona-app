@@ -24,7 +24,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ahabona-studio-${{ github.ref }}
+  group: ahabona-studio-checks-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
