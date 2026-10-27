@@ -8213,7 +8213,7 @@ self.addEventListener('fetch',function(e){
   try{url=new URL(req.url)}catch(err){return}
   if(url.origin!==self.location.origin)return;
   var p=url.pathname;
-  if(p.indexOf('/media/')===0)return;
+  if(p.indexOf('/media/')===0||p.indexOf('/studio-media/')===0||p==='/studio-renderer.js'||p==='/studio-renderer.css'||p==='/admin/studio'||p.indexOf('/admin/studio/')===0)return;
   if(p.indexOf('/api/me')===0||p.indexOf('/api/admin')===0||p.indexOf('/api/saved')===0||p.indexOf('/api/events')===0||p.indexOf('/api/report')===0||p.indexOf('/api/help/contact')===0){
     e.respondWith(fetch(req).catch(function(){return new Response(JSON.stringify({error:'offline'}),{status:503,headers:{'Content-Type':'application/json'}})}));
     return;
