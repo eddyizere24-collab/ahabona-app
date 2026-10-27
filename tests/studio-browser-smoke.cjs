@@ -65,7 +65,7 @@ let browser=null;
       null,{timeout:120000}
     );
     const imageId=await page.locator('#asset-select').inputValue();
-    assert.ok(/^\\d+$/.test(imageId),'uploaded image should be selected in the editor');
+    assert.ok(/^\d+$/.test(imageId),'uploaded image should be selected in the editor');
 
     await page.locator('#scene-kind').selectOption('video');
     await page.locator('#asset-upload').setInputFiles(sourceVideo);
@@ -76,8 +76,8 @@ let browser=null;
     );
     const videoId=await page.locator('#asset-select').inputValue();
     const posterId=await page.locator('#poster-select').inputValue();
-    assert.ok(/^\\d+$/.test(videoId),'uploaded video should be selected in the editor');
-    assert.ok(/^\\d+$/.test(posterId),'generated poster should be selected in the editor');
+    assert.ok(/^\d+$/.test(videoId),'uploaded video should be selected in the editor');
+    assert.ok(/^\d+$/.test(posterId),'generated poster should be selected in the editor');
 
     // Exercise the real editor in a narrow phone viewport: save an isolated
     // draft, then render its preview through the shared renderer.
