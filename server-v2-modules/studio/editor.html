@@ -59,6 +59,14 @@
               <label>Asset<select id="asset-select"><option value="">Hitamo media</option></select></label>
               <label id="poster-label" hidden>Poster ya video<select id="poster-select"><option value="">Hitamo poster</option></select></label>
             </div>
+            <div class="upload-row">
+              <label class="upload-input-label">Ohereza ifoto cyangwa video
+                <input id="asset-upload" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,video/x-msvideo">
+                <small>Image ≤ 8 MB; video ≤ 64 MB na ≤ 90 sec. Itunganywa kuri server mbere yo gutangaza.</small>
+              </label>
+              <button id="upload-btn" class="button secondary" type="button">Ohereza media</button>
+              <span id="upload-note" class="upload-note" role="status" aria-live="polite"></span>
+            </div>
             <div class="form-grid two-col">
               <label>Fit<select id="scene-fit"><option value="cover">Kuzuza agace (cover)</option><option value="contain">Kugaragaza yose (contain)</option></select></label>
               <label>Zoom<input id="scene-zoom" type="range" min="1" max="2.5" step="0.1" value="1"><output id="zoom-output">1.0×</output></label>
