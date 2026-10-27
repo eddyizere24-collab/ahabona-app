@@ -3,6 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const os=require('node:os');
 const path=require('node:path');
+const {execFileSync}=require('node:child_process');
 const {chromium}=require('playwright');
 
 const envNames=['AHABONA_STUDIO_BETA','ADMIN_EMAIL','ADMIN_PHONE','ADMIN_PASSWORD'];
@@ -41,8 +42,45 @@ let browser=null;
     await page.locator('#scene-form').waitFor();
     await page.locator('#scene-list').waitFor();
 
+    // Generate valid files and upload them through the actual authenticated UI.
+    // Conversion runs only against the temporary test database and directory.
+    const sourceImage=path.join(tmp,'browser-input.png');
+    const sourceVideo=path.join(tmp,'browser-input.mp4');
+    execFileSync('ffmpeg',[
+      '-y','-hide_banner','-loglevel','error','-f','lavfi','-i',
+      'testsrc2=size=320x180:rate=1','-frames:v','1','-threads','1',sourceImage
+    ],{timeout:30000});
+    execFileSync('ffmpeg',[
+      '-y','-hide_banner','-loglevel','error','-f','lavfi','-i',
+      'testsrc2=size=160x90:rate=10:duration=1','-t','1','-c:v','libx264',
+      '-preset','ultrafast','-pix_fmt','yuv420p','-threads','1','-an',
+      '-movflags','+faststart','-f','mp4',sourceVideo
+    ],{timeout:30000});
+
+    await page.locator('#scene-kind').selectOption('image');
+    await page.locator('#asset-upload').setInputFiles(sourceImage);
+    await page.locator('#upload-btn').click();
+    await page.waitForFunction(
+      () => { const n=document.querySelector('#upload-note'); return n&&n.classList.contains('success')&&n.textContent.includes('Ifoto yatunganyijwe'); },
+      null,{timeout:120000}
+    );
+    const imageId=await page.locator('#asset-select').inputValue();
+    assert.ok(/^\\d+$/.test(imageId),'uploaded image should be selected in the editor');
+
+    await page.locator('#scene-kind').selectOption('video');
+    await page.locator('#asset-upload').setInputFiles(sourceVideo);
+    await page.locator('#upload-btn').click();
+    await page.waitForFunction(
+      () => { const n=document.querySelector('#upload-note'); return n&&n.classList.contains('success')&&n.textContent.includes('Video yatunganyijwe'); },
+      null,{timeout:120000}
+    );
+    const videoId=await page.locator('#asset-select').inputValue();
+    const posterId=await page.locator('#poster-select').inputValue();
+    assert.ok(/^\\d+$/.test(videoId),'uploaded video should be selected in the editor');
+    assert.ok(/^\\d+$/.test(posterId),'generated poster should be selected in the editor');
+
     // Exercise the real editor in a narrow phone viewport: save an isolated
-    // draft, then render its preview through the shared production renderer.
+    // draft, then render its preview through the shared renderer.
     await page.locator('#new-scene').click();
     await page.locator('#title-rw').fill('Igenzura rya telefoni');
     await page.locator('#body-rw').fill('Ubutumwa bwo kugerageza AHABONA Studio.');
