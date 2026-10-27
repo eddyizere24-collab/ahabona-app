@@ -40,7 +40,8 @@
         '<span class="scene-icon" aria-hidden="true">' + kindIcon(scene.scene_kind) + '</span>' +
         '<button class="scene-copy" data-edit="' + Number(scene.id) + '" type="button" style="background:none;border:0;text-align:left;padding:0;color:inherit;min-width:0">' +
         '<strong>' + esc(activeTitle(scene)) + '</strong><small>' + esc(kindText(scene.scene_kind)) + ' · #' + Number(scene.id) + '</small></button>' +
-        '<span class="status-pill ' + statusClass(scene.status) + '">' + esc(statusText(scene.status)) + '</span>' +
+        '<div class="scene-end"><span class="status-pill ' + statusClass(scene.status) + '">' + esc(statusText(scene.status)) + '</span>' +
+        '<div class="move-buttons"><button type="button" data-move="' + Number(scene.id) + '" data-delta="-1" aria-label="Himura hejuru" title="Himura hejuru">↑</button><button type="button" data-move="' + Number(scene.id) + '" data-delta="1" aria-label="Himura hasi" title="Himura hasi">↓</button></div></div>' +
         '</div>';
     }).join('');
   }
@@ -52,6 +53,10 @@
   }
   function fromLocalDate(value) { if (!value) return null; const n = new Date(value).getTime(); return Number.isFinite(n) ? n : null; }
   function setValue(id, value) { $(id).value = value == null ? '' : String(value); }
+  function updatePublishLabel() {
+    const status = $('scene-fit-status').value;
+    $('publish-scene').textContent = status === 'archived' ? 'Bika & Archive' : status === 'draft' ? 'Bika Draft' : 'Bika & Tangaza';
+  }
   function resetForm() {
     state.current = null;
     $('scene-form').reset(); $('scene-id').value = ''; $('scene-kind').value = 'text'; $('scene-transition').value = 'inherit';
@@ -62,7 +67,7 @@
     $('crop-x').value = '50'; $('crop-y').value = '50'; $('cta-action').value = 'none';
     $('asset-select').value = ''; $('poster-select').value = '';
     $('editor-title').textContent = 'Ongeraho ikibaho'; $('editor-eyebrow').textContent = 'EDITOR';
-    $('scene-status').className = 'status-pill draft'; $('scene-status').textContent = 'Draft';
+    $('scene-status').className = 'status-pill draft'; $('scene-status').textContent = 'Draft'; updatePublishLabel();
     $('delete-scene').hidden = true; $('preview-scene').disabled = true;
     message(''); toggleFields(); renderScenes(); updateOutputs();
   }
@@ -83,7 +88,7 @@
     setValue('scene-duration', Math.round((scene.duration_ms || 7000) / 1000)); setValue('scene-fit-status', scene.status || 'draft');
     setValue('start-at', toLocalDate(scene.start_at)); setValue('end-at', toLocalDate(scene.end_at));
     $('editor-title').textContent = 'Hindura ikibaho #' + scene.id; $('editor-eyebrow').textContent = 'GUHINDURA';
-    $('scene-status').className = 'status-pill ' + statusClass(scene.status); $('scene-status').textContent = statusText(scene.status);
+    $('scene-status').className = 'status-pill ' + statusClass(scene.status); $('scene-status').textContent = statusText(scene.status); updatePublishLabel();
     $('delete-scene').hidden = false; $('preview-scene').disabled = false;
     message(''); toggleFields(); updateAssetState(); updateOutputs(); renderScenes();
   }
@@ -124,7 +129,7 @@
   function readForm(status) {
     const kind = $('scene-kind').value; const action = $('cta-action').value;
     const duration = Number($('scene-duration').value);
-    if (!Number.isFinite(duration) || duration < 1 || duration > 90) throw new Error('Igihe kigomba kuba hagati y’umunota? Oya: amasegonda 1 na 90.');
+    if (!Number.isFinite(duration) || duration < 1 || duration > 90) throw new Error('Igihe kigomba kuba hagati y’amasegonda 1 na 90.');
     const start = fromLocalDate($('start-at').value); const end = fromLocalDate($('end-at').value);
     if (start !== null && end !== null && end <= start) throw new Error('Itariki yo kurangira igomba kuza nyuma y’iyo gutangira.');
     return {
@@ -203,14 +208,17 @@
   function bind() {
     $('new-scene').addEventListener('click', resetForm); $('refresh-btn').addEventListener('click', refreshAll);
     $('scene-search').addEventListener('input', renderScenes); $('scene-list').addEventListener('click', (event) => {
+      const move = event.target.closest('[data-move]');
+      if (move) { moveScene(Number(move.dataset.move), Number(move.dataset.delta)); return; }
       const button = event.target.closest('[data-edit]'); if (button) fillForm(state.scenes.find((s) => Number(s.id) === Number(button.dataset.edit)) || null);
     });
     $('scene-kind').addEventListener('change', () => { toggleFields(); refreshAssetChoices(); updateAssetState(); });
     $('cta-action').addEventListener('change', toggleFields); $('asset-select').addEventListener('change', updateAssetState);
     ['scene-zoom','crop-x','crop-y','overlay-opacity'].forEach((id) => $(id).addEventListener('input', updateOutputs));
     $('settings-save').addEventListener('click', saveSettings); $('save-draft').addEventListener('click', () => saveScene('draft'));
-    $('publish-scene').addEventListener('click', (event) => { event.preventDefault(); saveScene('published'); });
+    $('publish-scene').addEventListener('click', (event) => { event.preventDefault(); saveScene($('scene-fit-status').value); });
     $('scene-form').addEventListener('submit', (event) => { event.preventDefault(); saveScene($('scene-fit-status').value); });
+    $('scene-fit-status').addEventListener('change', updatePublishLabel);
     $('reset-scene').addEventListener('click', () => state.current ? fillForm(state.current) : resetForm()); $('delete-scene').addEventListener('click', deleteScene);
     $('preview-scene').addEventListener('click', () => { toast('Preview imwe n’iy’abasura izahuzwa mu cyiciro cya 6.'); });
   }
