@@ -170,7 +170,6 @@ let browser=null;
     const publicHeroText=(await visitorPage.locator('#hero .studio-slide').allTextContents()).join(' ');
     assert.ok(publicHeroText.includes('Igenzura rya telefoni'),
       'anonymous public hero should render the same published text as admin preview');
-    await visitorContext.close();
 
     // Scheduling: a published scene beginning tomorrow must stay out of the
     // public playlist until its start time, then appear after moving its start
@@ -260,6 +259,8 @@ let browser=null;
     await visitorPage.locator('#hero .hero-slide').first().waitFor({timeout:10000});
     assert.equal(await visitorPage.locator('#hero .studio-slide').count(),0,
       'after Studio is disabled, anonymous homepage should return to the legacy hero');
+
+    await visitorContext.close();
 
     // Verify responsive layout at phone, small phone, tablet and desktop widths.
     for(const size of [
