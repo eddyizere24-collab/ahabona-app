@@ -6,6 +6,8 @@
   <meta name="color-scheme" content="light">
   <title>AHABONA Studio</title>
   <link rel="stylesheet" href="/admin/studio/editor.css">
+  <link rel="stylesheet" href="/admin/studio/renderer.css">
+  <script src="/admin/studio/renderer.js" defer></script>
   <script src="/admin/studio/editor.js" defer></script>
 </head>
 <body>
@@ -118,7 +120,7 @@
         </form>
       </section>
     </div>
-    <section class="preview-card" aria-labelledby="preview-title"><div><p class="eyebrow">PUBLIC VIEW</p><h2 id="preview-title">Preview imwe n'iy'abasura</h2><p class="muted">Preview izahuzwa na renderer rusange mu cyiciro cya 6. Ntituzakoresha preview y'agateganyo itandukanye n'iy'urubuga.</p></div><div class="preview-placeholder">Preview iracyafunze</div></section>
+    <section class="preview-card" aria-labelledby="preview-title"><div><p class="eyebrow">PUBLIC VIEW</p><h2 id="preview-title">Preview imwe n'iy'abasura</h2><p class="muted">Preview izahuzwa na renderer rusange mu cyiciro cya 6. Ntituzakoresha preview y'agateganyo itandukanye n'iy'urubuga.</p></div><div id="studio-preview" class="preview-placeholder studio-preview-stage" aria-label="Preview y'itangazo">Preview izagaragara hano</div></section>
     <footer class="page-footer">AHABONA Studio • Isuzuma riri mu ishami ryihariye. Urubuga nyarwo ntirwahinduwe.</footer>
   </main>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
