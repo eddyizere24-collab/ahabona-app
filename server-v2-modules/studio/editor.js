@@ -269,7 +269,21 @@
     $('scene-form').addEventListener('submit', (event) => { event.preventDefault(); saveScene($('scene-fit-status').value); });
     $('scene-fit-status').addEventListener('change', updatePublishLabel);
     $('reset-scene').addEventListener('click', () => state.current ? fillForm(state.current) : resetForm()); $('delete-scene').addEventListener('click', deleteScene);
-    $('preview-scene').addEventListener('click', () => { toast('Preview imwe n’iy’abasura izahuzwa mu cyiciro cya 6.'); });
+    $('preview-scene').addEventListener('click', () => {
+      try {
+        const scene=readForm('draft');
+        if(scene.scene_kind==='image'&&!scene.asset_id)throw new Error('Hitamo ifoto mbere yo kuyireba.');
+        if(scene.scene_kind==='video'&&(!scene.asset_id||!scene.poster_asset_id))throw new Error('Hitamo video na poster yayo mbere yo kuyireba.');
+        const stage=$('studio-preview');
+        if(!stage||!window.AhabonaStudioRenderer)throw new Error('Renderer ya Studio ntirahari. Ongera ufungure iri paji.');
+        window.AhabonaStudioRenderer.renderPreview(stage,scene,document.documentElement.lang);
+        $('preview-title').textContent='Preview — '+(scene.title_rw||scene.title_en||kindText(scene.scene_kind));
+        message('Iyi Preview ikoresha renderer imwe n’iy’urubuga.','success');
+      } catch(error) {
+        message(error.message,'error');
+        toast(error.message);
+      }
+    });
   }
   bind(); resetForm(); refreshAll();
 })();
