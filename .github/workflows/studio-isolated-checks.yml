@@ -42,6 +42,7 @@ jobs:
           node --check server-v2-modules/studio/schema.cjs
           node --check server-v2-modules/studio/store.cjs
           node --check server-v2-modules/studio/media.cjs
+          node --check server-v2-modules/studio/renderer.js
           node --check server-v2-modules/studio/editor.js
           node --check tests/studio-store-smoke.cjs
           node --check tests/studio-media-validation-smoke.cjs
