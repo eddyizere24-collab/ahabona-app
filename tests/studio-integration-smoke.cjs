@@ -11,9 +11,10 @@ const savedEnv = {
   adminPassword: process.env.ADMIN_PASSWORD
 };
 process.env.AHABONA_STUDIO_BETA = '1';
-delete process.env.ADMIN_EMAIL;
-delete process.env.ADMIN_PHONE;
-delete process.env.ADMIN_PASSWORD;
+// Bootstrap a disposable super-admin only in this test's temporary database.
+process.env.ADMIN_EMAIL = 'studio-test@example.test';
+process.env.ADMIN_PHONE = '0781234567';
+process.env.ADMIN_PASSWORD = 'Studio-test-pass-2026';
 
 const { start } = require('../server-v2.cjs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ahabona-studio-integration-'));
@@ -73,6 +74,32 @@ async function request(base, pathname, options) {
     assert.equal(protectedEditor.response.status, 401);
     const editorScript = await request(base, '/admin/studio/editor.js');
     assert.equal(editorScript.response.status, 401);
+
+    // Sign in as the disposable test admin and exercise the authenticated UI
+    // asset routes, including the renderer MIME types.
+    const login = await request(base, '/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: 'studio-test@example.test', password: 'Studio-test-pass-2026' })
+    });
+    assert.equal(login.response.status, 200);
+    assert.equal(login.json.staff, true);
+    const cookie = (login.response.headers.get('set-cookie') || '').split(';')[0];
+    assert.match(cookie, /^ahs=/);
+    for (const [pathname, mime, marker] of [
+      ['/admin/studio', 'text/html', 'AHABONA Studio'],
+      ['/admin/studio/editor.css', 'text/css', '.topbar'],
+      ['/admin/studio/renderer.css', 'text/css', '.studio-track'],
+      ['/admin/studio/renderer.js', 'text/javascript', 'AhabonaStudioRenderer'],
+      ['/admin/studio/editor.js', 'text/javascript', 'async function uploadAsset']
+    ]) {
+      const asset = await request(base, pathname, { headers: { Cookie: cookie } });
+      assert.equal(asset.response.status, 200, pathname + ' should load for an admin');
+      assert.ok((asset.response.headers.get('content-type') || '').startsWith(mime), pathname + ' MIME type');
+      assert.ok(asset.body.includes(marker), pathname + ' content marker');
+      assert.equal(asset.response.headers.get('cache-control'), 'no-store', pathname + ' must not be cached');
+    }
+
     const rendererScript = await request(base, '/studio-renderer.js');
     assert.equal(rendererScript.response.status, 200);
     assert.match(rendererScript.body, /AhabonaStudioRenderer/);
