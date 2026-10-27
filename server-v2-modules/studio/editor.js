@@ -77,7 +77,7 @@
     setValue('scene-id', scene.id); setValue('scene-kind', scene.scene_kind); setValue('scene-transition', scene.transition || 'inherit');
     setValue('title-rw', scene.title_rw); setValue('title-en', scene.title_en); setValue('body-rw', scene.body_rw); setValue('body-en', scene.body_en);
     setValue('asset-select', scene.asset_id); setValue('poster-select', scene.poster_asset_id);
-    setValue('scene-fit', scene.fit || 'cover'); setValue('scene-zoom', 1);
+    setValue('scene-fit', scene.fit || 'cover'); setValue('scene-zoom', scene.zoom == null ? 1 : scene.zoom);
     setValue('crop-x', scene.crop_x == null ? 50 : scene.crop_x); setValue('crop-y', scene.crop_y == null ? 50 : scene.crop_y);
     const style = scene.text_style || {}; setValue('style-size', style.fontSize == null ? 26 : style.fontSize);
     setValue('style-weight', style.fontWeight == null ? 700 : style.fontWeight); setValue('style-align', style.textAlign || 'center');
@@ -142,7 +142,7 @@
       cta_action:action,cta_value:action === 'link' || action === 'search' ? $('cta-value').value.trim() : '',
       cta_label_rw:$('cta-label-rw').value,cta_label_en:$('cta-label-en').value,
       duration_ms:Math.round(duration*1000),transition:$('scene-transition').value,
-      fit:$('scene-fit').value,crop_x:Number($('crop-x').value),crop_y:Number($('crop-y').value),
+      fit:$('scene-fit').value,zoom:Number($('scene-zoom').value),crop_x:Number($('crop-x').value),crop_y:Number($('crop-y').value),
       start_at:start,end_at:end,sort_order:state.current ? state.current.sort_order : state.scenes.length*10
     };
   }
