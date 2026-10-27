@@ -79,17 +79,79 @@ let browser=null;
     assert.ok(/^\d+$/.test(videoId),'uploaded video should be selected in the editor');
     assert.ok(/^\d+$/.test(posterId),'generated poster should be selected in the editor');
 
-    // Exercise the real editor in a narrow phone viewport: save an isolated
-    // draft, then render its preview through the shared renderer.
+    // Save and preview an image draft through the authenticated UI; this also
+    // checks that the private media route returns real image bytes.
+    await page.locator('#new-scene').click();
+    await page.locator('#scene-kind').selectOption('image');
+    await page.locator('#title-rw').fill('Igenzura ry’ifoto');
+    await page.locator('#asset-select').selectOption(imageId);
+    await page.locator('#save-draft').click();
+    await page.waitForFunction(() => (document.querySelector('#form-message')||{}).textContent.includes('Draft yabitswe'));
+    const imageRoutePromise=page.waitForResponse(resp=>resp.url().includes('/studio-media/'+imageId)&&resp.request().resourceType()==='image');
+    await page.locator('#preview-scene').click();
+    const imageRoute=await imageRoutePromise;
+    assert.equal(imageRoute.status(),200,'uploaded image preview should load successfully');
+    await page.waitForFunction(()=>{
+      const img=document.querySelector('#studio-preview img.studio-poster');
+      return !!img&&img.complete&&img.naturalWidth>0;
+    },null,{timeout:10000});
+
+    // Save and preview a video draft; the generated JPEG poster must load even
+    // in browsers that reject automatic video playback.
+    await page.locator('#new-scene').click();
+    await page.locator('#scene-kind').selectOption('video');
+    await page.locator('#title-rw').fill('Igenzura rya video');
+    await page.locator('#asset-select').selectOption(videoId);
+    await page.locator('#poster-select').selectOption(posterId);
+    await page.locator('#save-draft').click();
+    await page.waitForFunction(() => (document.querySelector('#form-message')||{}).textContent.includes('Draft yabitswe'));
+    const posterRoutePromise=page.waitForResponse(resp=>resp.url().includes('/studio-media/'+posterId)&&resp.request().resourceType()==='image');
+    await page.locator('#preview-scene').click();
+    const posterRoute=await posterRoutePromise;
+    assert.equal(posterRoute.status(),200,'video poster preview should load successfully');
+    await page.waitForFunction(()=>{
+      const img=document.querySelector('#studio-preview img.studio-poster');
+      return !!img&&img.complete&&img.naturalWidth>0;
+    },null,{timeout:10000});
+    await page.locator('#studio-preview video.studio-video').waitFor({state:'attached',timeout:5000});
+
+    // With Studio still disabled, anonymous visitors should continue seeing
+    // the legacy hero rather than an empty or partially enabled Studio view.
+    const visitorContext=await browser.newContext({viewport:{width:390,height:844}});
+    const visitorPage=await visitorContext.newPage();
+    visitorPage.on('pageerror',error=>pageErrors.push('visitor: '+error.message));
+    await visitorPage.goto(base+'/',{waitUntil:'domcontentloaded'});
+    await visitorPage.locator('#hero').waitFor({timeout:10000});
+    await visitorPage.locator('#hero .hero-slide').first().waitFor({timeout:10000});
+    assert.equal(await visitorPage.locator('#hero .studio-slide').count(),0,
+      'Studio disabled: anonymous homepage should keep the legacy hero');
+
+    // Publish the same text shown in the admin preview and enable Studio only
+    // in this temporary test database, then verify the public homepage output.
     await page.locator('#new-scene').click();
     await page.locator('#title-rw').fill('Igenzura rya telefoni');
     await page.locator('#body-rw').fill('Ubutumwa bwo kugerageza AHABONA Studio.');
     await page.locator('#save-draft').click();
-    await page.locator('#scene-list').getByText('Igenzura rya telefoni').waitFor({timeout:10000});
+    await page.waitForFunction(() => (document.querySelector('#form-message')||{}).textContent.includes('Draft yabitswe'));
     await page.locator('#preview-scene').click();
     await page.locator('#studio-preview .studio-slide').waitFor({timeout:5000});
     const previewText=await page.locator('#studio-preview').innerText();
     assert.ok(previewText.includes('Igenzura rya telefoni'),'preview should show the saved draft title');
+    await page.locator('#scene-fit-status').selectOption('published');
+    await page.locator('#publish-scene').click();
+    await page.waitForFunction(() => (document.querySelector('#form-message')||{}).textContent.includes('Byabitswe kandi byatangajwe.'));
+    await page.locator('#setting-enabled').check();
+    await page.locator('#settings-save').click();
+    await page.waitForFunction(() => (document.querySelector('#settings-note')||{}).textContent.includes('Byabitswe'));
+    const publicPlaylist=await (await context.request.get(base+'/api/studio/playlist')).json();
+    assert.ok(publicPlaylist.scenes.some(scene=>scene.title_rw==='Igenzura rya telefoni'),
+      'published text scene should be in the public playlist');
+    await visitorPage.reload({waitUntil:'domcontentloaded'});
+    await visitorPage.locator('#hero .studio-slide').waitFor({timeout:10000});
+    const publicHeroText=await visitorPage.locator('#hero').innerText();
+    assert.ok(publicHeroText.includes('Igenzura rya telefoni'),
+      'anonymous public hero should render the same published text as admin preview');
+    await visitorContext.close();
 
     // Verify responsive layout at phone, small phone, tablet and desktop widths.
     for(const size of [
