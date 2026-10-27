@@ -7610,7 +7610,7 @@ function handleRequest(ctx,req,res){
     if(!file)return sendError(req,res,404,'err.notfound');
     try{
       const body=fs.readFileSync(path.join(__dirname,'server-v2-modules','studio',file));
-      const types={'editor.html':'text/html; charset=utf-8','editor.css':'text/css; charset=utf-8','editor.js':'text/javascript; charset=utf-8'};
+      const types={'editor.html':'text/html; charset=utf-8','editor.css':'text/css; charset=utf-8','renderer.css':'text/css; charset=utf-8','renderer.js':'text/javascript; charset=utf-8','editor.js':'text/javascript; charset=utf-8'};
       return sendText(req,res,200,body,types[file],{noCache:true});
     }catch(e){
       console.error('[studio-ui] asset unavailable:',file,e&&e.message||String(e));
