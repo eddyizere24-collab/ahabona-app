@@ -122,9 +122,13 @@ function normalize(db,input={},cur={},now=Date.now(),actorId) {
     if(o.asset_id!==null||o.poster_asset_id!==null) bad('studio.err.text_asset','asset_id');
     if(status==='published'&&!(o.title_rw||o.title_en||o.body_rw||o.body_en)) bad('studio.err.text_required','body_rw');
   } else {
-    checkAsset(db,o.asset_id,kind,status,'asset_id');
-    if(kind==='video') checkAsset(db,o.poster_asset_id,'poster',status,'poster_asset_id');
-    else if(o.poster_asset_id!==null) bad('studio.err.poster_kind','poster_asset_id');
+    const media=checkAsset(db,o.asset_id,kind,status,'asset_id');
+    if(kind==='video'){
+      const poster=checkAsset(db,o.poster_asset_id,'poster',status,'poster_asset_id');
+      if(status==='published'&&(!media||media.mime_type!=='video/mp4'||media.codec!=='h264'||!media.duration_ms||media.duration_ms>90000||!poster||poster.status!=='ready')){
+        bad('studio.err.video_not_ready','asset_id');
+      }
+    } else if(o.poster_asset_id!==null) bad('studio.err.poster_kind','poster_asset_id');
   }
   o.created_by=cur.created_by!==undefined?cur.created_by:(Number.isSafeInteger(actorId)&&actorId>0?actorId:null);
   o.created_at=cur.created_at||now; o.updated_at=now;
@@ -178,7 +182,8 @@ function updateAssetStatus(db,id,status,details,options) {
     if(!w||!h) bad('studio.err.asset_dimensions','width');
     if((a.asset_kind==='video'&&(!d||d>90000))||(a.asset_kind!=='video'&&d!==null)) bad('studio.err.asset_duration','duration_ms');
     if(a.asset_kind==='video'&&a.mime_type!=='video/mp4') bad('studio.err.asset_mime','mime_type');
-    const codec=a.asset_kind==='video'?(text(details.codec===undefined?a.codec:details.codec,40,'codec')||'h264'):null;
+    const codec=a.asset_kind==='video'?(text(details.codec===undefined?a.codec:details.codec,40,'codec')||null):null;
+    if(a.asset_kind==='video'&&codec!=='h264') bad('studio.err.video_not_ready','codec');
     db.prepare("UPDATE studio_assets SET status='ready',failure_code=NULL,width=?,height=?,duration_ms=?,codec=?,updated_at=? WHERE id=?").run(w,h,d,codec,now,Number(id));
   }
   return getAsset(db,id);
