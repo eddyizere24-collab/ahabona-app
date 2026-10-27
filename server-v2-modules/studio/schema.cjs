@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS studio_scenes (
   fit TEXT NOT NULL DEFAULT 'cover' CHECK (fit IN ('cover','contain')),
   crop_x INTEGER NOT NULL DEFAULT 50 CHECK (crop_x BETWEEN 0 AND 100),
   crop_y INTEGER NOT NULL DEFAULT 50 CHECK (crop_y BETWEEN 0 AND 100),
+  zoom REAL NOT NULL DEFAULT 1 CHECK (zoom BETWEEN 1 AND 2.5),
   start_at INTEGER,
   end_at INTEGER,
   created_by INTEGER,
@@ -92,6 +93,9 @@ function initStudioSchema(db, now) {
   }
   db.exec(STUDIO_SCHEMA);
   const t = Number.isSafeInteger(now) ? now : Date.now();
+  // Additive migration for test copies initialized before the zoom field existed.
+  const cols=db.prepare('PRAGMA table_info(studio_scenes)').all();
+  if(!cols.some(c=>c.name==='zoom'))db.exec('ALTER TABLE studio_scenes ADD COLUMN zoom REAL NOT NULL DEFAULT 1 CHECK (zoom BETWEEN 1 AND 2.5)');
   db.prepare(`INSERT OR IGNORE INTO studio_settings
     (id, enabled, playback_mode, transition, transition_ms,
      default_duration_ms, pause_on_interaction, updated_at)
