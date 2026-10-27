@@ -7,6 +7,8 @@ const crypto=require('node:crypto');
 const zlib=require('node:zlib');
 const {DatabaseSync}=require('node:sqlite');
 const {execFile}=require('node:child_process');
+const STUDIO_BETA=process.env.AHABONA_STUDIO_BETA==='1';
+const StudioStore=STUDIO_BETA?require('./server-v2-modules/studio/store.cjs'):null;
 
 const PROV={
   "Umujyi wa Kigali":["Gasabo","Kicukiro","Nyarugenge"],
@@ -1719,6 +1721,11 @@ function makeCtx(opts){
   fs.mkdirSync(path.join(dataDir,'photos'),{recursive:true});
   const dbFile=path.join(dataDir,'ahabona.db');
   const db=new DatabaseSync(dbFile);
+  let studioStore=null;
+  if(STUDIO_BETA){
+    studioStore=StudioStore;
+    studioStore.initStudioSchema(db);
+  }
   db.exec('PRAGMA journal_mode=WAL;');
   db.exec('PRAGMA foreign_keys=OFF;');
   db.exec(SCHEMA);
@@ -1862,7 +1869,7 @@ function makeCtx(opts){
   return {
     db,Q,store,settings,rate,mailer,caps,loadCaps,capName,
     ipOf,deviceOf,parseCookies,sessionUser,newSession,destroySession,
-    isAdmin,isSuper,can,adminLog,adminBoot,featureEnabled,stripActive,mediaStore,
+    isAdmin,isSuper,can,adminLog,adminBoot,featureEnabled,stripActive,mediaStore,studio:studioStore,
     secure,dev,proxy,dataDir,pubDir,
     purge:()=>purge()
   };
@@ -7539,6 +7546,28 @@ function handleRequest(ctx,req,res){
   catch(e){return sendError(req,res,400,'err.server')}
   var ip=ctx.ipOf(req)||'unknown';
   if(!ctx.rate.allow('g:'+ip,600,60000))return sendError(req,res,429,'err.rate');
+  if(p==='/admin/studio'||p==='/admin/studio/'||p.startsWith('/admin/studio/')){
+    if(!ctx.studio)return sendError(req,res,404,'err.notfound');
+    const admin=ctx.sessionUser(req);
+    if(!admin)return sendError(req,res,401,'err.auth');
+    if(!ctx.isAdmin(admin)||!ctx.can(admin,'content.edit'))return sendError(req,res,403,'err.forbidden');
+    const files={
+      '/admin/studio':'editor.html',
+      '/admin/studio/':'editor.html',
+      '/admin/studio/editor.css':'editor.css',
+      '/admin/studio/editor.js':'editor.js'
+    };
+    const file=files[p];
+    if(!file)return sendError(req,res,404,'err.notfound');
+    try{
+      const body=fs.readFileSync(path.join(__dirname,'server-v2-modules','studio',file));
+      const types={'editor.html':'text/html; charset=utf-8','editor.css':'text/css; charset=utf-8','editor.js':'text/javascript; charset=utf-8'};
+      return sendText(req,res,200,body,types[file],{noCache:true});
+    }catch(e){
+      console.error('[studio-ui] asset unavailable:',file,e&&e.message||String(e));
+      return sendError(req,res,404,'err.notfound');
+    }
+  }
   if(p==='/icon.svg'){
     var svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="34" fill="#1a9b6c"/><g stroke="#d4a838" stroke-width="6" stroke-linecap="round"><line x1="96" y1="42" x2="96" y2="20"/><line x1="120" y1="48" x2="135" y2="30"/><line x1="138" y1="72" x2="158" y2="62"/><line x1="142" y1="96" x2="164" y2="96"/><line x1="138" y1="120" x2="158" y2="130"/><line x1="120" y1="144" x2="135" y2="162"/><line x1="72" y1="144" x2="57" y2="162"/><line x1="54" y1="120" x2="34" y2="130"/><line x1="50" y1="96" x2="28" y2="96"/><line x1="54" y1="72" x2="34" y2="62"/><line x1="72" y1="48" x2="57" y2="30"/></g><circle cx="96" cy="96" r="40" fill="#d4a838"/><text x="96" y="164" text-anchor="middle" fill="#fff" font-family="system-ui,sans-serif" font-size="22" font-weight="800">AHABONA</text></svg>';
     var buf=Buffer.from(svg,'utf8');
@@ -7631,11 +7660,100 @@ function handleRequest(ctx,req,res){
   return sendText(req,res,200,body,type,{cache:cc});
 }
 
+function studioApiError(req,res,e){
+  const code=String(e&&e.code||'');
+  const messages={
+    'studio.err.text_required':'Andika umutwe cyangwa ubutumwa mbere yo gutangaza.',
+    'studio.err.asset_not_ready':'Media ntirarangiza gutunganywa.',
+    'studio.err.asset_required':'Hitamo media mbere yo gutangaza.',
+    'studio.err.asset_kind':'Ubwoko bwa media wahisemo ntibuhuye n’ikibaho.',
+    'studio.err.asset_missing':'Iyo media ntibonetse.',
+    'studio.err.duration':'Igihe kigomba kuba hagati y’amasegonda 1 na 90.',
+    'studio.err.schedule':'Amatariki yo gutangira no kurangira si yo.',
+    'studio.err.cta_url':'Link igomba gutangirana na https://.',
+    'studio.err.style_value':'Imiterere y’inyandiko irimo agaciro katemewe.',
+    'studio.err.asset_key':'Izina rya media ntiryemewe.',
+    'studio.err.asset_size':'Ingano ya media irarenze umupaka.',
+    'studio.err.asset_duration':'Video igomba kuba itarengeje amasegonda 90.',
+    'studio.err.not_initialized':'Studio ntiyafunguwe kuri iyi seriveri.'
+  };
+  const msg=messages[code]||((code.startsWith('studio.err.'))?'Hari amakuru atemewe. Ongera uyagenzure.':'Habaye ikibazo. Gerageza nanone.');
+  console.error('[studio-api]',code||'unexpected',e&&e.message||String(e));
+  sendJson(req,res,code.startsWith('studio.err.')?400:500,{error:msg,code:code||null,field:e&&e.field||null});
+}
+function studioOff(req,res){
+  sendError(req,res,404,'err.notfound');
+}
+function apiStudioPlaylist(ctx,req,res){
+  if(!ctx.studio)return sendJson(req,res,200,{enabled:false,scenes:[]},{cache:'no-store'});
+  try{
+    const result=ctx.studio.getPublicPlaylist(ctx.db,{now:Date.now()});
+    sendJson(req,res,200,{enabled:result.enabled,settings:result.settings,scenes:result.scenes},{cache:'no-store'});
+  }catch(e){studioApiError(req,res,e)}
+}
+function adminStudioScenes(ctx,req,res,admin){
+  if(!ctx.studio)return studioOff(req,res);
+  try{sendJson(req,res,200,{scenes:ctx.studio.listScenes(ctx.db)})}
+  catch(e){studioApiError(req,res,e)}
+}
+async function adminStudioSceneAdd(ctx,req,res,admin){
+  if(!ctx.studio)return studioOff(req,res);
+  const b=await readBody(req,65536);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  try{
+    const scene=ctx.studio.createScene(ctx.db,b.data||{},{actorId:admin.id,now:Date.now()});
+    ctx.adminLog(admin.id,'studio.scene.create','studio_scene',String(scene.id),scene.title_rw||scene.title_en||scene.scene_kind,ctx.ipOf(req));
+    sendJson(req,res,201,{ok:true,scene:scene});
+  }catch(e){studioApiError(req,res,e)}
+}
+async function adminStudioSceneUpdate(ctx,req,res,id,admin){
+  if(!ctx.studio)return studioOff(req,res);
+  const b=await readBody(req,65536);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  try{
+    const scene=ctx.studio.updateScene(ctx.db,id,b.data||{},{actorId:admin.id,now:Date.now()});
+    if(!scene)return sendError(req,res,404,'err.notfound');
+    ctx.adminLog(admin.id,'studio.scene.update','studio_scene',String(id),scene.title_rw||scene.title_en||scene.scene_kind,ctx.ipOf(req));
+    sendJson(req,res,200,{ok:true,scene:scene});
+  }catch(e){studioApiError(req,res,e)}
+}
+function adminStudioSceneDelete(ctx,req,res,id,admin){
+  if(!ctx.studio)return studioOff(req,res);
+  try{
+    if(!ctx.studio.deleteScene(ctx.db,id))return sendError(req,res,404,'err.notfound');
+    ctx.adminLog(admin.id,'studio.scene.delete','studio_scene',String(id),null,ctx.ipOf(req));
+    sendJson(req,res,200,{ok:true});
+  }catch(e){studioApiError(req,res,e)}
+}
+function adminStudioAssets(ctx,req,res,admin){
+  if(!ctx.studio)return studioOff(req,res);
+  try{
+    const assets=ctx.Q('SELECT id,asset_kind,mime_type,bytes,width,height,duration_ms,codec,status,created_at,updated_at FROM studio_assets ORDER BY id DESC').all();
+    sendJson(req,res,200,{assets:assets});
+  }catch(e){studioApiError(req,res,e)}
+}
+function adminStudioSettings(ctx,req,res,admin){
+  if(!ctx.studio)return studioOff(req,res);
+  try{sendJson(req,res,200,{settings:ctx.studio.readSettings(ctx.db)})}
+  catch(e){studioApiError(req,res,e)}
+}
+async function adminStudioSettingsUpdate(ctx,req,res,admin){
+  if(!ctx.studio)return studioOff(req,res);
+  const b=await readBody(req,8192);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  try{
+    const settings=ctx.studio.updateSettings(ctx.db,b.data||{},{now:Date.now()});
+    ctx.adminLog(admin.id,'studio.settings.update','studio_settings','1',JSON.stringify(settings),ctx.ipOf(req));
+    sendJson(req,res,200,{ok:true,settings:settings});
+  }catch(e){studioApiError(req,res,e)}
+}
+
 async function handleApi(ctx,req,res,url,p){
   var m=req.method;
   if(p==='/api/health')return apiHealth(req,res);
   if(p==='/api/config'&&(m==='GET'||m==='HEAD'))return apiConfig(ctx,req,res);
   if(p==='/api/strip'&&(m==='GET'||m==='HEAD'))return apiStrip(ctx,req,res);
+  if(p==='/api/studio/playlist'&&(m==='GET'||m==='HEAD'))return apiStudioPlaylist(ctx,req,res);
   if(p==='/api/profiles'&&(m==='GET'||m==='HEAD'))return apiProfiles(ctx,req,res,url);
   var mt;
   if((mt=p.match(/^\/api\/profile\/([a-z0-9-]+)$/))&&(m==='GET'||m==='HEAD'))return apiProfile(ctx,req,res,mt[1]);
@@ -7678,6 +7796,13 @@ async function handleApi(ctx,req,res,url,p){
 
 const NOROUTE={};
 const ADMIN_ROUTES=[
+  ['GET','/api/admin/studio/scenes','content.edit',function(ctx,req,res,mt,u){return adminStudioScenes(ctx,req,res,u)}],
+  ['POST','/api/admin/studio/scenes','content.edit',function(ctx,req,res,mt,u){return adminStudioSceneAdd(ctx,req,res,u)}],
+  ['GET','/api/admin/studio/assets','content.edit',function(ctx,req,res,mt,u){return adminStudioAssets(ctx,req,res,u)}],
+  ['GET','/api/admin/studio/settings','content.edit',function(ctx,req,res,mt,u){return adminStudioSettings(ctx,req,res,u)}],
+  ['PUT','/api/admin/studio/settings','content.edit',function(ctx,req,res,mt,u){return adminStudioSettingsUpdate(ctx,req,res,u)}],
+  ['PUT',/^\/api\/admin\/studio\/scenes\/(\d+)$/,'content.edit',function(ctx,req,res,mt,u){return adminStudioSceneUpdate(ctx,req,res,+mt[1],u)}],
+  ['DELETE',/^\/api\/admin\/studio\/scenes\/(\d+)$/,'content.edit',function(ctx,req,res,mt,u){return adminStudioSceneDelete(ctx,req,res,+mt[1],u)}],
   ['GET','/api/admin/summary','dash.view',function(ctx,req,res,mt,u){return adminSummary(ctx,req,res)}],
   ['GET','/api/admin/users','users.view',function(ctx,req,res,mt,u){return adminUsers(ctx,req,res,u)}],
   ['POST','/api/admin/broadcast','broadcast.send',function(ctx,req,res,mt,u){return adminBroadcast(ctx,req,res,u)}],
