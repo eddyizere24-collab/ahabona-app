@@ -10,6 +10,7 @@ on:
       - 'tests/studio-store-smoke.cjs'
       - 'tests/studio-media-validation-smoke.cjs'
       - 'tests/studio-integration-smoke.cjs'
+      - 'tests/studio-disabled-fallback-smoke.cjs'
       - 'tests/studio-browser-smoke.cjs'
       - '.github/workflows/studio-isolated-checks.yml'
   pull_request:
@@ -19,6 +20,7 @@ on:
       - 'tests/studio-store-smoke.cjs'
       - 'tests/studio-media-validation-smoke.cjs'
       - 'tests/studio-integration-smoke.cjs'
+      - 'tests/studio-disabled-fallback-smoke.cjs'
       - 'tests/studio-browser-smoke.cjs'
       - '.github/workflows/studio-isolated-checks.yml'
   workflow_dispatch:
@@ -73,7 +75,11 @@ jobs:
           node --check tests/studio-store-smoke.cjs
           node --check tests/studio-media-validation-smoke.cjs
           node --check tests/studio-integration-smoke.cjs
+          node --check tests/studio-disabled-fallback-smoke.cjs
           node --check tests/studio-browser-smoke.cjs
+
+      - name: Verify legacy fallback with Studio flag unset
+        run: node --no-warnings tests/studio-disabled-fallback-smoke.cjs
 
       - name: Test isolated Studio storage
         run: node --no-warnings tests/studio-store-smoke.cjs
