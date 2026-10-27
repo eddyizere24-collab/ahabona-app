@@ -9,6 +9,7 @@ on:
       - 'server-v2-modules/studio/**'
       - 'tests/studio-store-smoke.cjs'
       - 'tests/studio-media-validation-smoke.cjs'
+      - 'tests/studio-integration-smoke.cjs'
       - '.github/workflows/studio-isolated-checks.yml'
   pull_request:
     paths:
@@ -46,9 +47,13 @@ jobs:
           node --check server-v2-modules/studio/editor.js
           node --check tests/studio-store-smoke.cjs
           node --check tests/studio-media-validation-smoke.cjs
+          node --check tests/studio-integration-smoke.cjs
 
       - name: Test isolated Studio storage
         run: node --no-warnings tests/studio-store-smoke.cjs
 
       - name: Test Studio media validation guards
         run: node --no-warnings tests/studio-media-validation-smoke.cjs
+
+      - name: Test opt-in Studio server integration
+        run: node --no-warnings tests/studio-integration-smoke.cjs
