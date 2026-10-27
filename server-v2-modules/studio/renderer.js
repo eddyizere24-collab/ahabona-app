@@ -17,6 +17,14 @@
     en:{register:'Sign up',search:'Find a worker',help:'Help',about:'About AHABONA',link:'Open link'}
   };
   const stateByContainer = new WeakMap();
+  function ensureStyles() {
+    if (document.querySelector('link[data-ahabona-studio-renderer-style]')) return;
+    const link=document.createElement('link');
+    link.rel='stylesheet';
+    link.href='/studio-renderer.css';
+    link.setAttribute('data-ahabona-studio-renderer-style','1');
+    document.head.appendChild(link);
+  }
 
   function styleFor(scene) {
     const src = scene && scene.text_style && typeof scene.text_style === 'object' ? scene.text_style : {};
@@ -129,7 +137,7 @@
     }
     slide.appendChild(copy);
 
-    if(kind==='video'&&!options.preview) {
+    if(kind==='video') {
       const retry=addTextNode(slide,'button','studio-video-play',lang==='en'?'Tap to play video':'Kanda ukine video');
       retry.type='button';
       retry.hidden=true;
@@ -270,6 +278,7 @@
   }
   function mount(container, playlist) {
     if(!container||!playlist||!Array.isArray(playlist.scenes)||!playlist.scenes.length)return null;
+    ensureStyles();
     const prior=stateByContainer.get(container);
     const signature=JSON.stringify({settings:playlist.settings||{},scenes:playlist.scenes});
     if(prior&&prior.signature===signature)return prior;
@@ -369,12 +378,19 @@
   }
   function renderPreview(target, scene, language) {
     if(!target)return;
+    ensureStyles();
+    $(target,'video').forEach(function(video){
+      try{video.pause()}catch(_){}
+      video.removeAttribute('src');
+      try{video.load()}catch(_){}
+    });
     target.innerHTML='';
     target.classList.add('studio-preview-stage');
     const slide=buildSlide(scene,{lang:langNow(language),active:true,preview:true});
     slide.classList.add('studio-preview-slide','studio-active');
     slide.removeAttribute('aria-hidden');
     target.appendChild(slide);
+    if(slide.dataset.videoId)playVideo(slide,false);
   }
   function stop(container) {
     const p=container&&stateByContainer.get(container);
