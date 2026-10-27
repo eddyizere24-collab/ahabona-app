@@ -388,7 +388,7 @@
   function renderPreview(target, scene, language) {
     if(!target)return;
     ensureStyles();
-    $(target,'video').forEach(function(video){
+    $$(target,'video').forEach(function(video){
       try{video.pause()}catch(_){}
       video.removeAttribute('src');
       try{video.load()}catch(_){}
