@@ -190,6 +190,46 @@
       $('system-status').className = 'status-pill ' + (state.settings.enabled ? 'on' : 'off'); toast('Igenamiterere ryabitswe');
     } catch (error) { $('settings-note').textContent = error.message; toast(error.message); }
   }
+  function mediaKind(file) {
+    const mime = String(file && file.type || '').toLowerCase();
+    const name = String(file && file.name || '').toLowerCase();
+    if (mime.startsWith('video/') || /\.(mp4|webm|mov|avi)$/.test(name)) return 'video';
+    if (mime.startsWith('image/') || /\.(jpg|jpeg|png|webp)$/.test(name)) return 'image';
+    return null;
+  }
+  async function uploadAsset() {
+    const file = $('asset-upload').files && $('asset-upload').files[0];
+    if (!file) { $('upload-note').textContent = 'Banza hitamo ifoto cyangwa video.'; $('upload-note').className = 'upload-note error'; return; }
+    const kind = mediaKind(file);
+    if (!kind) { $('upload-note').textContent = 'File itemewe. Koresha JPG, PNG, WebP, MP4 cyangwa WebM.'; $('upload-note').className = 'upload-note error'; return; }
+    const limit = kind === 'image' ? 8*1024*1024 : 64*1024*1024;
+    if (file.size < 100 || file.size > limit) { $('upload-note').textContent = kind === 'image' ? 'Ifoto igomba kuba hagati ya 100 bytes na 8 MB.' : 'Video igomba kuba hagati ya 100 bytes na 64 MB.'; $('upload-note').className = 'upload-note error'; return; }
+    const button = $('upload-btn'); button.disabled = true; button.textContent = 'Biratunganywa…';
+    $('upload-note').textContent = 'Ohereza file; server iri kuyigenzura no kuyitunganya. Ntufunge uru rupapuro.'; $('upload-note').className = 'upload-note';
+    try {
+      const response = await fetch(API + '/assets/' + kind, {
+        method:'POST', credentials:'same-origin',
+        headers:{'Content-Type':file.type || 'application/octet-stream'},
+        body:file
+      });
+      let data = {};
+      try { data = await response.json(); } catch (_) {}
+      if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+      const list = await api(API + '/assets');
+      state.assets = Array.isArray(list.assets) ? list.assets : [];
+      $('scene-kind').value = kind; toggleFields(); refreshAssetChoices();
+      if (data.asset && data.asset.id) $('asset-select').value = String(data.asset.id);
+      if (data.poster && data.poster.id) $('poster-select').value = String(data.poster.id);
+      updateAssetState(); updateOutputs();
+      $('upload-note').textContent = kind === 'video' ? 'Video yatunganyijwe. Poster yakozwe; iriteguye guhitwa no gutangazwa.' : 'Ifoto yatunganyijwe kandi iriteguye.';
+      $('upload-note').className = 'upload-note success'; $('asset-upload').value = '';
+      toast('Media yabitswe');
+    } catch (error) {
+      $('upload-note').textContent = error.message || 'Upload yanze. Ongera ugerageze.'; $('upload-note').className = 'upload-note error';
+    } finally {
+      button.disabled = false; button.textContent = 'Ohereza media';
+    }
+  }
   async function deleteScene() {
     const id = Number($('scene-id').value); if (!id) return;
     if (!window.confirm('Urashaka gusiba iki kibaho? Media yo kuri server ntizahita isibwa.')) return;
@@ -207,6 +247,15 @@
   }
   function bind() {
     $('new-scene').addEventListener('click', resetForm); $('refresh-btn').addEventListener('click', refreshAll);
+    $('upload-btn').addEventListener('click', uploadAsset);
+    $('asset-upload').addEventListener('change', () => {
+      const f = $('asset-upload').files && $('asset-upload').files[0];
+      if (!f) return;
+      const kind = mediaKind(f);
+      if (kind) { $('scene-kind').value = kind; toggleFields(); refreshAssetChoices(); }
+      $('upload-note').textContent = f.name + ' · ' + (f.size/1024/1024).toFixed(2) + ' MB';
+      $('upload-note').className = 'upload-note';
+    });
     $('scene-search').addEventListener('input', renderScenes); $('scene-list').addEventListener('click', (event) => {
       const move = event.target.closest('[data-move]');
       if (move) { moveScene(Number(move.dataset.move), Number(move.dataset.delta)); return; }
