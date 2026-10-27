@@ -100,6 +100,8 @@ let browser=null;
       {width:1280,height:900}
     ]){
       await page.setViewportSize(size);
+      await page.evaluate(()=>window.scrollTo(0,0));
+      await page.waitForTimeout(50);
       const layout=await page.evaluate(()=>{
         const scene=document.querySelector('.scene-panel').getBoundingClientRect();
         const editor=document.querySelector('.editor-panel').getBoundingClientRect();
