@@ -23,6 +23,10 @@ on:
       - '.github/workflows/studio-isolated-checks.yml'
   workflow_dispatch:
 
+concurrency:
+  group: ahabona-studio-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
