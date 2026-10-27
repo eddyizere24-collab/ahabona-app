@@ -275,6 +275,8 @@
     player.slides.forEach(stopVideo);
     if(player.pauseButton)player.pauseButton.remove();
     if(player.controls)player.controls.remove();
+    player.track.classList.remove('studio-track','studio-fade','studio-none');
+    ['display','transform','transition-duration','transition-property','--studio-transition-ms'].forEach(function(k){player.track.style.removeProperty(k)});
   }
   function mount(container, playlist) {
     if(!container||!playlist||!Array.isArray(playlist.scenes)||!playlist.scenes.length)return null;
@@ -303,6 +305,7 @@
     track.classList.toggle('studio-fade',transition==='fade');
     track.classList.toggle('studio-none',transition==='none');
     track.style.transitionDuration=transitionMs+'ms';
+    track.style.setProperty('--studio-transition-ms',transitionMs+'ms');
     track.style.transitionProperty=transition==='slide'?'transform':'none';
     player.slides=scenes.map(function(scene,i){
       const slide=buildSlide(scene,{lang:lang,active:i===0,preview:false});
@@ -372,8 +375,7 @@
     document.addEventListener('visibilitychange',player.onVisibility);
     container.setAttribute('aria-roledescription','carousel');
     stateByContainer.set(container,player);
-    if(player.slides[0]&&player.slides[0].dataset.videoId)playVideo(player.slides[0],false);
-    schedule(player);
+    go(player,0);
     return player;
   }
   function renderPreview(target, scene, language) {
