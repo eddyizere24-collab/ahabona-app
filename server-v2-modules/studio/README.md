@@ -25,7 +25,7 @@ The shared renderer uses the same slide builder for public playback and admin pr
 ## Media limits and safeguards
 
 - Images: up to 8 MB input; re-encoded to JPEG, up to 1280 pixels wide, with metadata stripped.
-- Videos: up to 64 MB input, maximum 90 seconds and 20 megapixels in source. The pipeline converts them to MP4/H.264 up to 960 pixels wide, uses one encoder thread, limits the video bitrate, removes the audio track and enables MP4 fast-start metadata. A JPEG poster is also generated.
+- Videos: up to 64 MB input, maximum 90 seconds and 20 megapixels in source. The pipeline converts them to MP4/H.264 within a 960×960-pixel frame at 30 fps, uses one encoder thread, limits the video bitrate, removes the audio track and enables MP4 fast-start metadata. A JPEG poster is also generated.
 - Image/video processing is serialized; if `ffmpeg`/`ffprobe` is missing or conversion/validation fails, the upload is rejected and is not marked ready.
 - Scene text is rendered as text rather than trusted HTML. Style values are allow-listed, external CTA links require HTTPS, scene durations and image zoom are bounded, and file paths are not taken from request parameters.
 - The additive Studio schema does not change `strip_ads`, `site_settings`, users or profiles. Deleting a scene does not automatically delete its media files; a separate reviewed retention process is required.
