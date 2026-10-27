@@ -97,6 +97,8 @@ let browser=null;
     await page.locator('#preview-scene').click();
     const imageRoute=await imageRoutePromise;
     assert.equal(imageRoute.status(),200,'uploaded image preview should load successfully');
+    assert.equal(imageRoute.headers()['cache-control'],'private, no-store',
+      'draft image previews must not be cached by shared/public caches');
     await page.waitForFunction(()=>{
       const img=document.querySelector('#studio-preview img.studio-poster');
       return !!img&&img.complete&&img.naturalWidth>0;
@@ -115,6 +117,13 @@ let browser=null;
     await page.locator('#preview-scene').click();
     const posterRoute=await posterRoutePromise;
     assert.equal(posterRoute.status(),200,'video poster preview should load successfully');
+    assert.equal(posterRoute.headers()['cache-control'],'private, no-store',
+      'draft video posters must not be cached by shared/public caches');
+    const videoRange=await context.request.get(base+'/studio-media/'+videoId,{headers:{Range:'bytes=0-99'}});
+    assert.equal(videoRange.status(),206,'video media should support HTTP byte-range streaming');
+    assert.match(videoRange.headers()['content-range']||'',/^bytes 0-99\//);
+    assert.equal(videoRange.headers()['cache-control'],'private, no-store',
+      'draft video stream must not be cached publicly');
     await page.waitForFunction(()=>{
       const img=document.querySelector('#studio-preview img.studio-poster');
       return !!img&&img.complete&&img.naturalWidth>0;
