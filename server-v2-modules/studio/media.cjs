@@ -156,7 +156,7 @@ function makeStudioMediaPipeline(dataDir) {
       const sourceDuration=durationMs(source,sourceDim.stream);
       // Reject overlong input; do not silently truncate user content.
       if(sourceDuration>MAX_DURATION_MS)fail('studio.err.media_too_long');
-      await exec('ffmpeg',['-y','-hide_banner','-loglevel','error','-i',input,'-t','90','-map','0:v:0','-vf',"scale='trunc(min(960,iw)/2)*2':-2",'-c:v','libx264','-preset','veryfast','-crf','29','-maxrate','1200k','-bufsize','2400k','-pix_fmt','yuv420p','-profile:v','main','-level','3.1','-threads','1','-an','-sn','-dn','-map_metadata','-1','-movflags','+faststart','-f','mp4',out],180000);
+      await exec('ffmpeg',['-y','-hide_banner','-loglevel','error','-i',input,'-t','90','-map','0:v:0','-vf','scale=960:960:force_original_aspect_ratio=decrease:force_divisible_by=2','-r','30','-c:v','libx264','-preset','veryfast','-crf','29','-maxrate','1200k','-bufsize','2400k','-pix_fmt','yuv420p','-profile:v','main','-level','3.1','-threads','1','-an','-sn','-dn','-map_metadata','-1','-movflags','+faststart','-f','mp4',out],180000);
       const processed=await probe(out), pd=dimensions(processed), dur=durationMs(processed,pd.stream);
       if(pd.stream.codec_name!=='h264'||dur>MAX_DURATION_MS)fail('studio.err.video_not_ready');
       await exec('ffmpeg',['-y','-hide_banner','-loglevel','error','-i',out,'-frames:v','1','-update','1','-vf',"scale='trunc(min(640,iw)/2)*2':-2",'-q:v','4','-map_metadata','-1','-threads','1',posterFile],60000);
