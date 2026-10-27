@@ -1,46 +1,44 @@
-# AHABONA Studio backend foundation (Phase 3)
+# AHABONA Studio — isolated development branch
 
-This is an isolated foundation module. It is **not imported by `server-v2.cjs`**, does not register routes, and is not active on the website. Keep it isolated until the editor, upload path, public renderer, tests, and rollback plan are reviewed.
+This branch contains the first integrated, opt-in Studio implementation. The code is wired into this branch's `server-v2.cjs` only when `AHABONA_STUDIO_BETA=1` is set. With the flag unset, Studio's store, media pipeline, UI routes and public renderer are not enabled. **This branch has not been deployed to production.** The live server, live database, existing `strip_ads` rows, `main` and PR #2 have not been changed by this work.
 
-## Files
+## What is included
 
-- `schema.cjs`: additive-only SQLite tables and indexes for Studio settings, media metadata, and scenes.
-- `store.cjs`: validated storage operations for settings, draft/published scenes, and asset-processing states.
+- `schema.cjs`: additive SQLite tables and indexes for Studio settings, scenes and media metadata.
+- `store.cjs`: validated create/update/delete, publish/archive, ordering, scheduling and playback settings.
+- `media.cjs`: bounded image/video processing, strict file validation, H.264 MP4 conversion, poster generation and one-at-a-time media-job lock.
+- `renderer.js` and `renderer.css`: shared renderer for the existing top hero area and the Studio preview.
+- `editor.html`, `editor.css` and `editor.js`: responsive authoring interface with text, image and video scenes, style/overlay controls, scheduling, upload, reordering and shared-renderer preview.
+- `../../tests/studio-store-smoke.cjs` and `../../tests/studio-media-validation-smoke.cjs`: isolated SQLite and upload-validation smoke tests.
 
-- `media.cjs`: isolated image/video optimization, strict size/dimension/duration checks, H.264 MP4 conversion, poster generation, and a one-job-at-a-time media lock.
-- `editor.html`, `editor.css`, `editor.js`: responsive Studio editor and upload controls. The editor calls the opt-in Studio API and is not linked from the existing admin menu yet.
-- `../../tests/studio-media-validation-smoke.cjs`: tests format sniffing, safe asset-key checks, limits, and the media-processing lock.
-- `../../tests/studio-store-smoke.cjs`: isolated SQLite smoke tests.
+## Opt-in behavior in this branch
 
-## Safety
+With `AHABONA_STUDIO_BETA=1`:
+- `/admin/studio` opens the editor for a signed-in admin with `content.edit` permission. The existing admin menu is not changed yet.
+- `/api/admin/studio/scenes`, `/api/admin/studio/assets` and `/api/admin/studio/settings` provide protected data operations. Image/video upload endpoints are `POST /api/admin/studio/assets/image` and `POST /api/admin/studio/assets/video`.
+- `GET /api/studio/playlist` returns the public list only when Studio is enabled and its scenes are published and in schedule.
+- `/studio-media/:assetId` resolves an asset ID through the database to a validated file name under the dedicated Studio media directory. Public caching is used only for published media; private draft preview media is sent with `private, no-store`.
+- The existing hero first checks Studio. If the flag/settings/playlist/renderer are unavailable, it falls back to the existing `/api/strip` content. Studio starts disabled; the public renderer does not become active merely because the code is present.
 
-- Studio starts with `studio_settings.enabled = 0` and an empty playlist.
-- Initialization only creates `studio_settings`, `studio_assets`, `studio_scenes`, and their indexes. It does not alter `strip_ads`, `site_settings`, users, profiles, or existing media.
-- A public image/video scene cannot be published until its asset is `ready`. A public video also requires a ready poster. Text and style content are stored as text/validated JSON, never trusted HTML.
-- External CTA links require HTTPS. Asset storage keys are fixed safe names, not filesystem paths supplied to a media route.
-- Deleting a Studio scene does not delete media files or asset records. Media cleanup needs a separate reviewed retention procedure.
-- The store is not an authorization layer. Any future route must apply the existing server admin/permission checks before write operations and must not expose raw storage keys publicly.
+The shared renderer uses the same slide builder for public playback and admin preview. It retains the existing hero placement, uses poster images before video playback, loads video when a slide becomes active, and supports pause/resume, touch swipe, shuffle, per-scene duration and transitions. Real browser behavior still needs end-to-end verification on small mobile screens.
 
-## Later integration requirements
+## Media limits and safeguards
 
-1. Call `initStudioSchema(db)` only from an isolated, reviewed Studio-enabled build, not the currently running production server.
-2. Resolve media by database asset ID to a validated key in a dedicated Studio media directory; never accept arbitrary request paths. Stream video with byte-range support.
-3. Keep uploaded assets in `processing` until validation, MP4/H.264 transcoding with fast-start metadata, poster generation, and duration checks all pass. Only then mark them `ready`.
-4. Keep the global Studio switch off until browser tests confirm the public renderer and admin preview use the same renderer.
-5. Preserve the old strip renderer/API as fallback until the new path passes the full test phase.
+- Images: up to 8 MB input; re-encoded to JPEG, up to 1280 pixels wide, with metadata stripped.
+- Videos: up to 64 MB input, maximum 90 seconds and 20 megapixels in source. The pipeline converts them to MP4/H.264 up to 960 pixels wide, uses one encoder thread, limits the video bitrate, removes the audio track and enables MP4 fast-start metadata. A JPEG poster is also generated.
+- Image/video processing is serialized; if `ffmpeg`/`ffprobe` is missing or conversion/validation fails, the upload is rejected and is not marked ready.
+- Scene text is rendered as text rather than trusted HTML. Style values are allow-listed, external CTA links require HTTPS, scene durations and image zoom are bounded, and file paths are not taken from request parameters.
+- The additive Studio schema does not change `strip_ads`, `site_settings`, users or profiles. Deleting a scene does not automatically delete its media files; a separate reviewed retention process is required.
 
-Run the isolated smoke test with:
+## Checks and remaining work
 
-```sh
-node tests/studio-store-smoke.cjs
-```
+The GitHub Actions workflow `AHABONA Studio isolated checks` checks JavaScript syntax and runs isolated store/media-validation tests. A successful workflow is **not** the same as having tested a real phone browser or a full video upload with the exact runtime environment.
 
-Timestamps (`start_at`, `end_at`) are Unix milliseconds. This foundation caps final video duration at 90 seconds. The upload/transcoding path is implemented and verified in a later phase.
+Before any release, still perform a separate non-production deployment and verify:
+1. Admin access and every editor operation, including publish/schedule/reorder/upload/delete.
+2. Real image/video upload using installed `ffmpeg`/`ffprobe`, memory/disk use and failure paths.
+3. The public hero and admin preview rendering the same saved content on narrow phones, tablets and desktop.
+4. Weak network, missing media/poster, autoplay rejection, byte-range streaming, service-worker caching and legacy fallback.
+5. Database backup, reversible deployment, and rollback.
 
-## Studio API and media rules
-
-With `AHABONA_STUDIO_BETA=1` in an isolated test deployment, the opt-in build creates only the new Studio tables and exposes the protected `/admin/studio` editor. The admin API supports scene CRUD, scheduling, ordering, playback settings, and image/video upload. The public playlist is `GET /api/studio/playlist`; its media references use `/studio-media/:assetId`, resolved from a ready database record rather than a request-supplied filesystem path.
-
-Uploads are raw request bodies (not base64), serialized so at most one Studio media transcode runs at a time. Images are limited to 8 MB and re-encoded to JPEG at up to 1280 pixels wide with metadata stripped. Source images/videos are capped at 20 megapixels. Videos are limited to 64 MB and 90 seconds; they must be decodable by ffmpeg and are converted to MP4/H.264 at up to 960 pixels wide with one encoder thread, without an audio track. A JPEG poster (up to 640 pixels wide) must also be created. If ffmpeg/ffprobe is missing or conversion fails, the upload is rejected; original unverified bytes are never marked ready or published.
-
-This branch contains route wiring only behind the `AHABONA_STUDIO_BETA=1` opt-in. No setting is enabled in the live server, no live database was opened or migrated, and the branch has not been deployed. Run the GitHub Actions workflow `AHABONA Studio isolated checks` for syntax and isolated data/validation tests. Real phone-browser rendering, production-sized transcode timing, and end-to-end public preview still require a separate non-production deployment before any release.
+Do not set the flag on the live server, migrate the production database or merge this branch until the non-production tests and release/rollback review have passed.
