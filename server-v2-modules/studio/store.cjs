@@ -131,7 +131,7 @@ function normalize(db,input={},cur={},now=Date.now(),actorId) {
 }
 function getScene(db,id) { return sceneOut(rawScene(db,id)); }
 function createScene(db,input,options) {
-  const now=stamp(options), o=normalize(db,input,null,now,options&&options.actorId);
+  const now=stamp(options), o=normalize(db,input,{},now,options&&options.actorId);
   const r=db.prepare('INSERT INTO studio_scenes (scene_kind,title_rw,title_en,body_rw,body_en,text_style_json,overlay_style_json,asset_id,poster_asset_id,cta_label_rw,cta_label_en,cta_action,cta_value,status,sort_order,duration_ms,transition,fit,crop_x,crop_y,start_at,end_at,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
     .run(o.scene_kind,o.title_rw,o.title_en,o.body_rw,o.body_en,o.text_style_json,o.overlay_style_json,o.asset_id,o.poster_asset_id,o.cta_label_rw,o.cta_label_en,o.cta_action,o.cta_value,o.status,o.sort_order,o.duration_ms,o.transition,o.fit,o.crop_x,o.crop_y,o.start_at,o.end_at,o.created_by,o.created_at,o.updated_at);
   return getScene(db,Number(r.lastInsertRowid));
