@@ -255,6 +255,13 @@ let browser=null;
     const disabledPlaylist=await (await context.request.get(base+'/api/studio/playlist')).json();
     assert.equal(disabledPlaylist.enabled,false,'Studio should turn off cleanly');
     assert.deepEqual(disabledPlaylist.scenes,[],'disabled Studio should expose no public scenes');
+    // A visitor may already have Studio mounted when an admin switches it off.
+    // Stopping the renderer must remove its old slides before legacy fallback.
+    await visitorPage.evaluate(()=>{
+      if(window.AhabonaStudioRenderer)window.AhabonaStudioRenderer.stop(document.querySelector('#hero'));
+    });
+    assert.equal(await visitorPage.locator('#hero .studio-slide').count(),0,
+      'stopping Studio should clear its slides before legacy fallback');
     await visitorPage.reload({waitUntil:'domcontentloaded'});
     await visitorPage.locator('#hero .hero-slide').first().waitFor({timeout:10000});
     assert.equal(await visitorPage.locator('#hero .studio-slide').count(),0,
