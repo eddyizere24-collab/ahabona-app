@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="rw">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>AHABONA Studio</title>
+  <link rel="stylesheet" href="/admin/studio/editor.css">
+  <script src="/admin/studio/editor.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="back" href="/admin" aria-label="Subira ku buyobozi">←</a>
+    <div class="brand"><span class="brand-mark">A</span><div><strong>AHABONA Studio</strong><small>Agace k'itangazo ko hejuru</small></div></div>
+    <div class="top-status"><span id="system-status" class="status-pill off">Kizimye</span><button id="refresh-btn" class="button subtle" type="button">Ongera urebe</button></div>
+  </header>
+
+  <main class="app-shell">
+    <section class="settings-card" aria-labelledby="settings-title">
+      <div class="section-heading"><div><p class="eyebrow">IGENAMITERERE RUSANGE</p><h1 id="settings-title">Uko Studio ikora</h1><p class="muted">Studio itangira izimye. Ibikubiye muri yo ntibigaragara kugeza igihe uyifunguye kandi ibizamini birangiye.</p></div><label class="switch-line" for="setting-enabled"><span>Gutangaza Studio</span><input id="setting-enabled" type="checkbox"><span class="switch-ui" aria-hidden="true"></span></label></div>
+      <div class="settings-grid">
+        <label>Uko ibikubiye bikurikirana<select id="setting-playback"><option value="sequential">Bikurikirana uko byatondetswe</option><option value="shuffle">Bivangwe ku buryo bw'impanuka</option></select></label>
+        <label>Transition<select id="setting-transition"><option value="none">Nta guhinduka</option><option value="fade">Fade</option><option value="slide">Slide</option></select></label>
+        <label>Igihe cya transition (ms)<input id="setting-transition-ms" type="number" min="0" max="1500" step="50" value="450"></label>
+        <label>Igihe gisanzwe (amasegonda)<input id="setting-duration" type="number" min="1" max="90" value="7"></label>
+        <label class="check-setting"><input id="setting-pause" type="checkbox" checked><span>Hagarara iyo umuntu akozeho agace</span></label>
+        <div class="settings-actions"><button id="settings-save" class="button primary" type="button">Bika igenamiterere</button><span id="settings-note" class="muted" aria-live="polite"></span></div>
+      </div>
+    </section>
+
+    <div class="workspace">
+      <aside class="scene-panel" aria-labelledby="scene-list-title">
+        <div class="scene-panel-head"><div><p class="eyebrow">IBIKUBIYE MURI STUDIO</p><h2 id="scene-list-title">Amatangazo</h2></div><button id="new-scene" class="button primary" type="button">＋ Gishya</button></div>
+        <label class="search-label" for="scene-search">Shakisha<div class="search-box"><span aria-hidden="true">⌕</span><input id="scene-search" type="search" placeholder="Umutwe cyangwa ubwoko"></div></label>
+        <div id="scene-list" class="scene-list" aria-live="polite"><div class="empty-state">Tegereza...</div></div>
+        <div class="list-footer"><span id="scene-count">0 items</span><span>Ibibitswe biguma ari draft</span></div>
+      </aside>
+
+      <section class="editor-panel" aria-labelledby="editor-title">
+        <div class="editor-heading"><div><p class="eyebrow" id="editor-eyebrow">EDITOR</p><h2 id="editor-title">Ongeraho ikibaho</h2><p class="muted">Inyandiko, ifoto cyangwa video. Bika nka draft mbere yo gutangaza.</p></div><span id="scene-status" class="status-pill neutral">Draft</span></div>
+        <form id="scene-form" novalidate>
+          <input id="scene-id" type="hidden">
+          <div class="form-grid two-col">
+            <label>Ubwoko bw'ikibaho<select id="scene-kind"><option value="text">Inyandiko</option><option value="image">Ifoto</option><option value="video">Video</option></select></label>
+            <label>Imiterere<select id="scene-transition"><option value="inherit">Koresha igenamiterere rusange</option><option value="none">Nta transition</option><option value="fade">Fade</option><option value="slide">Slide</option></select></label>
+          </div>
+          <div class="form-grid two-col">
+            <label>Umutwe (Kinyarwanda)<input id="title-rw" type="text" maxlength="120" autocomplete="off" placeholder="Urugero: Ufite icyo ushoboye?"></label>
+            <label>Title (English)<input id="title-en" type="text" maxlength="120" autocomplete="off" placeholder="Example: Have a skill?"></label>
+          </div>
+          <div class="form-grid two-col">
+            <label>Amagambo (Kinyarwanda)<textarea id="body-rw" rows="3" maxlength="2000" placeholder="Andika ubutumwa bugufi..."></textarea></label>
+            <label>Text (English)<textarea id="body-en" rows="3" maxlength="2000" placeholder="Write a short message..."></textarea></label>
+          </div>
+
+          <section id="media-fields" class="subcard" hidden aria-labelledby="media-title">
+            <div class="subcard-heading"><div><h3 id="media-title">Media</h3><p class="muted">Hitamo media yamaze gutunganywa. Upload izafungurwa nyuma y'igenzura rya video.</p></div><span id="asset-state" class="status-pill neutral">Nta media</span></div>
+            <div class="form-grid two-col">
+              <label>Asset<select id="asset-select"><option value="">Hitamo media</option></select></label>
+              <label id="poster-label" hidden>Poster ya video<select id="poster-select"><option value="">Hitamo poster</option></select></label>
+            </div>
+            <div class="form-grid two-col">
+              <label>Fit<select id="scene-fit"><option value="cover">Kuzuza agace (cover)</option><option value="contain">Kugaragaza yose (contain)</option></select></label>
+              <label>Zoom<input id="scene-zoom" type="range" min="1" max="2.5" step="0.1" value="1"><output id="zoom-output">1.0×</output></label>
+              <label>Crop X<input id="crop-x" type="range" min="0" max="100" step="1" value="50"><output id="crop-x-output">50%</output></label>
+              <label>Crop Y<input id="crop-y" type="range" min="0" max="100" step="1" value="50"><output id="crop-y-output">50%</output></label>
+            </div>
+            <p class="note">Video izatangazwa gusa yamaze guhindurwa MP4/H.264 kandi ifite poster; ntituzatangaza file ititeguye.</p>
+          </section>
+
+          <section class="subcard" aria-labelledby="style-title">
+            <div class="subcard-heading"><div><h3 id="style-title">Uko inyandiko igaragara</h3><p class="muted">Amahitamo yemewe gusa; nta HTML cyangwa CSS mbisi.</p></div></div>
+            <div class="form-grid style-grid">
+              <label>Font size<input id="style-size" type="number" min="12" max="48" value="26"></label>
+              <label>Uburemere<select id="style-weight"><option value="400">Normal</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700" selected>Bold</option><option value="800">Extra bold</option></select></label>
+              <label>Alignment<select id="style-align"><option value="left">Ibumoso</option><option value="center">Hagati</option><option value="right">Iburyo</option></select></label>
+              <label>Font<select id="style-font"><option value="system">System</option><option value="sans">Sans</option><option value="serif">Serif</option></select></label>
+              <label>Ibara ry'inyandiko<input id="style-color" type="color" value="#ffffff"></label>
+              <label>Ibara ry'inyuma<input id="style-bg" type="color" value="#123c2d"></label>
+            </div>
+            <div class="form-grid style-grid overlay-grid">
+              <label>Aho inyandiko iri kuri media<select id="overlay-position"><option value="top">Hejuru</option><option value="middle">Hagati</option><option value="bottom" selected>Hasi</option></select></label>
+              <label>Ububonerane (opacity)<input id="overlay-opacity" type="range" min="0" max="1" step="0.05" value="0.35"><output id="overlay-opacity-output">35%</output></label>
+              <label>Inyuma y'inyandiko<select id="overlay-bg"><option value="none">Nta background</option><option value="dark" selected>Yijimye</option><option value="light">Yerurutse</option></select></label>
+            </div>
+          </section>
+
+          <section class="subcard" aria-labelledby="cta-title">
+            <div class="subcard-heading"><div><h3 id="cta-title">Buto y'igikorwa</h3><p class="muted">Ishobora kuyobora umuntu ku kwiyandikisha cyangwa gushaka umukozi.</p></div></div>
+            <div class="form-grid two-col">
+              <label>Igikorwa<select id="cta-action"><option value="none">Nta buto</option><option value="register">Iyandikishe</option><option value="search">Shaka umukozi</option><option value="help">Ubufasha</option><option value="about">Ibyerekeye AHABONA</option><option value="link">Link ya HTTPS</option></select></label>
+              <label id="cta-value-label" hidden>Link / Ijambo ryo gushakisha<input id="cta-value" type="url" maxlength="500" placeholder="https://..."></label>
+              <label>Izina rya buto (Kinyarwanda)<input id="cta-label-rw" maxlength="50" placeholder="Urugero: Shaka ubu"></label>
+              <label>Button label (English)<input id="cta-label-en" maxlength="50" placeholder="Example: Search now"></label>
+            </div>
+          </section>
+
+          <section class="subcard" aria-labelledby="schedule-title">
+            <div class="subcard-heading"><div><h3 id="schedule-title">Igihe cyo kwerekana</h3><p class="muted">Amatariki ni amahitamo; nta tariki bivuze ko ikibaho kitagira igihe ntarengwa.</p></div></div>
+            <div class="form-grid two-col">
+              <label>Igihe ikibaho kimara (amasegonda)<input id="scene-duration" type="number" min="1" max="90" value="7" required></label>
+              <label>Imiterere yo gutangaza<select id="scene-fit-status"><option value="draft">Draft — ntigaragara ku bantu</option><option value="published">Tangaza</option><option value="archived">Archive</option></select></label>
+              <label>Itangira<input id="start-at" type="datetime-local"></label>
+              <label>Irangira<input id="end-at" type="datetime-local"></label>
+            </div>
+          </section>
+
+          <div class="editor-actions"><div class="action-left"><button id="delete-scene" class="button danger subtle" type="button" hidden>Siba</button><button id="preview-scene" class="button subtle" type="button" disabled>Reba Preview</button></div><div class="action-right"><button id="reset-scene" class="button subtle" type="button">Siba ibyo nahinduye</button><button id="save-draft" class="button secondary" type="button">Bika Draft</button><button id="publish-scene" class="button primary" type="submit">Bika & Tangaza</button></div></div>
+          <p id="form-message" class="form-message" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+    </div>
+    <section class="preview-card" aria-labelledby="preview-title"><div><p class="eyebrow">PUBLIC VIEW</p><h2 id="preview-title">Preview imwe n'iy'abasura</h2><p class="muted">Preview izahuzwa na renderer rusange mu cyiciro cya 6. Ntituzakoresha preview y'agateganyo itandukanye n'iy'urubuga.</p></div><div class="preview-placeholder">Preview iracyafunze</div></section>
+    <footer class="page-footer">AHABONA Studio • Isuzuma riri mu ishami ryihariye. Urubuga nyarwo ntirwahinduwe.</footer>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
