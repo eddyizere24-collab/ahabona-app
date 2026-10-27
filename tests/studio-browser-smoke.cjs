@@ -86,7 +86,13 @@ let browser=null;
     await page.locator('#title-rw').fill('Igenzura ry’ifoto');
     await page.locator('#asset-select').selectOption(imageId);
     await page.locator('#save-draft').click();
-    await page.waitForFunction(() => (document.querySelector('#form-message')||{}).textContent.includes('Draft yabitswe'));
+    await page.waitForFunction(() => {
+      const node=document.querySelector('#form-message');
+      return !!node && (node.classList.contains('error') || node.textContent.includes('Draft yabitswe'));
+    },null,{timeout:10000});
+    const imageDraftState=await page.locator('#form-message').evaluate(node=>({text:node.textContent,className:node.className}));
+    assert.ok(imageDraftState.className.includes('success')&&imageDraftState.text.includes('Draft yabitswe'),
+      'Image draft save failed: '+JSON.stringify(imageDraftState));
     const imageRoutePromise=page.waitForResponse(resp=>resp.url().includes('/studio-media/'+imageId)&&resp.request().resourceType()==='image');
     await page.locator('#preview-scene').click();
     const imageRoute=await imageRoutePromise;
