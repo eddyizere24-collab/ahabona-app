@@ -75,6 +75,28 @@ async function request(base, pathname, options) {
     const editorScript = await request(base, '/admin/studio/editor.js');
     assert.equal(editorScript.response.status, 401);
 
+    // Studio's data APIs must not leak drafts or settings to anonymous visitors.
+    for (const endpoint of [
+      '/api/admin/studio/scenes',
+      '/api/admin/studio/assets',
+      '/api/admin/studio/settings'
+    ]) {
+      const protectedApi = await request(base, endpoint);
+      assert.equal(protectedApi.response.status, 401, endpoint + ' must require admin login');
+    }
+
+    // A ready asset attached only to a draft must remain private to anonymous users.
+    const privateAsset = app.ctx.studio.createAsset(app.db, {
+      asset_kind:'image', storage_key:'studio-private123.jpg', mime_type:'image/jpeg',
+      bytes:256, width:10, height:10
+    }, {now:Date.now()});
+    app.ctx.studio.updateAssetStatus(app.db, privateAsset.id, 'ready', {width:10,height:10});
+    app.ctx.studio.createScene(app.db, {
+      scene_kind:'image', title_rw:'Private draft', asset_id:privateAsset.id, status:'draft'
+    });
+    const privateMedia = await request(base, '/studio-media/' + privateAsset.id);
+    assert.equal(privateMedia.response.status, 404, 'draft media must not be exposed publicly');
+
     // Sign in as the disposable test admin and exercise the authenticated UI
     // asset routes, including the renderer MIME types.
     const login = await request(base, '/api/login', {
