@@ -19,8 +19,9 @@ try {
   assert.equal(db.prepare('SELECT text FROM strip_ads WHERE id=1').get().text,'legacy stays');
   assert.equal(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").get(),undefined);
 
-  const draft=studio.createScene(db,{scene_kind:'text',title_rw:'Murakaza neza',body_rw:'Menya AHABONA',text_style:{fontSize:26,fontWeight:700,textAlign:'center',color:'#ffffff'}},{now:1100,actorId:7});
-  assert.equal(draft.status,'draft'); assert.equal(draft.text_style.fontSize,26); assert.equal(draft.created_by,7);
+  const draft=studio.createScene(db,{scene_kind:'text',title_rw:'Murakaza neza',body_rw:'Menya AHABONA',zoom:1.7,text_style:{fontSize:26,fontWeight:700,textAlign:'center',color:'#ffffff'}},{now:1100,actorId:7});
+  assert.equal(draft.status,'draft'); assert.equal(draft.text_style.fontSize,26); assert.equal(draft.zoom,1.7); assert.equal(draft.created_by,7);
+  expectCode(()=>studio.createScene(db,{scene_kind:'text',title_rw:'bad zoom',zoom:3}), 'studio.err.zoom');
   const empty=studio.createScene(db,{scene_kind:'text',status:'draft'},{now:1150});
   expectCode(()=>studio.updateScene(db,empty.id,{status:'published'},{now:1200}),'studio.err.text_required');
   const text=studio.updateScene(db,draft.id,{status:'published',body_rw:'Menya abantu. Menya amahirwe.'},{now:1250});
