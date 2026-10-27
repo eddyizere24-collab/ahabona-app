@@ -16,6 +16,8 @@ on:
       - 'server-v2.cjs'
       - 'server-v2-modules/studio/**'
       - 'tests/studio-store-smoke.cjs'
+      - 'tests/studio-media-validation-smoke.cjs'
+      - 'tests/studio-integration-smoke.cjs'
       - '.github/workflows/studio-isolated-checks.yml'
   workflow_dispatch:
 
