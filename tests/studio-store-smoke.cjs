@@ -42,6 +42,7 @@ try {
   const poster=studio.createAsset(db,{asset_kind:'poster',storage_key:'studio-poster123.jpg',mime_type:'image/jpeg',bytes:4000,sha256:'b'.repeat(64),width:720,height:405},{now:1300});
   const videoDraft=studio.createScene(db,{scene_kind:'video',title_rw:'Video',asset_id:video.id,poster_asset_id:poster.id,status:'draft'},{now:1300});
   expectCode(()=>studio.updateScene(db,videoDraft.id,{status:'published'},{now:1400}),'studio.err.asset_not_ready');
+  expectCode(()=>studio.updateAssetStatus(db,video.id,'ready',{width:1280,height:720,duration_ms:20000,codec:'hevc'},{now:1450}),'studio.err.video_not_ready');
   studio.updateAssetStatus(db,video.id,'ready',{width:1280,height:720,duration_ms:20000,codec:'h264'},{now:1500});
   studio.updateAssetStatus(db,poster.id,'ready',{width:720,height:405},{now:1500});
   const pubVideo=studio.updateScene(db,videoDraft.id,{status:'published'},{now:1600});
