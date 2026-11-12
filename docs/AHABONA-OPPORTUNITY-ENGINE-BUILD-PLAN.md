@@ -4,7 +4,7 @@
 **Inyandiko-fatizo yo kubaka Job & Opportunity Marketplace ihujwe na AHABONA**
 
 - Document ID: AHABONA-OPP-001
-- Version: 1.4
+- Version: 1.5
 - Itariki: 12 Ugushyingo 2026
 - Status: Planning baseline; si uburenganzira bwo guhindura Production.
 - Repository: eddyizere24-collab/ahabona-app
@@ -135,6 +135,14 @@ Public server IPs ntizishyirwa muri iyi product document; zibikwa mu private ope
 - The region catalogue includes AWS Europe Central 1 (Frankfurt), `aws-eu-central-1`.
 - Result: connector integration is present, but there is currently no Neon organization/project visible to this connection. This may mean no organization is provisioned under the connected Neon account or the connected account is not the intended account. It is not evidence of an AHABONA database.
 - No organization, project, branch, database, role, credential or configuration was created or changed during this inspection.
+- After the owner confirmed the connection, a dedicated Neon Free organization became visible: `org-royal-dream-23363731` (`eddyizere24@gmail.com`). The prior zero-organization result was an earlier connection/account visibility state.
+- Created AHABONA-only Neon project `ahabona-platform` (`damp-lake-50983782`) in AWS Europe Central 1 Frankfurt (`aws-eu-central-1`), PostgreSQL 17.11, Free plan. Default branch `main` is `br-twilight-flower-b9o8noqo`; database `ahabona`; owner role `ahabona_owner`.
+- Created isolated `development` branch `br-super-truth-b9ei5e3y` from `main`; it is ready. Created application role `ahabona_app` scoped to database `ahabona` and schema `public` with read/write data privileges. Verified that it can use the schema but cannot create schema objects. Do not put its password or any connection string in GitHub or chat.
+- Verified PostgreSQL 17.11 connectivity with a harmless SELECT and confirmed the development database currently has zero application tables. No production AHABONA data has been copied.
+- Neon Free does not permit changing the suspend interval on this account; the project uses the plan default (`suspend_timeout_seconds=0`). Main-branch protection was also rejected by the Free-plan protected-branch limit. The main branch therefore remains unprotected; use reviewed migrations and keep all schema work on `development` until protection is available.
+- Repository audit reconfirmed the active `server-v2.cjs` imports `node:sqlite` / `DatabaseSync` and contains the live schema/runtime; `package.json` currently has no `pg` driver. Therefore Neon infrastructure is provisioned but the live Lightsail app is **not yet connected**. Do not claim the migration or app integration is complete.
+- Next engineering gate: map the full SQLite schema, transactions, session/auth flows, backups and current data counts; add a Postgres repository/driver layer and repeatable migrations on the development branch; test existing flows and parity; only then configure Lightsail environment secrets and a controlled cutover with rollback. Keep the current SQLite database untouched until successful verification.
+
 - Next step is for the owner to ensure the intended Neon account has an organization, create/select a dedicated AHABONA project in `aws-eu-central-1`, and then re-run read-only inventory through this connector before any schema work.
 
 
@@ -462,4 +470,4 @@ Tangira kuri **Phase 0: Product & Technical Audit**. Reba live host n'uko accoun
 | 1.1 | 12 Ugushyingo 2026 | Recorded owner-provided Lightsail hosting facts and clarified VPS-specific Phase 0 checks. |
 | 1.2 | 12 Ugushyingo 2026 | Initial database architecture review recommending isolated Supabase PostgreSQL. |
 | 1.3 | 12 Ugushyingo 2026 | Re-evaluated six options; recommends Neon Postgres/backend with ChatGPT MCP safeguards, free-plan limits, beta boundaries and migration gates. |
-| 1.4 | 12 Ugushyingo 2026 | Recorded live Neon connector inventory: connector available, but zero organizations/projects visible; no resources changed. |
+| 1.4 | 12 Ugushyingo 2026 | Recorded live Neon connector inventory: connector available, but zero organizations/projects visible; no resources changed. |\n| 1.5 | 12 Ugushyingo 2026 | Provisioned AHABONA-only Neon Free PostgreSQL 17 project and development branch; verified least-privilege app role and documented remaining SQLite-to-Postgres integration gates. |
