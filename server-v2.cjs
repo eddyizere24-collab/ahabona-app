@@ -7536,12 +7536,12 @@ function handleRequest(ctx,req,res){
   if(!ctx.rate.allow('g:'+ip,600,60000))return sendError(req,res,429,'err.rate');
   // Public discovery endpoints: only expose records that the public profile API already exposes.
   if((req.method==='GET'||req.method==='HEAD')&&p==='/robots.txt'){
-    const publicBase=process.env.AHABONA_PUBLIC_URL||DEFAULT_BASE_URL;
+    const publicBase=trustedBaseUrl()||DEFAULT_BASE_URL;
     return sendText(req,res,200,buildRobotsTxt(publicBase),'text/plain; charset=utf-8',{cache:'public, max-age=3600'});
   }
   if((req.method==='GET'||req.method==='HEAD')&&p==='/sitemap.xml'){
     const publicRows=ctx.Q("SELECT p.pid,p.updated_at FROM profiles p JOIN users u ON u.id=p.user_id WHERE u.status='active' AND p.suspended=0 ORDER BY p.updated_at DESC LIMIT 49999").all();
-    const publicBase=process.env.AHABONA_PUBLIC_URL||DEFAULT_BASE_URL;
+    const publicBase=trustedBaseUrl()||DEFAULT_BASE_URL;
     return sendText(req,res,200,buildSitemapXml(publicRows,publicBase),'application/xml; charset=utf-8',{cache:'public, max-age=300'});
   }
   const publicProfileMatch=(req.method==='GET'||req.method==='HEAD')?p.match(/^\/u\/([a-z0-9]{8,16})$/):null;
@@ -7552,7 +7552,7 @@ function handleRequest(ctx,req,res){
       return sendText(req,res,404,'<!doctype html><html lang="rw"><meta charset="utf-8"><title>Umwirondoro ntiwabonetse | AHABONA</title><body><main><h1>Umwirondoro ntiwabonetse</h1><p>Uyu mwirondoro ntukiri ku mugaragaro cyangwa ntiwabashije kuboneka.</p><a href="/">Subira kuri AHABONA</a></main></body></html>','text/html; charset=utf-8',{cache:'public, max-age=30'});
     }
     const publicProfile=pubProfile(publicRow,null,{});
-    const publicBase=process.env.AHABONA_PUBLIC_URL||DEFAULT_BASE_URL;
+    const publicBase=trustedBaseUrl()||DEFAULT_BASE_URL;
     const profileHtml=renderPublicProfileHtml(publicProfile,{baseUrl:publicBase,updatedAt:publicRow.updated_at});
     return sendText(req,res,200,profileHtml,'text/html; charset=utf-8',{cache:'public, max-age=60'});
   }
