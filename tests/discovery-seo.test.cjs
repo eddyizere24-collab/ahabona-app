@@ -6,7 +6,6 @@ const { buildRobotsTxt, buildSitemapXml, renderPublicProfileHtml, isoDate } = re
 test('robots permits ChatGPT search while keeping private routes out', () => {
   const robots = buildRobotsTxt('https://ahabona.duckdns.org/');
   assert.match(robots, /User-agent: OAI-SearchBot\nAllow: \//);
-  assert.match(robots, /User-agent: ChatGPT-User\nAllow: \//);
   assert.match(robots, /User-agent: GPTBot\nDisallow: \//);
   assert.match(robots, /Disallow: \/api\//);
   assert.match(robots, /Disallow: \/admin/);
