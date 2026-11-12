@@ -123,3 +123,23 @@ test('transaction rolls back and releases when callback fails', async () => {
   );
   assert.deepEqual(calls, ['BEGIN', 'ROLLBACK', 'release']);
 });
+
+
+test('rollback failure evicts the connection and releases it only once', async () => {
+  const calls = [];
+  const client = {
+    async query(sql) {
+      calls.push(sql);
+      if (sql === 'ROLLBACK') throw new Error('rollback failed');
+      return { rows: [] };
+    },
+    release(error) { calls.push(error ? 'release-error' : 'release'); }
+  };
+  const pool = { async connect() { return client; } };
+
+  await assert.rejects(
+    withTransaction(pool, async () => { throw new Error('original failure'); }),
+    /original failure/
+  );
+  assert.deepEqual(calls, ['BEGIN', 'ROLLBACK', 'release-error']);
+});
