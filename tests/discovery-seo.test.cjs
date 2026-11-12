@@ -1,0 +1,55 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { buildRobotsTxt, buildSitemapXml, renderPublicProfileHtml, isoDate } = require('../discovery-seo.cjs');
+
+test('robots permits ChatGPT search while keeping private routes out', () => {
+  const robots = buildRobotsTxt('https://ahabona.duckdns.org/');
+  assert.match(robots, /User-agent: OAI-SearchBot\nAllow: \//);
+  assert.match(robots, /User-agent: ChatGPT-User\nAllow: \//);
+  assert.match(robots, /User-agent: GPTBot\nDisallow: \//);
+  assert.match(robots, /Disallow: \/api\//);
+  assert.match(robots, /Disallow: \/admin/);
+  assert.match(robots, /Sitemap: https:\/\/ahabona\.duckdns\.org\/sitemap\.xml/);
+});
+test('sitemap includes only valid public profile ids and safely encodes paths', () => {
+  const xml = buildSitemapXml([
+    { pid: 'a1b2c3d4', updated_at: 1794469200000 }, { pid: 'a1b2c3d4', updated_at: 1794469200000 },
+    { pid: 'abc', updated_at: 1794469200000 }, { pid: 'bad<script>', updated_at: 1794469200000 }, { pid: 'e5f6g7h8' }
+  ]);
+  assert.match(xml, /https:\/\/ahabona\.duckdns\.org\//);
+  assert.equal((xml.match(/<loc>/g) || []).length, 3);
+  assert.match(xml, /https:\/\/ahabona\.duckdns\.org\/u\/a1b2c3d4/);
+  assert.doesNotMatch(xml, /<script>/);
+  assert.match(xml, /<lastmod>2026-11-12T/);
+});
+test('public profile HTML renders canonical metadata and approved public fields', () => {
+  const html = renderPublicProfileHtml({
+    pid: 'a1b2c3d4', name: 'Eddy Example', district: 'Gasabo', province: 'Umujyi wa Kigali',
+    caps: ['Umushoferi', 'Umukanishi'], intro: 'Mfite uburambe mu gutwara imodoka.',
+    phone: '+250 788 123 456', phones: [], photos: ['/photos/a1b2c3d4-0.jpg?v=1794469200000'],
+    thumb: '/photos/a1b2c3d4-t.jpg?v=1794469200000'
+  }, { updatedAt: 1794469200000 });
+  assert.match(html, /<link rel="canonical" href="https:\/\/ahabona\.duckdns\.org\/u\/a1b2c3d4">/);
+  assert.match(html, /Eddy Example/); assert.match(html, /Umushoferi/);
+  assert.match(html, /href="tel:\+250788123456"/); assert.match(html, /og:image/);
+  assert.match(html, /application\/ld\+json/); assert.match(html, /AHABONA ntiyishyurisha/);
+});
+test('profile page cannot leak a phone omitted by the public API projection', () => {
+  const html = renderPublicProfileHtml({ pid: 'a1b2c3d4', name: 'Private Phone Example', district: 'Huye', caps: ['Umudozi'], phone: '', phones: [] });
+  assert.doesNotMatch(html, /tel:/); assert.doesNotMatch(html, /0788123456/);
+  assert.match(html, /Nta makuru yo kuvugana yashyizwe ku mugaragaro/);
+});
+test('profile text is escaped and unsafe external URLs are omitted', () => {
+  const html = renderPublicProfileHtml({
+    pid: 'a1b2c3d4', name: '<script>alert(1)</script>', district: 'Kigali & Gasabo',
+    caps: ['Umudozi <img src=x>'], intro: 'Hello </script><script>alert(2)</script>',
+    facebook: 'javascript:alert(3)', phone: ''
+  });
+  assert.doesNotMatch(html, /<script>alert\(/); assert.match(html, /&lt;script&gt;/);
+  assert.doesNotMatch(html, /javascript:/);
+});
+test('ISO date conversion accepts Unix milliseconds and seconds', () => {
+  assert.equal(isoDate(1794469200), new Date(1794469200000).toISOString());
+  assert.equal(isoDate('not a date'), '');
+});
