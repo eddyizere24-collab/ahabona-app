@@ -1,6 +1,6 @@
 # AHABONA Opportunity Engine — Build Tracker
 
-**Last verified:** 12 Ugushyingo 2026  
+**Last verified:** 12 Ugushyingo 2026 (evening update)  
 **Working branch:** `feature/chatgpt-discovery-foundation-20261112`  
 **Production status:** unchanged. No Lightsail environment variables, production database, PM2 process, or public deployment has been modified.
 
@@ -14,11 +14,11 @@ This tracker distinguishes work that is implemented and tested from work that is
 | Neon development infrastructure | 100% | Frankfurt project `ahabona-platform`, PostgreSQL 17.11, development branch ready |
 | Initial PostgreSQL schema | 100% | 45 tables, 62 foreign keys, two recorded migrations on development |
 | Runtime database role security | 100% | `ahabona_app` has DML privileges; no schema CREATE; no read access to sensitive identity vault or migration ledger |
-| Node.js PostgreSQL adapter | 70% | Server-only pool, verified TLS, timeouts, health check and transaction helper implemented; not yet wired into routes or connected to Neon from Lightsail |
+| Node.js PostgreSQL adapter | 85% | Server-only pool is wired behind opt-in `AHABONA_ENABLE_POSTGRES=1`; verified TLS, bounded pool, health check and transaction helper; no live Lightsail connection test yet |
 | SQLite migration audit tooling | 100% | Read-only schema/count audit utility; synthetic fixture tests pass; real AHABONA backup not yet audited |
 | SQLite data export/import and reconciliation | 0% | Waiting for a protected, consistent source backup and complete schema audit |
 | Existing API/database route integration | 0% | Existing server still uses synchronous SQLite query methods |
-| Public Job Marketplace API | 0% | Database tables exist; public endpoints not yet implemented |
+| Public Job Marketplace API | 35% | Public list/detail query service mounted at `/api/jobs` and `/api/jobs/:uuid`; 5 tests passed; no frontend, job creation or live connection test yet |
 | Employer creation and management | 0% | Schema foundation only |
 | Apply on AHABONA and applicant tracking | 0% | Schema foundation only |
 | Candidate Talent Passport enhancements | 0% | Existing profile model must be extended progressively, without duplicate accounts |
@@ -46,13 +46,15 @@ This tracker distinguishes work that is implemented and tested from work that is
 
 ## CI evidence
 
-- GitHub Actions run: [43274798387](https://github.com/eddyizere24-collab/ahabona-app/actions/runs/43274798387)
-- Head commit: `1a797f6e58fd78b058e39772dbefe83363008bcf`
+- GitHub Actions run: [43276759101](https://github.com/eddyizere24-collab/ahabona-app/actions/runs/43276759101)
+- Head commit: `90389eda49eefdf80f23cdd5bd4d4f7e2a770a5c`
 - Result: **success**
 - Discovery tests: 12/12 passed
-- PostgreSQL adapter tests: 8/8 passed
+- PostgreSQL adapter tests: 9/9 passed
 - SQLite audit tests: 3/3 passed
+- Public job API tests: 5/5 passed
 - JavaScript syntax checks: passed
+- Total: **29/29 passed**
 
 ## Next ordered tasks
 
@@ -60,9 +62,9 @@ This tracker distinguishes work that is implemented and tested from work that is
 2. Confirm all SQLite columns, indexes, triggers, timestamp units, data counts, session semantics, file paths and email verification behavior.
 3. Build a repeatable, restartable importer for Neon development. Preserve user IDs, profile IDs, capability IDs and foreign-key relationships. Encrypt sensitive identity data before import.
 4. Verify login, registration, profile discovery, saved profiles, messages, notifications, admin permissions and restore/rollback using test data.
-5. Add an explicit development-only Postgres integration flag and route repositories; keep SQLite as active fallback until parity is proven.
-6. Build Job Marketplace APIs, public read views, employer dashboard and moderation.
-7. Add Apply, candidate status tracking, notifications and delivery retries.
+5. Connect the opt-in Neon pool from an authorised staging Node.js process and verify the admin-only DB health endpoint before enabling any write routes.
+6. Build employer identity/profile linking and job creation/editing/submission/moderation APIs.
+7. Build Apply, candidate status tracking, notifications and delivery retries.
 8. Add matching, reverse discovery and Talent Watch with candidate opt-in and explainable results.
 9. Add UI without changing the existing homepage discovery layout.
 10. Production cutover only after backup/restore rehearsal, load/security tests, billing review and a separate owner release instruction.
@@ -76,3 +78,12 @@ This tracker distinguishes work that is implemented and tested from work that is
 - Candidate matching/reverse discovery must be opt-in.
 - Public visitors can browse approved, active job posts; applications remain private.
 - Do not claim that a feature is complete until its implementation and tests have passed.
+
+
+## Latest code milestone
+
+- Public job service: `server/opportunities-public.cjs`.
+- Server endpoints mounted: `GET /api/jobs`, `GET /api/jobs/:uuid`.
+- Runtime remains protected by `AHABONA_ENABLE_POSTGRES=1`, default off.
+- Public reads exclude non-approved/expired jobs and suppress salary/contact fields according to the publisher's visibility choices.
+- No frontend changes, no job fixtures or user data in Neon, and no Production environment changes.
