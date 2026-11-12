@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildRobotsTxt, buildSitemapXml, renderPublicProfileHtml, renderInfoPageHtml, isoDate } = require('../discovery-seo.cjs');
+const { buildRobotsTxt, buildSitemapXml, renderPublicProfileHtml, renderInfoPageHtml, getServiceLandingDefinition, renderServiceLandingHtml, isoDate } = require('../discovery-seo.cjs');
 
 test('robots permits ChatGPT search while keeping private routes out', () => {
   const robots = buildRobotsTxt('https://ahabona.duckdns.org/');
@@ -68,6 +68,35 @@ test('how-it-works page explains direct contact and direct agreements', () => {
   assert.match(html, /Ushaka umuntu\? Shakisha icyo akeneye/);
   assert.match(html, /Muganire ku kazi, igiciro, igihe/);
   assert.match(html, /contact the person directly/);
+});
+
+
+test('service category sitemap entries are added only from validated slugs', () => {
+  const xml = buildSitemapXml([], 'https://ahabona.duckdns.org', ['umushoferi', 'bad<script>']);
+  assert.ok(xml.includes('https://ahabona.duckdns.org/services/umushoferi'));
+  assert.ok(!xml.includes('bad<script>'));
+});
+test('service landing pages render only matched public profiles and their links', () => {
+  const definition = getServiceLandingDefinition('umushoferi');
+  assert.ok(definition);
+  const html = renderServiceLandingHtml(definition, [
+    { pid: 'a1b2c3d4', name: 'Eddy Driver', district: 'Gasabo', province: 'Umujyi wa Kigali',
+      caps: ['Umushoferi'], intro: 'Nkorera mu Rwanda.', phone: '', phones: [],
+      thumb: '/photos/a1b2c3d4-t.jpg?v=1794469200000' },
+    { pid: 'invalid<script>', name: 'Should not render', caps: ['Umushoferi'] }
+  ]);
+  assert.match(html, /Abashoferi mu Rwanda/);
+  assert.match(html, /Eddy Driver/);
+  assert.match(html, /href="\\/u\\/a1b2c3d4"/);
+  assert.match(html, /og:title/);
+  assert.doesNotMatch(html, /Should not render/);
+  assert.match(html, /application\\/ld\\+json/);
+});
+test('empty service landing pages are noindex until matching public profiles exist', () => {
+  const definition = getServiceLandingDefinition('umubaji');
+  const html = renderServiceLandingHtml(definition, []);
+  assert.match(html, /name="robots" content="noindex,follow"/);
+  assert.match(html, /Nta muntu ubonetse muri iki cyiciro ubu/);
 });
 
 test('ISO date conversion accepts Unix milliseconds and seconds', () => {
