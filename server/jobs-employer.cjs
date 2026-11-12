@@ -279,7 +279,7 @@ async function ensureLegacyIdentity(client, actor) {
     'INSERT INTO public.users (id, role, status, created_at, identity_source) ' +
     "VALUES ($1, 'user', 'active', $2, 'legacy_sqlite') " +
     'ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status ' +
-    "WHERE public.users.identity_source = 'legacy_sqlite' RETURNING id",
+    "WHERE public.users.identity_source IN ('legacy_sqlite','imported') RETURNING id",
     [id, createdAt]
   );
   if (!result.rows?.length) {
