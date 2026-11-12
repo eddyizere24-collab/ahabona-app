@@ -7960,7 +7960,7 @@ async function handleApi(ctx,req,res,url,p){
   if(p.indexOf('/api/admin/')===0){
     if(!u)return sendError(req,res,401,'err.auth');
     if(!ctx.isAdmin(u))return sendError(req,res,403,'err.forbidden');
-    var ar=adminRoute(ctx,req,res,p,m,u);
+    var ar=adminRoute(ctx,req,res,p,m,u,url);
     if(ar!==NOROUTE)return ar;
   }
   return sendError(req,res,404,'err.notfound');
@@ -8014,7 +8014,7 @@ const ADMIN_ROUTES=[
   ['DELETE',/^\/api\/admin\/staff\/(\d+)$/,'staff.manage',function(ctx,req,res,mt,u){return adminStaffDelete(ctx,req,res,+mt[1],u)}],
   ['POST',/^\/api\/admin\/staff\/(\d+)\/invite$/,'staff.manage',function(ctx,req,res,mt,u){return adminStaffInvite(ctx,req,res,+mt[1],u)}]
 ];
-function adminRoute(ctx,req,res,p,m,u){
+function adminRoute(ctx,req,res,p,m,u,url){
   for(let i=0;i<ADMIN_ROUTES.length;i++){
     const r=ADMIN_ROUTES[i];
     if(r[0]!==m)continue;
