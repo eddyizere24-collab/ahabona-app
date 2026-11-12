@@ -289,7 +289,13 @@ function getServiceLandingSlugs() {
 function renderServiceLandingHtml(page, profiles, options = {}) {
   if (!page || !/^[a-z0-9-]{2,60}$/.test(page.slug || '')) throw new TypeError('A valid service landing page is required');
   const base = baseOrigin(options.baseUrl);
-  const list = Array.isArray(profiles) ? profiles.slice(0, 60) : [];
+  const seenProfileIds = new Set();
+  const list = (Array.isArray(profiles) ? profiles : []).filter(profile => {
+    const pid = String(profile && profile.pid || '');
+    if (!PUBLIC_PID_RE.test(pid) || seenProfileIds.has(pid)) return false;
+    seenProfileIds.add(pid);
+    return true;
+  }).slice(0, 60);
   const canonical = base + '/services/' + page.slug;
   const hasResults = list.length > 0;
   const title = page.rw + ' | AHABONA';
