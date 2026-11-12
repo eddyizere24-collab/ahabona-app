@@ -366,7 +366,7 @@ async function createJobPost(pool, actor, rawInput) {
     await client.query(
       'INSERT INTO public.job_moderation_events (job_post_id, actor_user_id, action, note) ' +
       'VALUES ($1, $2, $3, $4)',
-      [job.id, userId, input.draft ? 'saved_draft' : 'submitted', input.draft ? 'Employer saved a draft.' : 'Employer submitted job post for moderation.']
+      [job.id, userId, input.draft ? 'draft_saved' : 'submitted', input.draft ? 'Employer saved a draft.' : 'Employer submitted job post for moderation.']
     );
 
     return {
