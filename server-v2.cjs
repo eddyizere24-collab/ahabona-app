@@ -9,6 +9,7 @@ const {buildRobotsTxt,buildSitemapXml,renderPublicProfileHtml,renderInfoPageHtml
 const {DatabaseSync}=require('node:sqlite');
 const {execFile}=require('node:child_process');
 const {createOptionalPostgresPool}=require('./server/postgres.cjs');
+const {listPublicJobs,getPublicJob}=require('./server/opportunities-public.cjs');
 
 const PROV={
   "Umujyi wa Kigali":["Gasabo","Kicukiro","Nyarugenge"],
@@ -7683,9 +7684,37 @@ function handleRequest(ctx,req,res){
   return sendText(req,res,200,body,type,{cache:cc});
 }
 
+async function apiPublicJobs(ctx,req,res,url){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  try{
+    const result=await listPublicJobs(ctx.pgPool,url.searchParams);
+    return sendJson(req,res,200,result);
+  }catch(error){
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[public-jobs-list] database operation failed ('+code+').');
+    return sendError(req,res,503,'err.server');
+  }
+}
+
+async function apiPublicJob(ctx,req,res,jobId){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  try{
+    const result=await getPublicJob(ctx.pgPool,jobId);
+    if(!result)return sendError(req,res,404,'err.notfound');
+    return sendJson(req,res,200,result);
+  }catch(error){
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[public-job-detail] database operation failed ('+code+').');
+    return sendError(req,res,503,'err.server');
+  }
+}
+
 async function handleApi(ctx,req,res,url,p){
   var m=req.method;
   if(p==='/api/health')return apiHealth(req,res);
+  if(p==='/api/jobs'&&(m==='GET'||m==='HEAD'))return apiPublicJobs(ctx,req,res,url);
+  var publicJobMatch;
+  if((publicJobMatch=p.match(/^\/api\/jobs\/([0-9a-fA-F-]{36})$/))&&(m==='GET'||m==='HEAD'))return apiPublicJob(ctx,req,res,publicJobMatch[1]);
   if(p==='/api/config'&&(m==='GET'||m==='HEAD'))return apiConfig(ctx,req,res);
   if(p==='/api/strip'&&(m==='GET'||m==='HEAD'))return apiStrip(ctx,req,res);
   if(p==='/api/profiles'&&(m==='GET'||m==='HEAD'))return apiProfiles(ctx,req,res,url);
