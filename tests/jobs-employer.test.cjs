@@ -152,7 +152,7 @@ test('creates job, skills and questions transactionally with ID-only identity pr
   assert.equal(result.next_step, 'awaiting_moderation');
   assert.ok(identityCall);
   assert.match(identityCall.sql, /identity_source/);
-  assert.match(identityCall.sql, /IN \\('legacy_sqlite','imported'\\)/);
+  assert.ok(identityCall.sql.includes("IN ('legacy_sqlite','imported')"));
   assert.doesNotMatch(identityCall.sql, /email|phone|\bpw\b/i);
   assert.ok(!identityCall.values.includes(actor.email));
   assert.ok(!identityCall.values.includes(actor.phone));
