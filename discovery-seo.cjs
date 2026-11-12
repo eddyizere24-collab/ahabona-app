@@ -20,7 +20,6 @@ function buildRobotsTxt(baseUrl = DEFAULT_BASE_URL) {
   const commonDisallows = ['Disallow: /admin', 'Disallow: /api/', 'Disallow: /reset/', 'Disallow: /saved'];
   return ['User-agent: *', 'Allow: /', ...commonDisallows, '',
     'User-agent: OAI-SearchBot', 'Allow: /', ...commonDisallows, '',
-    'User-agent: ChatGPT-User', 'Allow: /', ...commonDisallows, '',
     'User-agent: GPTBot', 'Disallow: /', '', 'Sitemap: ' + base + '/sitemap.xml', ''].join('\n');
 }
 function buildSitemapXml(rows, baseUrl = DEFAULT_BASE_URL) {
