@@ -4,7 +4,7 @@
 **Inyandiko-fatizo yo kubaka Job & Opportunity Marketplace ihujwe na AHABONA**
 
 - Document ID: AHABONA-OPP-001
-- Version: 1.5
+- Version: 1.6
 - Itariki: 12 Ugushyingo 2026
 - Status: Planning baseline; si uburenganzira bwo guhindura Production.
 - Repository: eddyizere24-collab/ahabona-app
@@ -72,9 +72,9 @@ Screenshot ya AWS Lightsail nyir'urubuga yatanze igaragaza ibi bikurikira. Ibi n
 Public server IPs ntizishyirwa muri iyi product document; zibikwa mu private operations inventory aho bikenewe.
 
 
-### ADR-001: Database platform for AHABONA (Neon recommended; not provisioned)
+### ADR-001: Database platform for AHABONA (Neon selected; development provisioned)
 
-**Status:** Architectural recommendation for owner review. No Neon project, organization, database, migration or production configuration has been created or changed. This decision supersedes the Supabase recommendation in document v1.2.
+**Status:** Neon is selected and an AHABONA-only project plus development branch have been provisioned. Foundation migrations `0001` and `0002` are applied to the Neon `development` branch only. The application code is not yet connected, no live AHABONA user data has been copied, and the Neon `main` branch and Lightsail production remain untouched. This decision supersedes the Supabase recommendation in document v1.2.
 
 **Decision:** Use **Neon Lakebase Postgres as AHABONA's primary relational database/backend**, on a dedicated Neon project in AWS Europe Central 1 (Frankfurt, `eu-central-1`). Keep AHABONA's existing Node.js application/API on the current Lightsail instance during the first phases. Do not add separate databases for jobs, users, applications, matching or notifications: these are connected business entities and must share one PostgreSQL source of truth.
 
@@ -82,7 +82,7 @@ Public server IPs ntizishyirwa muri iyi product document; zibikwa mu private ope
 - It is native PostgreSQL, suitable for relational entities, transactions, indexes, constraints, search and matching logic.
 - Neon now offers a broader backend set around Postgres: Managed Better Auth, Object Storage and Node.js Functions are GA; AI Gateway is separately metered/prepaid. Neon Realtime remains beta.
 - It has a generous current Free allowance for an early development/pilot project.
-- It has an official Neon MCP server that can connect ChatGPT to Neon using OAuth. The Neon connector/app must be connected by the owner before it is available in this workspace.
+- The official Neon MCP connector is connected in this ChatGPT workspace and can inspect/manage the AHABONA Neon project. Connector SQL access is being restricted to development tasks; it is not used as an unattended production deployment channel.
 - The Lightsail instance and Neon project can both be placed in Frankfurt, reducing geography mismatch. Measure actual API/database latency from the AHABONA server before release.
 
 **Neon Free allowances observed on 12 Nov 2026 (re-check before provisioning):**
@@ -97,7 +97,7 @@ Public server IPs ntizishyirwa muri iyi product document; zibikwa mu private ope
 
 **ChatGPT access and security:**
 - Neon documents a ChatGPT MCP connection at `https://mcp.neon.tech/mcp` using OAuth. The official Neon documentation labels its MCP server as intended for development and testing only and instructs users to review LLM-requested actions.
-- For the first connection, use **read-only access**, restrict it to the AHABONA project, and restrict the SQL role/tools as tightly as possible. Read-only mode can limit tools to listing projects, describing schemas, querying data and performance metrics; SQL executes in a read-only transaction.
+- Use the Neon connector only for scoped development operations. The runtime role `ahabona_app` is separate from the database owner and has no schema-creation rights. Sensitive identity vault and migration ledger read access is revoked from `ahabona_app`. Do not place credentials in source code or chat.
 - Use a separate development/staging Neon project or branch for schema experiments. Do not grant broad write access to production through MCP. Production changes require a reviewed GitHub migration/PR, backup/rollback plan and explicit owner approval.
 - No database credentials, API keys or private personal data may enter GitHub or chat messages.
 
@@ -126,7 +126,7 @@ Public server IPs ntizishyirwa muri iyi product document; zibikwa mu private ope
 - **PocketBase:** simple, small and self-hostable, but it uses embedded SQLite, scales vertically on one server, has no built-in cloud functions, and its own docs warn it is not recommended for production-critical applications before v1.0. AHABONA already uses SQLite, so PocketBase would not solve the need for a mature relational platform.
 - **Keep current SQLite only:** preserves continuity for Phase 0, but is not the recommended long-term primary database for the full jobs/applications/notifications/matching roadmap.
 
-**Decision guardrail:** Neon is the current recommendation because its PostgreSQL foundation, free early-stage capacity, Frankfurt region and ChatGPT MCP path are the best overall fit among the reviewed options. This is not an instruction to provision or cut over immediately. Phase 0 must validate the connector, project setup, region, security model, backups, actual latency and current product quotas first.
+**Decision guardrail:** Neon is the selected development and intended primary relational database because its PostgreSQL foundation, early-stage Free capacity, Frankfurt region and ChatGPT connector best fit AHABONA. This does not authorize Production cutover. Production use still requires a completed data inventory, migration rehearsal, independent backups, authorization review, latency/load tests, billing plan and explicit release approval.
 
 **Live connector verification (12 Nov 2026):**
 - The Neon connector became available in ChatGPT and its read-only discovery tools were called.
@@ -138,12 +138,10 @@ Public server IPs ntizishyirwa muri iyi product document; zibikwa mu private ope
 - After the owner confirmed the connection, a dedicated Neon Free organization became visible: `org-royal-dream-23363731` (`eddyizere24@gmail.com`). The prior zero-organization result was an earlier connection/account visibility state.
 - Created AHABONA-only Neon project `ahabona-platform` (`damp-lake-50983782`) in AWS Europe Central 1 Frankfurt (`aws-eu-central-1`), PostgreSQL 17.11, Free plan. Default branch `main` is `br-twilight-flower-b9o8noqo`; database `ahabona`; owner role `ahabona_owner`.
 - Created isolated `development` branch `br-super-truth-b9ei5e3y` from `main`; it is ready. Created application role `ahabona_app` scoped to database `ahabona` and schema `public` with read/write data privileges. Verified that it can use the schema but cannot create schema objects. Do not put its password or any connection string in GitHub or chat.
-- Verified PostgreSQL 17.11 connectivity with a harmless SELECT and confirmed the development database currently has zero application tables. No production AHABONA data has been copied.
+- Verified PostgreSQL 17.11 connectivity with a harmless SELECT. At initial provisioning the development database had zero application tables; the foundation schema was subsequently applied through versioned GitHub migrations. No production AHABONA data has been copied.
 - Neon Free does not permit changing the suspend interval on this account; the project uses the plan default (`suspend_timeout_seconds=0`). Main-branch protection was also rejected by the Free-plan protected-branch limit. The main branch therefore remains unprotected; use reviewed migrations and keep all schema work on `development` until protection is available.
 - Repository audit reconfirmed the active `server-v2.cjs` imports `node:sqlite` / `DatabaseSync` and contains the live schema/runtime; `package.json` currently has no `pg` driver. Therefore Neon infrastructure is provisioned but the live Lightsail app is **not yet connected**. Do not claim the migration or app integration is complete.
-- Next engineering gate: map the full SQLite schema, transactions, session/auth flows, backups and current data counts; add a Postgres repository/driver layer and repeatable migrations on the development branch; test existing flows and parity; only then configure Lightsail environment secrets and a controlled cutover with rollback. Keep the current SQLite database untouched until successful verification.
-
-- Next step is for the owner to ensure the intended Neon account has an organization, create/select a dedicated AHABONA project in `aws-eu-central-1`, and then re-run read-only inventory through this connector before any schema work.
+- Next engineering gate: finish the SQLite data/transaction/auth inventory, implement and test a server-side PostgreSQL adapter, seed the shared capabilities taxonomy, then migrate anonymized or controlled development fixtures and verify all existing flows. Only after that may we prepare a separately approved production migration. Keep the current SQLite database untouched until successful verification.
 
 
 ### AWS Free Plan and billing guardrail
@@ -471,3 +469,36 @@ Tangira kuri **Phase 0: Product & Technical Audit**. Reba live host n'uko accoun
 | 1.2 | 12 Ugushyingo 2026 | Initial database architecture review recommending isolated Supabase PostgreSQL. |
 | 1.3 | 12 Ugushyingo 2026 | Re-evaluated six options; recommends Neon Postgres/backend with ChatGPT MCP safeguards, free-plan limits, beta boundaries and migration gates. |
 | 1.4 | 12 Ugushyingo 2026 | Recorded live Neon connector inventory: connector available, but zero organizations/projects visible; no resources changed. |\n| 1.5 | 12 Ugushyingo 2026 | Provisioned AHABONA-only Neon Free PostgreSQL 17 project and development branch; verified least-privilege app role and documented remaining SQLite-to-Postgres integration gates. |
+
+
+## 3.1 Development implementation log (12 Ugushyingo 2026)
+
+The following work was completed after provisioning the Neon project. Evidence is from live Neon connector read-backs and GitHub commits; it is not a Production release.
+
+| Item | Verified result |
+|---|---|
+| Neon project | `ahabona-platform`, project ID `damp-lake-50983782`, AWS Europe Central 1 (Frankfurt), PostgreSQL 17.11 |
+| Neon database | `ahabona` |
+| Neon development branch | `development`, branch ID `br-super-truth-b9ei5e3y`, state `ready` |
+| Migration 0001 | Core compatibility projection and Opportunity Engine foundation applied on development |
+| Migration 0002 | Restricted runtime-role read access to the sensitive identity vault and schema migration ledger |
+| Tables | 45 public base tables |
+| Foreign keys | 62 |
+| Migration ledger | 1 applied migration row (0001); 0002 is a privilege-only migration recorded in GitHub and will be added to the database ledger in the next metadata migration |
+| Empty-data verification | users=0, profiles=0, job_posts=0, job_applications=0 |
+| Runtime role check | `ahabona_app` can use public schema and write job data; cannot create schema objects, read `user_sensitive_records`, or read `schema_migrations` |
+| GitHub files | `db/migrations/0001_opportunity_foundation.sql`, `db/migrations/0002_restrict_sensitive_runtime_access.sql` |
+| Current GitHub commits | `84acb5821a08c1773bde46cc0d69197dc557e60b`, `84c66b0f8fcfd0ab657a41514efdca832d8d7e38` |
+
+**Not done yet:** the live Node.js server still uses SQLite; no `pg` adapter is wired into application routes; capabilities have not yet been seeded into Neon; no user/profile data has been migrated; Neon main is still empty; Lightsail environment variables and production database settings have not been changed; no production deployment or restart has occurred.
+
+**Important schema note:** legacy core tables are compatibility projections intended to preserve existing user/profile IDs during controlled migration. The actual current production counts, column data, referential patterns, transactions and backup state must be measured directly from an authorised SQLite backup before any data transfer. National ID is deliberately excluded from the plain users table in the new schema; sensitive identity material is represented only as encrypted ciphertext in `user_sensitive_records`. No raw national ID or verification OTP should be logged or stored in plaintext.
+
+**Next build order:**
+1. Add a small server-only PostgreSQL pool/health adapter with strict environment validation and no credential logging.
+2. Add migration runner/ledger bookkeeping with a direct (non-pooled) connection and explicit version order.
+3. Seed capabilities from the existing authoritative `TAX` catalogue, preserving IDs only if the source IDs are captured.
+4. Build the migration/export tool against a protected SQLite backup; verify row counts and foreign-key parity using a throwaway development dataset.
+5. Wire selected routes behind a disabled-by-default development feature gate, preserving SQLite as the current active store until all user journeys pass.
+6. Add jobs, applications and notification APIs with server-side authorization, then UI.
+7. Production cutover requires a separate explicit owner release decision.
