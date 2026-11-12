@@ -30,7 +30,10 @@ jobs:
           node --check tests/discovery-seo.test.cjs
           node --check server/postgres.cjs
           node --check tests/postgres-adapter.test.cjs
+          node --check scripts/audit-sqlite-schema.cjs
+          node --check tests/sqlite-audit.test.cjs
       - name: Run focused tests
         run: |
           npm run test:discovery
           npm run test:db-adapter
+          npm run test:sqlite-audit
