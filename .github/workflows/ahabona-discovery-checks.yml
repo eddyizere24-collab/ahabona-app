@@ -32,8 +32,11 @@ jobs:
           node --check tests/postgres-adapter.test.cjs
           node --check scripts/audit-sqlite-schema.cjs
           node --check tests/sqlite-audit.test.cjs
+          node --check server/opportunities-public.cjs
+          node --check tests/opportunities-public.test.cjs
       - name: Run focused tests
         run: |
           npm run test:discovery
           npm run test:db-adapter
           npm run test:sqlite-audit
+          npm run test:public-jobs
