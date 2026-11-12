@@ -53,8 +53,8 @@ function safePhone(value) {
   return /^\+?[0-9]{7,15}$/.test(tel) ? { display, tel } : null;
 }
 function safeRwandaWhatsApp(value) {
-  const local = String(value || '').replace(/[\\s-]/g, '').replace(/^\\+?250/, '0');
-  return /^07[2389]\\d{7}$/.test(local) ? 'https://wa.me/250' + local.slice(1) : '';
+  const local = String(value || '').replace(/[\s-]/g, '').replace(/^\+?250/, '0');
+  return /^07[2389]\d{7}$/.test(local) ? 'https://wa.me/250' + local.slice(1) : '';
 }
 function jsonForHtml(value) {
   return JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e')
