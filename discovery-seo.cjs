@@ -295,8 +295,8 @@ function renderServiceLandingHtml(page, profiles, options = {}) {
   }).slice(0, 60);
   const canonical = base + '/services/' + page.slug;
   const hasResults = list.length > 0;
-  const title = page.rw + ' | AHABONA';
-  const description = cleanText(page.rwDescription, 260);
+  const title = page.rw + ' | ' + page.en + ' | AHABONA';
+  const description = cleanText(page.rwDescription + ' ' + page.enDescription, 300);
   const cards = list.map(profile => {
     const pid = String(profile.pid || '');
     if (!PUBLIC_PID_RE.test(pid)) return '';
@@ -351,10 +351,11 @@ function renderServiceLandingHtml(page, profiles, options = {}) {
     '.empty{margin-top:14px;padding:18px;background:#fff;border:1px solid var(--line);border-radius:14px}.foot{text-align:center;padding:4px 0 28px;color:var(--muted);font-size:14px}' +
     '@media(max-width:520px){.profile-main{gap:10px;padding:11px}.profile img{width:82px;height:82px}}' +
     '</style></head><body><header class="top"><div class="wrap bar"><a class="brand" href="/">AHABONA</a><a href="/">Subira kuri AHABONA</a></div></header>' +
-    '<main class="wrap"><section class="lead"><h1>' + escapeHtml(page.rw) + '</h1><p>' + escapeHtml(description) + '</p>' +
-    '<p class="muted">Kwiyandikisha no gushakisha kuri AHABONA ni ubuntu. Abantu bavugana kandi bakumvikana hagati yabo.</p></section>' +
+    '<main class="wrap"><section class="lead"><h1>' + escapeHtml(page.rw) + '</h1><p>' + escapeHtml(page.rwDescription) + '</p>' +
+    '<p class="muted">Kwiyandikisha no gushakisha kuri AHABONA ni ubuntu. Abantu bavugana kandi bakumvikana hagati yabo.</p>' +
+    '<div class="english" lang="en"><h2>' + escapeHtml(page.en) + '</h2><p>' + escapeHtml(page.enDescription) + '</p></div></section>' +
     (hasResults ? '<section class="profiles" aria-label="Abantu bafite public profiles">' + cards + '</section>' :
-      '<section class="empty"><h2>Nta muntu ubonetse muri iki cyiciro ubu</h2><p>Subira kuri AHABONA ushakishe abandi cyangwa ugerageze nyuma.</p></section>') +
+      '<section class="empty"><h2>Nta muntu ubonetse muri iki cyiciro ubu</h2><p>Subira kuri AHABONA ushakishe abandi cyangwa ugerageze nyuma.</p><p lang="en">No active public profile is currently listed in this category.</p></section>') +
     '<footer class="foot">AHABONA ntitanga akazi kandi ntiyivanga mu masezerano y’abakoresha. <a href="/">Shakisha abantu kuri AHABONA.</a></footer></main></body></html>';
 }
 
