@@ -276,9 +276,6 @@ const SERVICE_LANDING_PAGES = [
   { slug: 'umufotozi', query: 'umufotozi', rw: 'Abafotozi mu Rwanda', en: 'Photographers in Rwanda',
     rwDescription: 'Shaka abafotozi bagaragaje ibikorwa byabo kuri AHABONA.',
     enDescription: 'Find photographers in Rwanda with public AHABONA profiles.' },
-  { slug: 'umuganga', query: 'umuganga', rw: 'Abaganga n’abatanga serivisi z’ubuzima', en: 'Healthcare professionals in Rwanda',
-    rwDescription: 'Reba imyirondoro y’abantu bagaragaje serivisi z’ubuzima kuri AHABONA. Banza ugenzure impamyabumenyi n’impushya zabo ku nzego zibifitiye ububasha.',
-    enDescription: 'Browse public profiles of people who list health-related services. Verify professional registration and licensing with the relevant authorities before using healthcare services.' }
 ];
 function getServiceLandingDefinition(slug) {
   return SERVICE_LANDING_PAGES.find(page => page.slug === String(slug || '')) || null;
