@@ -5,7 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const crypto=require('node:crypto');
 const zlib=require('node:zlib');
-const {buildRobotsTxt,buildSitemapXml,renderPublicProfileHtml,renderInfoPageHtml,DEFAULT_BASE_URL}=require('./discovery-seo.cjs');
+const {buildRobotsTxt,buildSitemapXml,renderPublicProfileHtml,renderInfoPageHtml,getServiceLandingDefinition,getServiceLandingSlugs,renderServiceLandingHtml,DEFAULT_BASE_URL}=require('./discovery-seo.cjs');
 const {DatabaseSync}=require('node:sqlite');
 const {execFile}=require('node:child_process');
 
@@ -7554,10 +7554,27 @@ function handleRequest(ctx,req,res){
     const page=p==='/about'?'about':'how-it-works';
     return sendText(req,res,200,renderInfoPageHtml(page,{baseUrl:publicBase}),'text/html; charset=utf-8',{cache:'public, max-age=300'});
   }
+  const serviceMatch=(req.method==='GET'||req.method==='HEAD')?p.match(/^\\/services\\/([a-z0-9-]{2,60})$/):null;
+  if(serviceMatch){
+    const definition=getServiceLandingDefinition(serviceMatch[1]);
+    if(!definition){
+      res.setHeader('X-Robots-Tag','noindex, nofollow');
+      return sendError(req,res,404,'err.notfound');
+    }
+    const ranked=rank({q:definition.query,prov:'',dist:'',dv:null,epoch:0,limit:60});
+    const publicProfiles=ranked.list.map(profile=>pubProfile(profile,null,{}));
+    const publicBase=trustedBaseUrl()||DEFAULT_BASE_URL;
+    const html=renderServiceLandingHtml(definition,publicProfiles,{baseUrl:publicBase});
+    return sendText(req,res,200,html,'text/html; charset=utf-8',{cache:'public, max-age=60'});
+  }
   if((req.method==='GET'||req.method==='HEAD')&&p==='/sitemap.xml'){
     const publicRows=ctx.Q("SELECT p.pid,p.updated_at FROM profiles p JOIN users u ON u.id=p.user_id WHERE u.status='active' AND p.suspended=0 ORDER BY p.updated_at DESC LIMIT 49999").all();
+    const publicServiceSlugs=getServiceLandingSlugs().filter(slug=>{
+      const definition=getServiceLandingDefinition(slug);
+      return definition&&rank({q:definition.query,prov:'',dist:'',dv:null,epoch:0,limit:1}).list.length>0;
+    });
     const publicBase=trustedBaseUrl()||DEFAULT_BASE_URL;
-    return sendText(req,res,200,buildSitemapXml(publicRows,publicBase),'application/xml; charset=utf-8',{cache:'public, max-age=300'});
+    return sendText(req,res,200,buildSitemapXml(publicRows,publicBase,publicServiceSlugs),'application/xml; charset=utf-8',{cache:'public, max-age=300'});
   }
   const publicProfileMatch=(req.method==='GET'||req.method==='HEAD')?p.match(/^\/u\/([a-z0-9]{8,16})$/):null;
   if(publicProfileMatch){
