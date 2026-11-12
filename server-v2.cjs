@@ -5,6 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const crypto=require('node:crypto');
 const zlib=require('node:zlib');
+const {buildRobotsTxt,buildSitemapXml,renderPublicProfileHtml,DEFAULT_BASE_URL}=require('./discovery-seo.cjs');
 const {DatabaseSync}=require('node:sqlite');
 const {execFile}=require('node:child_process');
 
@@ -7533,6 +7534,28 @@ function handleRequest(ctx,req,res){
   catch(e){return sendError(req,res,400,'err.server')}
   var ip=ctx.ipOf(req)||'unknown';
   if(!ctx.rate.allow('g:'+ip,600,60000))return sendError(req,res,429,'err.rate');
+  // Public discovery endpoints: only expose records that the public profile API already exposes.
+  if((req.method==='GET'||req.method==='HEAD')&&p==='/robots.txt'){
+    const publicBase=process.env.AHABONA_PUBLIC_URL||DEFAULT_BASE_URL;
+    return sendText(req,res,200,buildRobotsTxt(publicBase),'text/plain; charset=utf-8',{cache:'public, max-age=3600'});
+  }
+  if((req.method==='GET'||req.method==='HEAD')&&p==='/sitemap.xml'){
+    const publicRows=ctx.Q("SELECT p.pid,p.updated_at FROM profiles p JOIN users u ON u.id=p.user_id WHERE u.status='active' AND p.suspended=0 ORDER BY p.updated_at DESC LIMIT 49999").all();
+    const publicBase=process.env.AHABONA_PUBLIC_URL||DEFAULT_BASE_URL;
+    return sendText(req,res,200,buildSitemapXml(publicRows,publicBase),'application/xml; charset=utf-8',{cache:'public, max-age=300'});
+  }
+  const publicProfileMatch=(req.method==='GET'||req.method==='HEAD')?p.match(/^\\/u\\/([a-z0-9]{8,16})$/):null;
+  if(publicProfileMatch){
+    const publicRow=ctx.Q("SELECT p.*,u.phone,u.email,u.status,u.id_verified AS owner_verified FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.pid=? AND u.status='active' AND p.suspended=0").get(publicProfileMatch[1]);
+    if(!publicRow){
+      res.setHeader('X-Robots-Tag','noindex, nofollow');
+      return sendText(req,res,404,'<!doctype html><html lang="rw"><meta charset="utf-8"><title>Umwirondoro ntiwabonetse | AHABONA</title><body><main><h1>Umwirondoro ntiwabonetse</h1><p>Uyu mwirondoro ntukiri ku mugaragaro cyangwa ntiwabashije kuboneka.</p><a href="/">Subira kuri AHABONA</a></main></body></html>','text/html; charset=utf-8',{cache:'public, max-age=30'});
+    }
+    const publicProfile=pubProfile(publicRow,null,{});
+    const publicBase=process.env.AHABONA_PUBLIC_URL||DEFAULT_BASE_URL;
+    const profileHtml=renderPublicProfileHtml(publicProfile,{baseUrl:publicBase,updatedAt:publicRow.updated_at});
+    return sendText(req,res,200,profileHtml,'text/html; charset=utf-8',{cache:'public, max-age=60'});
+  }
   if(p==='/icon.svg'){
     var svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="34" fill="#1a9b6c"/><g stroke="#d4a838" stroke-width="6" stroke-linecap="round"><line x1="96" y1="42" x2="96" y2="20"/><line x1="120" y1="48" x2="135" y2="30"/><line x1="138" y1="72" x2="158" y2="62"/><line x1="142" y1="96" x2="164" y2="96"/><line x1="138" y1="120" x2="158" y2="130"/><line x1="120" y1="144" x2="135" y2="162"/><line x1="72" y1="144" x2="57" y2="162"/><line x1="54" y1="120" x2="34" y2="130"/><line x1="50" y1="96" x2="28" y2="96"/><line x1="54" y1="72" x2="34" y2="62"/><line x1="72" y1="48" x2="57" y2="30"/></g><circle cx="96" cy="96" r="40" fill="#d4a838"/><text x="96" y="164" text-anchor="middle" fill="#fff" font-family="system-ui,sans-serif" font-size="22" font-weight="800">AHABONA</text></svg>';
     var buf=Buffer.from(svg,'utf8');
