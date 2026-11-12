@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --pretty",
     "test:discovery": "node --test tests/discovery-seo.test.cjs",
-    "test:db-adapter": "node --test tests/postgres-adapter.test.cjs"
+    "test:db-adapter": "node --test tests/postgres-adapter.test.cjs",
+    "audit:sqlite": "node scripts/audit-sqlite-schema.cjs",
+    "test:sqlite-audit": "node --test tests/sqlite-audit.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",
