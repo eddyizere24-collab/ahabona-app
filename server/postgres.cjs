@@ -88,6 +88,11 @@ function createPostgresPool(options = {}) {
   return pool;
 }
 
+function createOptionalPostgresPool(env = process.env, PoolClass) {
+  if (env.AHABONA_ENABLE_POSTGRES !== '1') return null;
+  return createPostgresPool({ env, ...(PoolClass ? { PoolClass } : {}) });
+}
+
 function getPostgresPool() {
   if (!sharedPool) sharedPool = createPostgresPool();
   return sharedPool;
@@ -156,6 +161,7 @@ async function withTransaction(pool, work) {
 
 module.exports = {
   createPostgresPool,
+  createOptionalPostgresPool,
   getPostgresPool,
   closePostgresPool,
   checkPostgres,
