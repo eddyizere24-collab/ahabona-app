@@ -4,7 +4,7 @@
 **Inyandiko-fatizo yo kubaka Job & Opportunity Marketplace ihujwe na AHABONA**
 
 - Document ID: AHABONA-OPP-001
-- Version: 1.8
+- Version: 1.9
 - Itariki: 12 Ugushyingo 2026
 - Status: Planning baseline; si uburenganzira bwo guhindura Production.
 - Repository: eddyizere24-collab/ahabona-app
@@ -516,7 +516,7 @@ The following work was completed after provisioning the Neon project. Evidence i
 | Security tests | Confirm missing/invalid URL rejection, TLS override removal, certificate verification config, bounded pool, health-check shape, commit/rollback and failed-rollback client eviction |
 | Runbook | `db/README.md` |
 
-The workflow logs show 8/8 adapter tests passed and 12/12 discovery tests passed. The adapter is deliberately **not wired into the existing SQLite request handlers yet**. It does not run unless explicitly imported and called by future server code. The current production app remains unchanged.
+The workflow logs show 8/8 adapter tests passed and 12/12 discovery tests passed. The adapter is wired into the server context behind the explicit `AHABONA_ENABLE_POSTGRES=1` feature flag. The flag defaults off, so current production behavior remains SQLite. The server now mounts public job list/detail endpoints that call the Neon-backed query service only when the flag is enabled. No employer write, application, moderation or notification route has been enabled yet.
 
 **Next engineering tasks:**
 1. Inspect the entire current `server-v2.cjs` database bootstrap and query/transaction usage on the working branch; map every SQLite-specific API that must be abstracted.
@@ -526,7 +526,7 @@ The workflow logs show 8/8 adapter tests passed and 12/12 discovery tests passed
 5. Implement opportunity APIs using server-side authorization and the new schema; add the public job list/details first, then employer creation/moderation, applications, matching and delivery workers.
 6. Only after end-to-end tests, backup/restore rehearsal, data reconciliation, billing review and a separate owner release instruction may Lightsail environment variables or Production be changed.
 
-The Node adapter's unit tests use a fake Pool so they verify adapter setup logic without connecting to a live database. The Neon development branch is separately validated by connector SQL checks. No live end-to-end Node-to-Neon connection from Lightsail has been attempted yet.
+The Node adapter and public job-query tests use a fake Pool, so they verify setup and query/visibility logic without connecting from the AHABONA server to Neon. The Neon development branch is separately validated by connector SQL checks. No live end-to-end Node-to-Neon connection from Lightsail has been attempted yet.
 
 
 ## 3.3 SQLite migration audit tooling (12 Ugushyingo 2026)
@@ -539,3 +539,27 @@ A read-only audit utility is now stored at `scripts/audit-sqlite-schema.cjs`. It
 - GitHub Actions run `43274798387` passed on commit `1a797f6e58fd78b058e39772dbefe83363008bcf`: 12/12 discovery tests, 8/8 PostgreSQL adapter tests and 3/3 SQLite audit tests passed; JavaScript syntax checks also passed.
 
 This utility has only been tested with synthetic SQLite fixtures in GitHub Actions. It has **not** been run against the AHABONA Lightsail data file, because no authorised, protected SQLite backup has been brought into the development environment. The actual row counts and production data remain unknown and unchanged.
+
+
+## 3.4 Public Job Marketplace read API (12 Ugushyingo 2026)
+
+The first public-facing server module has been added without changing the existing homepage layout.
+
+| Endpoint | Behavior |
+|---|---|
+| `GET /api/jobs` | Lists approved, unexpired job posts; supports bounded text, province, district, category, employment-type and work-arrangement filters with clamped pagination |
+| `GET /api/jobs/:uuid` | Returns details, required/preferred skills and application questions for an approved, unexpired post |
+
+**Visibility and privacy rules implemented in the SQL projection:**
+- Draft, pending-review, rejected, closed, expired and archived posts are never included in public reads.
+- Deadline-expired jobs are excluded even if their status was not yet changed to `expired`.
+- Salary values are returned only when the publisher sets `salary_visible=true`.
+- External application URLs are returned only for `external_url` applications.
+- Public email/phone are returned only when the post explicitly uses `employer_contact`; private user email/phone are not selected.
+- Query filters are passed as bound SQL parameters; pagination is clamped.
+
+**Server integration:** `server-v2.cjs` mounts both read endpoints. They require `ctx.pgPool`, which is created only when `AHABONA_ENABLE_POSTGRES=1`; without that explicit setting the existing server remains on SQLite and the new endpoints return unavailable. Public job reads have no dependency on user sign-in.
+
+**Test evidence:** `tests/opportunities-public.test.cjs`, 5 tests. GitHub Actions run `43276759101` completed successfully on commit `90389eda49eefdf80f23cdd5bd4d4f7e2a770a5c`. The combined workflow passed 12 discovery tests, 9 database adapter tests, 3 SQLite audit tests and 5 public job API tests (29/29 total).
+
+**Not yet implemented:** frontend job listings/details, job creation/editing/submission, employer verification, moderation endpoints, applications, candidate/employer dashboards, job notifications, push/email workers and matching. No real job data has been inserted. The public read API has not been connected to a running Lightsail process or tested over a real Node-to-Neon network connection.
