@@ -461,4 +461,5 @@ Tangira kuri **Phase 0: Product & Technical Audit**. Reba live host n'uko accoun
 | 1.0 | 12 Ugushyingo 2026 | Planning baseline: product requirements, technical direction, phases, trust/safety, tests and release gates. |
 | 1.1 | 12 Ugushyingo 2026 | Recorded owner-provided Lightsail hosting facts and clarified VPS-specific Phase 0 checks. |
 | 1.2 | 12 Ugushyingo 2026 | Initial database architecture review recommending isolated Supabase PostgreSQL. |
-| 1.3 | 12 Ugushyingo 2026 | Re-evaluated six options; recommends Neon Postgres/backend with ChatGPT MCP safeguards, free-plan limits, beta boundaries and migration gates. |\n| 1.4 | 12 Ugushyingo 2026 | Recorded live Neon connector inventory: connector available, but zero organizations/projects visible; no resources changed. |
+| 1.3 | 12 Ugushyingo 2026 | Re-evaluated six options; recommends Neon Postgres/backend with ChatGPT MCP safeguards, free-plan limits, beta boundaries and migration gates. |
+| 1.4 | 12 Ugushyingo 2026 | Recorded live Neon connector inventory: connector available, but zero organizations/projects visible; no resources changed. |
