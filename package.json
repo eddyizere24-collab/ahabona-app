@@ -15,7 +15,8 @@
     "test:public-jobs": "node --test tests/opportunities-public.test.cjs",
     "test:employer-jobs": "node --test tests/jobs-employer.test.cjs",
     "test:applications": "node --test tests/applications.test.cjs",
-    "test:opportunity": "node --test tests/opportunities-public.test.cjs tests/jobs-employer.test.cjs tests/applications.test.cjs"
+    "test:opportunity": "node --test tests/opportunities-public.test.cjs tests/jobs-employer.test.cjs tests/job-workflow.test.cjs tests/applications.test.cjs",
+    "test:job-workflow": "node --test tests/job-workflow.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",
