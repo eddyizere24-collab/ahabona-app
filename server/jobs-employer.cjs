@@ -301,15 +301,15 @@ async function createJobPost(pool, actor, rawInput) {
     const userId = await ensureLegacyIdentity(client, actor);
 
     await client.query(
-      'INSERT INTO public.employer_profiles ' +
+      'INSERT INTO public.employer_profiles AS ep ' +
       '(user_id, display_name, description, public_email, public_phone, website_url, verification_status) ' +
       "VALUES ($1, $2, $3, $4, $5, $6, 'unverified') " +
       'ON CONFLICT (user_id) DO UPDATE SET ' +
       'display_name = EXCLUDED.display_name, ' +
-      'description = COALESCE(EXCLUDED.description, public.employer_profiles.description), ' +
-      'public_email = COALESCE(EXCLUDED.public_email, public.employer_profiles.public_email), ' +
-      'public_phone = COALESCE(EXCLUDED.public_phone, public.employer_profiles.public_phone), ' +
-      'website_url = COALESCE(EXCLUDED.website_url, public.employer_profiles.website_url), ' +
+      'description = COALESCE(EXCLUDED.description, ep.description), ' +
+      'public_email = COALESCE(EXCLUDED.public_email, ep.public_email), ' +
+      'public_phone = COALESCE(EXCLUDED.public_phone, ep.public_phone), ' +
+      'website_url = COALESCE(EXCLUDED.website_url, ep.website_url), ' +
       'updated_at = now()',
       [
         userId,
