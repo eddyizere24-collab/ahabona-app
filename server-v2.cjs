@@ -12,6 +12,7 @@ const {createOptionalPostgresPool}=require('./server/postgres.cjs');
 const {listPublicJobs,getPublicJob}=require('./server/opportunities-public.cjs');
 const {createJobPost,listEmployerJobs,JobInputError}=require('./server/jobs-employer.cjs');
 const {ApplicationError,createJobApplication,listMyApplications,listEmployerApplications,updateEmployerApplicationStatus}=require('./server/applications.cjs');
+const {JobWorkflowError,updateEmployerJobDraft,submitEmployerJobForReview,closeEmployerJob,listModerationQueue,reviewEmployerJob}=require('./server/job-workflow.cjs');
 
 const PROV={
   "Umujyi wa Kigali":["Gasabo","Kicukiro","Nyarugenge"],
@@ -226,6 +227,7 @@ const PERMS={
   "broadcast.send":{rw:"Kohereza ubutumwa kuri bose",en:"Broadcast to everyone"},
   "profiles.moderate":{rw:"Guhagarika no kugarura imyirondoro",en:"Suspend and restore profiles"},
   "reports.handle":{rw:"Gukemura ibibazo (reports)",en:"Handle reports"},
+  "jobs.moderate":{rw:"Kugenzura amatangazo y'akazi",en:"Moderate job posts"},
   "requests.handle":{rw:"Kwemeza ibyifuzo by'imirimo",en:"Approve skill requests"},
   "catalog.edit":{rw:"Imirimo n'ibyiciro",en:"Skills and categories"},
   "content.edit":{rw:"Ikibaho, FAQ n'ubutumwa bw'ubufasha",en:"Hero board, FAQ and help messages"},
@@ -235,8 +237,8 @@ const PERMS={
 };
 const ROLE_PERMS={
   super:Object.keys(PERMS),
-  admin:["dash.view","users.view","users.edit","users.message","profiles.moderate","reports.handle","requests.handle","catalog.edit","content.edit"],
-  mod:["dash.view","users.view","profiles.moderate","reports.handle","requests.handle"],
+  admin:["dash.view","users.view","users.edit","users.message","profiles.moderate","reports.handle","jobs.moderate","requests.handle","catalog.edit","content.edit"],
+  mod:["dash.view","users.view","profiles.moderate","reports.handle","jobs.moderate","requests.handle"],
   editor:["dash.view","catalog.edit","content.edit"],
   viewer:["dash.view"]
 };
@@ -7834,11 +7836,89 @@ async function apiOpportunityApplications(ctx,req,res,url,p,m){
   return null;
 }
 
+async function apiEmployerJobWorkflow(ctx,req,res,url,p,m){
+  var editMatch;
+  if((editMatch=p.match(/^\/api\/me\/jobs\/([0-9a-fA-F-]{36})$/))&&m==='PUT'){
+    if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+    const actor=ctx.sessionUser(req);
+    if(!actor)return sendError(req,res,401,'err.auth');
+    if(!sameOriginMutation(req))return sendError(req,res,403,'err.forbidden');
+    if(!ctx.rate.allow('job-edit:'+actor.id,20,HOUR))return sendError(req,res,429,'err.rate');
+    const body=await readBody(req,48*1024);
+    if(!body.ok)return sendError(req,res,body.code||400,body.error||'err.server');
+    try{
+      const result=await updateEmployerJobDraft(ctx.pgPool,actor,editMatch[1],body.data||{});
+      return sendJson(req,res,200,result);
+    }catch(error){
+      if(error instanceof JobWorkflowError)return sendJson(req,res,error.status,{error:error.code,field:error.field});
+      if(error instanceof JobInputError)return sendJson(req,res,400,{error:error.message,field:error.field});
+      const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+      console.error('[job-edit] database operation failed ('+code+').');
+      return sendError(req,res,503,'err.server');
+    }
+  }
+
+  var actionMatch;
+  if((actionMatch=p.match(/^\/api\/me\/jobs\/([0-9a-fA-F-]{36})\/(submit|close)$/))&&m==='POST'){
+    if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+    const actor=ctx.sessionUser(req);
+    if(!actor)return sendError(req,res,401,'err.auth');
+    if(!sameOriginMutation(req))return sendError(req,res,403,'err.forbidden');
+    if(!ctx.rate.allow('job-action:'+actor.id,20,HOUR))return sendError(req,res,429,'err.rate');
+    try{
+      const result=actionMatch[2]==='submit'
+        ? await submitEmployerJobForReview(ctx.pgPool,actor,actionMatch[1])
+        : await closeEmployerJob(ctx.pgPool,actor,actionMatch[1]);
+      return sendJson(req,res,200,result);
+    }catch(error){
+      if(error instanceof JobWorkflowError)return sendJson(req,res,error.status,{error:error.code,field:error.field});
+      const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+      console.error('[job-action] database operation failed ('+code+').');
+      return sendError(req,res,503,'err.server');
+    }
+  }
+  return null;
+}
+
+async function adminJobModerationQueue(ctx,req,res,url){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  try{
+    const result=await listModerationQueue(ctx.pgPool,{limit:url.searchParams.get('limit')});
+    return sendJson(req,res,200,result);
+  }catch(error){
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[admin-job-queue] database operation failed ('+code+').');
+    return sendError(req,res,503,'err.server');
+  }
+}
+
+async function adminJobModerationReview(ctx,req,res,jobId,actor){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  if(!sameOriginMutation(req))return sendError(req,res,403,'err.forbidden');
+  if(!ctx.rate.allow('job-moderate:'+actor.id,120,HOUR))return sendError(req,res,429,'err.rate');
+  const body=await readBody(req,8*1024);
+  if(!body.ok)return sendError(req,res,body.code||400,body.error||'err.server');
+  try{
+    const result=await reviewEmployerJob(ctx.pgPool,actor,jobId,body.data||{});
+    ctx.adminLog(actor.id,'job_'+String(body.data?.action||'review'),'job_post',jobId,{
+      action:String(body.data?.action||''),note:typeof body.data?.note==='string'?body.data.note.slice(0,300):null
+    },ctx.ipOf(req));
+    return sendJson(req,res,200,result);
+  }catch(error){
+    if(error instanceof JobWorkflowError)return sendJson(req,res,error.status,{error:error.code,field:error.field});
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[admin-job-review] database operation failed ('+code+').');
+    return sendError(req,res,503,'err.server');
+  }
+}
+
 async function handleApi(ctx,req,res,url,p){
   var m=req.method;
   if(p==='/api/health')return apiHealth(req,res);
   var applicationRoute=await apiOpportunityApplications(ctx,req,res,url,p,m);
   if(applicationRoute!==null)return applicationRoute;
+  var employerWorkflowRoute=await apiEmployerJobWorkflow(ctx,req,res,url,p,m);
+  if(employerWorkflowRoute!==null)return employerWorkflowRoute;
   if(p==='/api/jobs'&&(m==='GET'||m==='HEAD'))return apiPublicJobs(ctx,req,res,url);
   if(p==='/api/jobs'&&m==='POST')return apiCreateJob(ctx,req,res);
   if(p==='/api/me/jobs'&&m==='GET')return apiMyJobs(ctx,req,res);
@@ -7889,6 +7969,8 @@ async function handleApi(ctx,req,res,url,p){
 const NOROUTE={};
 const ADMIN_ROUTES=[
   ['GET','/api/admin/summary','dash.view',function(ctx,req,res,mt,u){return adminSummary(ctx,req,res)}],
+  ['GET','/api/admin/jobs','jobs.moderate',function(ctx,req,res,mt,u){return adminJobModerationQueue(ctx,req,res,url)}],
+  ['POST',/^\/api\/admin\/jobs\/([0-9a-fA-F-]{36})\/review$/,'jobs.moderate',function(ctx,req,res,mt,u){return adminJobModerationReview(ctx,req,res,mt[1],u)}],
   ['GET','/api/admin/users','users.view',function(ctx,req,res,mt,u){return adminUsers(ctx,req,res,u)}],
   ['POST','/api/admin/broadcast','broadcast.send',function(ctx,req,res,mt,u){return adminBroadcast(ctx,req,res,u)}],
   ['GET','/api/admin/reports','reports.handle',function(ctx,req,res,mt,u){return adminReports(ctx,req,res)}],
