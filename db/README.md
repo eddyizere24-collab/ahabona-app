@@ -24,7 +24,7 @@
 - The connection URL must never be placed in browser code, source files, GitHub Actions logs, or chat messages.
 - TLS certificate verification is enabled by the adapter; TLS overrides in URL query parameters are removed so the explicit verified TLS configuration is used.
 - Pool limits and timeouts are controlled by `AHABONA_PG_POOL_MAX`, `AHABONA_PG_CONNECTION_TIMEOUT_MS`, `AHABONA_PG_IDLE_TIMEOUT_MS`, and `AHABONA_PG_QUERY_TIMEOUT_MS`.
-- The adapter is not activated by the existing server yet. Do not set a runtime switch or configure Lightsail until repository routes have been migrated and parity tests pass.
+- server-v2.cjs now creates the PostgreSQL pool only when AHABONA_ENABLE_POSTGRES=1. Employer job, public job, application and moderation API routes are wired behind this gate. The gate remains off in the live Lightsail environment; SQLite continues to serve Production. Do not enable it on Lightsail until full route parity, backup/restore rehearsal and a separate release approval are complete.
 
 ## Roles and sensitive information
 
@@ -52,8 +52,12 @@ Before any migration from SQLite:
 
 - `0001_opportunity_foundation.sql`: applied on Neon development.
 - `0002_restrict_sensitive_runtime_access.sql`: applied on Neon development and recorded in the migration ledger.
-- The Neon development database contains schema only; it has zero user, profile, job-post, and application rows.
-- Neon main is still clean. No live application routes are connected to Postgres yet.
+- `0003_legacy_identity_bridge.sql`: applied on Neon development; it permits ID-only identity projection without copying private contacts or credentials.
+- `0004_job_draft_moderation_event.sql`: applied on Neon development; it records draft-save lifecycle events.
+- `0005_job_changes_requested_status.sql`: applied on Neon development; it permits a moderator to request employer corrections.
+- Neon development has 45 public tables and 62 foreign keys. Last read-back counts: users=0, profiles=0, capabilities=0, job_posts=0, job_applications=0, notifications=0.
+- The runtime role can read/write job and application data and create notifications, but cannot read user_sensitive_records or schema_migrations.
+- API route code is wired behind the feature gate, but no live Lightsail application route is using Postgres yet. No Lightsail environment settings, Production database, user data, or production data have been changed.
 - No Lightsail environment settings, Production database, or production data have been changed.
 
 
@@ -66,3 +70,23 @@ npm run audit:sqlite
 ```
 
 The script opens SQLite in read-only mode and outputs schema metadata and counts only. It does not print row values. Do not point it at a live database file while the application is writing. The audit has not yet been run against the real AHABONA backup.
+
+
+## Employer and candidate APIs (development branch only)
+
+The feature branch now includes:
+- Public job reads: GET /api/jobs and GET /api/jobs/:uuid.
+- Employer job creation and listing: POST /api/jobs and GET /api/me/jobs.
+- Employer job draft edit, moderation submission, and close: PUT /api/me/jobs/:uuid, POST /api/me/jobs/:uuid/submit, POST /api/me/jobs/:uuid/close.
+- Permissioned moderation: GET /api/admin/jobs and POST /api/admin/jobs/:uuid/review. The distinct jobs.moderate permission is granted to admin and mod roles.
+- Candidate applications: POST /api/jobs/:uuid/applications and GET /api/me/applications.
+- Employer applicant pipeline: GET /api/employer/jobs/:uuid/applications and POST /api/employer/applications/:uuid/status.
+
+All of these routes require AHABONA_ENABLE_POSTGRES=1. The flag defaults off. Employer ownership, candidate ownership, moderation permissions, same-origin mutation checks, request-size limits and rate limits are enforced in the Node.js server. These are API layers only; UI, email/push dispatch, matching and Talent Watch are not complete.
+
+## Verification boundaries
+
+- GitHub Actions checks JavaScript syntax and runs the repository's focused service tests, including application and job moderation workflow tests.
+- Service tests use fake PostgreSQL pools. They do not prove the Lightsail server can currently connect to Neon.
+- Neon development schema and runtime-role privileges have been verified separately using read-only connector queries.
+- No production connection strings, Neon main schema changes, Lightsail environment updates, PM2 restarts, production migrations or deployments have been performed.
