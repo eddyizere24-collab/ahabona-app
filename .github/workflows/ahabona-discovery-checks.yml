@@ -34,9 +34,12 @@ jobs:
           node --check tests/sqlite-audit.test.cjs
           node --check server/opportunities-public.cjs
           node --check tests/opportunities-public.test.cjs
+          node --check server/jobs-employer.cjs
+          node --check tests/jobs-employer.test.cjs
       - name: Run focused tests
         run: |
           npm run test:discovery
           npm run test:db-adapter
           npm run test:sqlite-audit
           npm run test:public-jobs
+          npm run test:employer-jobs
