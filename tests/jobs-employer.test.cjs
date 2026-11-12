@@ -45,7 +45,7 @@ class FakeClient {
         rows: [{
           id: 'd14a611e-4f2f-4f2d-8ad3-6343658e1c13',
           title: 'Abashoferi barakenewe',
-          status: 'pending_review',
+          status: values[values.length - 1],
           created_at: '2026-11-12T18:00:00Z',
           deadline_at: null
         }]
@@ -152,6 +152,7 @@ test('creates job, skills and questions transactionally with ID-only identity pr
   assert.equal(result.next_step, 'awaiting_moderation');
   assert.ok(identityCall);
   assert.match(identityCall.sql, /identity_source/);
+  assert.match(identityCall.sql, /IN \\('legacy_sqlite','imported'\\)/);
   assert.doesNotMatch(identityCall.sql, /email|phone|\bpw\b/i);
   assert.ok(!identityCall.values.includes(actor.email));
   assert.ok(!identityCall.values.includes(actor.phone));
@@ -173,7 +174,7 @@ test('employer may save a draft but cannot make it public directly', async () =>
     { ...validInput, save_draft: true }
   );
 
-  assert.equal(result.job.status, 'pending_review');
+  assert.equal(result.job.status, 'draft');
   assert.equal(result.next_step, 'edit_and_submit');
 });
 
