@@ -4,9 +4,9 @@
 **Inyandiko-fatizo yo kubaka Job & Opportunity Marketplace ihujwe na AHABONA**
 
 - Document ID: AHABONA-OPP-001
-- Version: 1.9
+- Version: 2.0
 - Itariki: 12 Ugushyingo 2026
-- Status: Planning baseline; si uburenganzira bwo guhindura Production.
+- Status: Planning baseline + development implementation log; si uburenganzira bwo guhindura Production.
 - Repository: eddyizere24-collab/ahabona-app
 - Working branch: feature/chatgpt-discovery-foundation-20261112
 - Baseline commit: 58a406afe238dd8360108ac48cde1aa4a276062d
@@ -482,9 +482,12 @@ The following work was completed after provisioning the Neon project. Evidence i
 | Neon development branch | `development`, branch ID `br-super-truth-b9ei5e3y`, state `ready` |
 | Migration 0001 | Core compatibility projection and Opportunity Engine foundation applied on development |
 | Migration 0002 | Restricted runtime-role read access to the sensitive identity vault and schema migration ledger |
+| Migration 0003 | Added identity-source marker and legacy SQLite ID-only bridge |
+| Migration 0004 | Added explicit draft-save moderation event |
+| Migration 0005 | Added `changes_requested` job status for employer corrections |
 | Tables | 45 public base tables |
 | Foreign keys | 62 |
-| Migration ledger | 2 applied migration rows (`0001_opportunity_foundation`, `0002_restrict_sensitive_runtime_access`) |
+| Migration ledger | 5 applied migration rows (`0001` through `0005`) |
 | Empty-data verification | users=0, profiles=0, job_posts=0, job_applications=0 |
 | Runtime role check | `ahabona_app` can use public schema and write job data; cannot create schema objects, read `user_sensitive_records`, or read `schema_migrations` |
 | GitHub files | `db/migrations/0001_opportunity_foundation.sql`, `db/migrations/0002_restrict_sensitive_runtime_access.sql` |
@@ -516,7 +519,7 @@ The following work was completed after provisioning the Neon project. Evidence i
 | Security tests | Confirm missing/invalid URL rejection, TLS override removal, certificate verification config, bounded pool, health-check shape, commit/rollback and failed-rollback client eviction |
 | Runbook | `db/README.md` |
 
-The workflow logs show 8/8 adapter tests passed and 12/12 discovery tests passed. The adapter is wired into the server context behind the explicit `AHABONA_ENABLE_POSTGRES=1` feature flag. The flag defaults off, so current production behavior remains SQLite. The server now mounts public job list/detail endpoints that call the Neon-backed query service only when the flag is enabled. No employer write, application, moderation or notification route has been enabled yet.
+The workflow logs show 8/8 adapter tests passed and 12/12 discovery tests passed. The adapter is wired into the server context behind the explicit `AHABONA_ENABLE_POSTGRES=1` feature flag. The flag defaults off, so current production behavior remains SQLite. The server now mounts public job list/detail endpoints that call the Neon-backed query service only when the flag is enabled. Employer job creation, draft management, moderation and candidate application routes now exist in the feature branch. They remain gated by `AHABONA_ENABLE_POSTGRES=1`; the flag is still off in the live Lightsail environment. No production route has been activated.
 
 **Next engineering tasks:**
 1. Inspect the entire current `server-v2.cjs` database bootstrap and query/transaction usage on the working branch; map every SQLite-specific API that must be abstracted.
@@ -562,4 +565,62 @@ The first public-facing server module has been added without changing the existi
 
 **Test evidence:** `tests/opportunities-public.test.cjs`, 5 tests. GitHub Actions run `43276759101` completed successfully on commit `90389eda49eefdf80f23cdd5bd4d4f7e2a770a5c`. The combined workflow passed 12 discovery tests, 9 database adapter tests, 3 SQLite audit tests and 5 public job API tests (29/29 total).
 
-**Not yet implemented:** frontend job listings/details, job creation/editing/submission, employer verification, moderation endpoints, applications, candidate/employer dashboards, job notifications, push/email workers and matching. No real job data has been inserted. The public read API has not been connected to a running Lightsail process or tested over a real Node-to-Neon network connection.
+**Not yet implemented:** public job UI/header entry, employer job wizard/dashboard UI, candidate Apply UI, candidate application tracker UI, in-app job notification UI, email and web-push delivery workers, matching/Talent Watch, complete moderator UI, and the full SQLite-to-Neon parity migration. No real user/job/application data has been inserted into Neon. Node-to-Neon application queries have been unit-tested with a fake pool and Neon permissions/schema were independently verified, but no live Lightsail-to-Neon end-to-end connection has been attempted.
+
+ 
+## 3.5 Employer job lifecycle and moderation APIs (12 Ugushyingo 2026)
+
+The server-side employer workflow is now implemented in server/job-workflow.cjs and routed by server-v2.cjs. It is available only when the server's AHABONA_ENABLE_POSTGRES=1 development/staging gate is enabled.
+
+| Endpoint | Behavior |
+|---|---|
+| PUT /api/me/jobs/:uuid | Owner-only draft editing; merges omitted values from the saved job, validates the complete result, and updates requirements, skills and application questions in one transaction |
+| POST /api/me/jobs/:uuid/submit | Employer submits a draft or changes-requested post into pending_review; it never publishes directly |
+| POST /api/me/jobs/:uuid/close | Owner closes an eligible job and an audit event is recorded |
+| GET /api/admin/jobs | Permissioned moderation queue containing only pending_review posts |
+| POST /api/admin/jobs/:uuid/review | Moderator approves, rejects or requests changes, with a reason required for non-approval outcomes |
+
+**Authorization and safety rules:**
+- Job ownership is checked server-side on every employer edit, submit, close and application-list request.
+- Draft editing is limited to draft, changes_requested and rejected posts; published and pending-review posts cannot be silently edited.
+- Public visibility still requires a moderation decision. Employer submission alone does not publish.
+- jobs.moderate is a distinct server permission granted to admin and mod roles; super receives all permissions. It does not reuse user-management permissions.
+- Moderation review is restricted to pending_review posts and persists reviewed_by_user_id, reviewed_at, moderation_note, published_at and a job_moderation_events event.
+- Employer notifications are created for review outcomes. Database changes and notifications are grouped in transactions.
+- State changes, body sizes and request rates are validated server-side; mutations use same-origin checks.
+
+**Not yet a complete UI:** these are API/service layers only. The actual employer wizard, edit screen and moderator queue UI remain to be built and connected.
+
+## 3.6 Candidate applications and employer pipeline APIs (12 Ugushyingo 2026)
+
+Implemented in server/applications.cjs and mounted in server-v2.cjs:
+
+| Endpoint | Behavior |
+|---|---|
+| POST /api/jobs/:uuid/applications | Signed-in candidate applies to an approved, unexpired job whose application method is in_platform |
+| GET /api/me/applications | Candidate sees only their own applications and status |
+| GET /api/employer/jobs/:uuid/applications | Employer sees applicants only for a job they own |
+| POST /api/employer/applications/:uuid/status | Employer advances an application through permitted status transitions |
+
+**Application rules:**
+- User ID is bridged to Neon without copying email, phone, password hash, national ID or session secrets.
+- The profile snapshot uses only selected profile/work fields and omits private contact channels and identity data.
+- Employer-defined questions are checked for valid question IDs, input types, choices and required answers.
+- Application creation, status history and employer notification are committed in one transaction.
+- A unique (job_post_id, candidate_user_id) constraint prevents repeat applications; duplicate submission returns a conflict.
+- Candidates cannot apply to their own job, suspended profiles are blocked, and external-application jobs are not falsely treated as in-platform applications.
+- Employer ownership is checked for applicant reads and status updates. Invalid or skipped status transitions are rejected.
+- Status changes create an event and candidate notification.
+
+**Test coverage added:** 12 application service tests, including privacy snapshot checks, question validation, duplicate prevention, ownership isolation, unpublished-job rejection, transaction rollback and allowed status transitions. The test suite is run by the branch's GitHub Actions workflow.
+
+## 3.7 Current development verification and exact boundaries
+
+- Neon development still contains schema only: users=0, profiles=0, capabilities=0, job_posts=0, job_applications=0, notifications=0 at the last read-back.
+- Runtime role ahabona_app can read/write job and application data and create notifications, but cannot read user_sensitive_records or schema_migrations.
+- Job public read, employer creation, editing, submit/close, moderation and application services are wired into the Node server behind AHABONA_ENABLE_POSTGRES=1.
+- GitHub CI includes syntax checks and focused tests for PostgreSQL adapter, SQLite audit, public job reads, employer job creation, candidate applications and job workflow/moderation.
+- These service tests use fake PostgreSQL pools. Neon schema/role access was verified separately using connector SQL. This is not the same as a live Node-to-Neon network integration test.
+- AHABONA_ENABLE_POSTGRES remains off in Lightsail. SQLite remains the live app database. No production environment variable, SQLite file, user data, public site, DNS, service process or Neon main branch has been changed.
+- UI, candidate/employer dashboard, email/push dispatch, matching, capability catalogue seed, real SQLite backup audit, live network smoke test and rollback rehearsal remain release gates.
+
