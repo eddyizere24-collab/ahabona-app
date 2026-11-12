@@ -4,7 +4,7 @@
 **Inyandiko-fatizo yo kubaka Job & Opportunity Marketplace ihujwe na AHABONA**
 
 - Document ID: AHABONA-OPP-001
-- Version: 1.1
+- Version: 1.2
 - Itariki: 12 Ugushyingo 2026
 - Status: Planning baseline; si uburenganzira bwo guhindura Production.
 - Repository: eddyizere24-collab/ahabona-app
@@ -70,6 +70,49 @@ Screenshot ya AWS Lightsail nyir'urubuga yatanze igaragaza ibi bikurikira. Ibi n
 **Ibyo screenshot itagaragaza kandi bigomba kugenzurwa kuri Phase 0:** domain/DNS mapping, exact Node.js runtime version, repository path and deployed Git SHA, process manager and startup command, reverse proxy/TLS settings, environment variable names (values never print), database file location and backup/restore procedure, uploaded-file storage, firewall/security group rules, logs and monitoring. Screenshot ya console yonyine ntihamya ko branch cyangwa commit runaka ari yo iri live.
 
 Public server IPs ntizishyirwa muri iyi product document; zibikwa mu private operations inventory aho bikenewe.
+
+
+### ADR-001: Database target and separation (recommended; not yet provisioned)
+
+**Recommendation:** Use one dedicated Supabase-managed PostgreSQL project as the long-term authoritative database for AHABONA, while keeping the existing Node.js application/API on Lightsail. Do not create multiple unrelated databases for users, jobs, applications and notifications. Those are related parts of the same platform and should share one transactional source of truth.
+
+**Read-only connector discovery (12 Nov 2026):**
+- The connected Supabase organization is currently on the Free plan.
+- It contains one active, healthy project named `iwacu-rwanda-2`, in `eu-central-1`; this is the IWACU project, not AHABONA.
+- Supabase allows two active Free projects across organizations where the owner/admin belongs. One project slot is therefore currently available based on the visible connected account state.
+- The Supabase connector is available in this ChatGPT workspace for project discovery, schema inspection, SQL queries, migrations, logs, advisors and supported project operations.
+
+**Separation rule:** Never put AHABONA tables or AHABONA user records inside the IWACU project. Recommended future layout is a separate Supabase Organization named AHABONA, with one AHABONA project in Central EU (Frankfurt, `eu-central-1`). This separates project access, data and later billing. Keeping the AHABONA organization separate means a future Pro upgrade for AHABONA need not upgrade the existing IWACU organization. No organization or project has been created by this recommendation.
+
+**Connection direction:**
+- Lightsail continues hosting the Node.js API and existing AHABONA web application.
+- The Node.js server connects to Supabase PostgreSQL over TLS using a persistent-server connection method and a small application connection pool. Test IPv6 direct connectivity first because the supplied Lightsail instance is dual-stack; use Supabase's IPv4 session pooler if direct IPv6 connectivity is not available.
+- Database credentials stay on the server and never enter browser code, GitHub or logs. Use a least-privilege runtime database role; don't use the project owner/superuser for ordinary API queries.
+- Keep AHABONA's existing authentication/session behavior during the database migration unless an independent review approves a separate Auth change. Supabase Auth is not required just to use Supabase PostgreSQL.
+- Public visitors and candidates continue to use AHABONA server APIs. Do not expose raw database credentials or broad database access to the browser.
+- Use the PostgreSQL database for related structured application data: existing account/profile data, job posts, employer records, applications, preferences, matches, notifications and audit. Separate these through clear table/schema boundaries and access policies, not disconnected databases.
+- Portfolio photos and private documents are files, not relational rows. Store them in controlled object storage (Supabase Storage or an evaluated S3 design), with private buckets, signed access, size/type checks and retention rules.
+- Add cache/search/queue products only when measured workload or product requirements justify them; PostgreSQL remains the source of truth.
+
+**Migration rule:** The current source code uses `node:sqlite` / `DatabaseSync`. Before building a jobs-only database, audit the actual production SQLite schema, data volume, auth/session dependencies and backup location. Prepare a staging Supabase project, migrate the existing AHABONA data with repeatable scripts, preserve stable user IDs and ownership relationships, compare row counts and critical records, test every existing user flow, and prepare cutover/rollback. Do not maintain two competing writable sources of truth. Do not cut production over until the owner approves the migration and the rollback has been rehearsed.
+
+**Free-plan use versus production-readiness:**
+- Supabase Free is suitable for development, schema experiments and controlled QA. Current published allowances include 500 MB database size per project, 5 GB egress, 1 GB file storage and up to two active Free projects across the owner's/admin memberships.
+- Free projects can pause after seven days of low database activity, and Free does not provide downloadable automatic database backups. This is not an acceptable final reliability posture for a public production system holding job applications and personal data; use scheduled off-site exports while testing.
+- Current Supabase Pro starts at $25/month for an organization, includes $10 monthly compute credits covering one default Micro/Nano compute project, 8 GB database disk, 100 GB file storage, 250 GB egress, and daily backups kept for seven days. Overages, add-ons or a larger compute size can increase cost. Re-check plan terms at the time of upgrade.
+- Production release gate: activate the dedicated AHABONA organization/project on the appropriate paid plan, verify backups and restore, configure spend alerts, RLS/least-privilege access, SSL and monitoring before moving real user data. This is a future readiness condition, not a request to purchase now.
+
+**Alternatives considered:**
+- Keep SQLite on Lightsail: simplest immediate continuity, but not the recommended long-term primary database for the planned relational jobs/applications/matching workflows and future growth.
+- Lightsail managed database: AWS-native PostgreSQL/MySQL with less self-hosting work; published plans start at $15/month for 1 GB RAM/40 GB SSD, but it does not provide the same directly connected Supabase management workflow in this ChatGPT workspace.
+- Supabase PostgreSQL: recommended because it is managed PostgreSQL, has the relevant data/security/backup tools, is accessible through the connected Supabase tools in this workspace, and supports Frankfurt region selection. Re-evaluate on measured requirements rather than locking AHABONA into a provider forever.
+
+### AWS Free Plan and billing guardrail
+
+The AWS screenshot confirms the Lightsail instance and size, not the AWS account's billing plan or remaining credits. Current AWS documentation says a new AWS Free account plan lasts up to six months or until credits are exhausted, whichever happens first; the plan closes the AWS account at expiry, with a 90-day window to upgrade and regain access before data is erased. New accounts can receive up to $200 in credits. A Paid plan with credits behaves differently, so Phase 0 must record the exact account plan, credit balance and expiry date from the AWS Cost and Usage widget.
+
+The current Lightsail public-IPv4 bundle matching 1 GB RAM / 2 vCPUs / 40 GB SSD is listed at $7/month. That price is not proof of what the owner is currently paying: actual charges depend on plan, credits, trial eligibility, usage and billing period. Build for the intended product scale; use the Free Plan for experimentation and plan the billing transition before it ends, rather than limiting the architecture to today's trial.
+
 
 ## 4. Ibyemezo bidahinduka (Guardrails)
 
