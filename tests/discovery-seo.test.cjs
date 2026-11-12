@@ -28,11 +28,12 @@ test('public profile HTML renders canonical metadata and approved public fields'
     pid: 'a1b2c3d4', name: 'Eddy Example', district: 'Gasabo', province: 'Umujyi wa Kigali',
     caps: ['Umushoferi', 'Umukanishi'], intro: 'Mfite uburambe mu gutwara imodoka.',
     phone: '+250 788 123 456', wa: '0788123456', phones: [], photos: ['/photos/a1b2c3d4-0.jpg?v=1794469200000'],
-    thumb: '/photos/a1b2c3d4-t.jpg?v=1794469200000'
+    thumb: '/photos/a1b2c3d4-t.jpg?v=1794469200000', edu: 'Amashuri yisumbuye', svc: ['Gasabo'],
+    languages: ['rw', 'en'], experience: [{ role: 'Umushoferi', where: 'Kigali', years: 'Imyaka 4' }]
   }, { updatedAt: 1794469200000 });
   assert.match(html, /<link rel="canonical" href="https:\/\/ahabona\.duckdns\.org\/u\/a1b2c3d4">/);
   assert.match(html, /Eddy Example/); assert.match(html, /Umushoferi/);
-  assert.match(html, /href="tel:\+250788123456"/); assert.match(html, /og:image/);
+  assert.match(html, /href="tel:\+250788123456"/); assert.match(html, /https:\/\/wa\.me\/250788123456/); assert.match(html, /Indimi/); assert.match(html, /Gasabo/); assert.match(html, /Imyaka 4/); assert.match(html, /og:image/);
   assert.match(html, /application\/ld\+json/); assert.match(html, /AHABONA ntiyishyurisha/);
 });
 test('profile page cannot leak a phone omitted by the public API projection', () => {
