@@ -8,6 +8,7 @@ const zlib=require('node:zlib');
 const {buildRobotsTxt,buildSitemapXml,renderPublicProfileHtml,renderInfoPageHtml,getServiceLandingDefinition,getServiceLandingSlugs,renderServiceLandingHtml,DEFAULT_BASE_URL}=require('./discovery-seo.cjs');
 const {DatabaseSync}=require('node:sqlite');
 const {execFile}=require('node:child_process');
+const {createOptionalPostgresPool}=require('./server/postgres.cjs');
 
 const PROV={
   "Umujyi wa Kigali":["Gasabo","Kicukiro","Nyarugenge"],
@@ -1714,6 +1715,8 @@ function makeCtx(opts){
   const secure=!!opts.secure;
   const proxy=!!opts.proxy;
   const dev=!!opts.dev;
+  // Neon remains disabled unless a development/staging environment opts in explicitly.
+  const pgPool=createOptionalPostgresPool(process.env);
   fs.mkdirSync(dataDir,{recursive:true});
   fs.mkdirSync(path.join(dataDir,'photos'),{recursive:true});
   const dbFile=path.join(dataDir,'ahabona.db');
@@ -1859,7 +1862,7 @@ function makeCtx(opts){
     return Q("SELECT * FROM strip_ads WHERE active=1 AND (start_at IS NULL OR start_at<=?) AND (end_at IS NULL OR end_at>=?) ORDER BY priority DESC, id ASC").all(t,t);
   };
   return {
-    db,Q,store,settings,rate,mailer,caps,loadCaps,capName,
+    db,Q,store,settings,rate,mailer,caps,loadCaps,capName,pgPool,postgresEnabled:!!pgPool,
     ipOf,deviceOf,parseCookies,sessionUser,newSession,destroySession,
     isAdmin,isSuper,can,adminLog,adminBoot,featureEnabled,stripActive,mediaStore,
     secure,dev,proxy,dataDir,pubDir,
@@ -8157,7 +8160,8 @@ function start(opts){
   }
   function close(){
     return new Promise(function(resolve){
-      server.close(function(){
+      server.close(async function(){
+        try{if(ctx.pgPool)await ctx.pgPool.end()}catch(e){}
         try{ctx.db.close()}catch(e){}
         resolve();
       });
