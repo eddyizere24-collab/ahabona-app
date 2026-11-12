@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   createPostgresPool,
+  createOptionalPostgresPool,
   checkPostgres,
   withTransaction,
   parseDatabaseUrl
@@ -142,4 +143,14 @@ test('rollback failure evicts the connection and releases it only once', async (
     /original failure/
   );
   assert.deepEqual(calls, ['BEGIN', 'ROLLBACK', 'release-error']);
+});
+
+
+test('PostgreSQL is disabled unless the explicit feature flag is enabled', () => {
+  assert.equal(createOptionalPostgresPool({}, FakePool), null);
+  const pool = createOptionalPostgresPool(
+    makeEnv({ AHABONA_ENABLE_POSTGRES: '1' }),
+    FakePool
+  );
+  assert.ok(pool instanceof FakePool);
 });
