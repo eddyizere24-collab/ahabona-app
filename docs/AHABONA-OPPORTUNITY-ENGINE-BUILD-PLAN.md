@@ -4,7 +4,7 @@
 **Inyandiko-fatizo yo kubaka Job & Opportunity Marketplace ihujwe na AHABONA**
 
 - Document ID: AHABONA-OPP-001
-- Version: 1.0
+- Version: 1.1
 - Itariki: 12 Ugushyingo 2026
 - Status: Planning baseline; si uburenganzira bwo guhindura Production.
 - Repository: eddyizere24-collab/ahabona-app
@@ -48,7 +48,30 @@ Igenzura ryakozwe kuri branch iri hejuru, commit 58a406afe238dd8360108ac48cde1aa
 
 **Technical decision:** Ntituzahitamo database nshya kubera ko package dependency iboneka gusa. Phase 0 igomba kwemeza production host, real schema, auth, backups, uploads, email provider, PWA/service worker, deploy method na active source revision. Existing account/profile system ni yo igomba kongerwaho, ntituzubaka accounts ebyiri cyangwa user database nshya.
 
-## 3. Ibyemezo bidahinduka (Guardrails)
+## 3. Hosting facts zemejwe na nyir'urubuga (12 Ugushyingo 2026)
+
+Screenshot ya AWS Lightsail nyir'urubuga yatanze igaragaza ibi bikurikira. Ibi ni facts zigaragara kuri console igihe screenshot yafashwe; si uko twagenzuye server imbere.
+
+| Ikintu | Icyemejwe |
+|---|---|
+| Cloud platform | Amazon Lightsail (AWS) |
+| Instance name | ahabona-server |
+| Blueprint / application family | Node.js |
+| Instance state | Running |
+| System status check | Passed |
+| Instance status check | Passed |
+| Instance plan | 1 GB RAM, 2 vCPUs, 40 GB SSD |
+| Instance class | General purpose |
+| AWS region / zone | Frankfurt, Zone A (eu-central-1a) |
+| Networking | Dual-stack; Static IPv4 and public IPv6 are assigned |
+
+**Icyo bivuze ku kubaka:** AHABONA igomba gufatwa nka application ikorera kuri Lightsail VPS yayo. Deployment, backup, monitoring, server resource budget, process manager, Node runtime, database na storage bigomba kugenzurwa kuri iyi instance. Ntituzafata Vercel nk'aho ari production host yayo.
+
+**Ibyo screenshot itagaragaza kandi bigomba kugenzurwa kuri Phase 0:** domain/DNS mapping, exact Node.js runtime version, repository path and deployed Git SHA, process manager and startup command, reverse proxy/TLS settings, environment variable names (values never print), database file location and backup/restore procedure, uploaded-file storage, firewall/security group rules, logs and monitoring. Screenshot ya console yonyine ntihamya ko branch cyangwa commit runaka ari yo iri live.
+
+Public server IPs ntizishyirwa muri iyi product document; zibikwa mu private operations inventory aho bikenewe.
+
+## 4. Ibyemezo bidahinduka (Guardrails)
 
 1. Homepage iguma yerekana abantu n'ubushobozi bwabo ako kanya; jobs ntizisimbura abantu.
 2. Job icon iba nto kuri header. Badge yerekana jobs notifications zitarasomwa n'umukoresha winjiye; ntigaragaza private unread count ku visitor utinjiye.
@@ -63,7 +86,7 @@ Igenzura ryakozwe kuri branch iri hejuru, commit 58a406afe238dd8360108ac48cde1aa
 11. DB changes ziba additive, zifite backup na rollback plan; nta gusiba data itabanje kugenzurwa.
 12. Nta main merge, Production deploy, PM2 restart, production migration cyangwa host configuration change hatabaye release approval yihariye.
 
-## 4. Roles
+## 5. Roles
 
 - **Visitor:** kureba abantu, profiles, jobs na details; gushakisha no report.
 - **Registered candidate:** preferences, Talent Passport, saved jobs, Apply, application tracking, notifications.
@@ -77,7 +100,7 @@ Igenzura ryakozwe kuri branch iri hejuru, commit 58a406afe238dd8360108ac48cde1aa
 
 Umuntu umwe ashobora kuba candidate n'employer kuri account imwe.
 
-## 5. End-to-end journeys
+## 6. End-to-end journeys
 
 ### 5.1 Candidate
 1. Afungura AHABONA akabona homepage isanzwe.
@@ -107,7 +130,7 @@ System igaragaza progress, ikanasobanura impamvu isaba buri field. User ashobora
 ### 5.4 Apply and hiring
 Candidate yohereza application muri AHABONA. Employer abona applicants mu Employer Desk, akabareba, akabashyira muri stages, akohereza messages cyangwa interview invites. Candidate abona status updates. Internal employer notes ntizigaragarira candidate.
 
-## 6. Functional requirements
+## 7. Functional requirements
 
 | ID | Requirement | Acceptance criteria |
 |---|---|---|
@@ -140,7 +163,7 @@ Candidate yohereza application muri AHABONA. Employer abona applicants mu Employ
 | FR-027 | Saved jobs | save/unsave, saved list and changed/expired status. |
 | FR-028 | Communication | in-platform communication with consent, ownership, anti-abuse and attachment checks. |
 
-## 7. Job data and experience
+## 8. Job data and experience
 
 ### Job types
 Full-time, part-time, temporary, casual/day work, contract, project-based, gig/short task, internship/trainee, apprenticeship. The posting flow must distinguish employment type, work arrangement (on-site/remote/hybrid where relevant), schedule, duration and location.
@@ -154,7 +177,7 @@ List and detail cards show title, employer and genuine verification state, locat
 ### Job application
 Candidate uses Talent Passport and only answers missing job-specific questions. Employer selects one of: Apply on AHABONA (preferred), in-platform contact, or external apply link/email. AHABONA must not pretend it handles an external application.
 
-## 8. Talent Passport
+## 9. Talent Passport
 
 Passport is a reusable skills profile, not a rigid CV template. It may include:
 - Basic identity and selected public contact method.
@@ -170,7 +193,7 @@ Passport is a reusable skills profile, not a rigid CV template. It may include:
 
 User controls public visibility, employer sharing and matching opt-in. Profile completion must not be confused with verification or job suitability.
 
-## 9. Matching Engine and Talent Watch
+## 10. Matching Engine and Talent Watch
 
 Matching must consider user-declared skills/interest, required vs preferred skills, location/commute preferences, work type, availability and declared constraints. It must explain why a job matches and allow user feedback. Do not infer protected attributes or use sensitive personal data to rank candidates. Avoid opaque automated rejection.
 
@@ -180,7 +203,7 @@ Matching must consider user-declared skills/interest, required vs preferred skil
 - Avoid duplicate alerts, expired listings and over-notification.
 - Matching rules require versioning and deterministic tests.
 
-## 10. Notifications
+## 11. Notifications
 
 Three channels:
 1. **In-app:** icon badge, notifications center, unread/read state, deep link to relevant job/application, history.
@@ -194,7 +217,7 @@ Controls:
 - Unread count is per user/device policy, consistent across devices where account identity permits.
 - SMS/WhatsApp are not part of v1; assess costs and consent before adding.
 
-## 11. Logical data model (subject to Phase 0 audit)
+## 12. Logical data model (subject to Phase 0 audit)
 
 Proposed entities, not production SQL:
 - job_posts
@@ -215,7 +238,7 @@ Proposed entities, not production SQL:
 
 Reuse existing users, authentication, profiles and taxonomy. Define foreign keys, indexes, ownership rules, deletion/retention and migration strategy only after inspecting the exact production schema. Files containing certificates or personal documents must use private storage, signed access and retention controls; never commit them to GitHub.
 
-## 12. Architecture direction
+## 13. Architecture direction
 
 - Preserve the existing Node.js server and React/Vite client unless Phase 0 proves a change is necessary.
 - Add bounded modules/services for jobs, employer, applications, matching, notifications, moderation and audit; avoid expanding the existing server into an untestable monolith.
@@ -225,7 +248,7 @@ Reuse existing users, authentication, profiles and taxonomy. Define foreign keys
 - Do not introduce paid APIs or infrastructure without checking owner budget and free-tier limits.
 - Maintain responsive UI for low-end Android and weak network connections.
 
-## 13. Trust, privacy and safety
+## 14. Trust, privacy and safety
 
 - Verify employer email/phone as appropriate; organization verification requires evidence and reviewer process.
 - Show verification badges only when a real check has completed.
@@ -239,7 +262,7 @@ Reuse existing users, authentication, profiles and taxonomy. Define foreign keys
 - Define retention, export and deletion rules before launch.
 - AI can assist with drafting, classification and flagging; humans make moderation and hiring decisions. AI must not fabricate information or reject people autonomously.
 
-## 14. UX, accessibility and performance
+## 15. UX, accessibility and performance
 
 - Preserve homepage and current profile discovery priority.
 - Jobs area is separate and reachable from the small header icon.
@@ -251,7 +274,7 @@ Reuse existing users, authentication, profiles and taxonomy. Define foreign keys
 - Mobile-first; keep bundles, images and network requests light; paginate lists and avoid mandatory animation.
 - Do not show push permission on page load; explain benefit, ask at a meaningful point after user action.
 
-## 15. Measurement / KPIs
+## 16. Measurement / KPIs
 
 Measure, do not invent targets before a baseline:
 - Job publish completion and time to publish.
@@ -265,7 +288,7 @@ Measure, do not invent targets before a baseline:
 
 Targets are agreed after pilot baseline data; never optimize volume at the expense of relevance or trust.
 
-## 16. Phased roadmap and gates
+## 17. Phased roadmap and gates
 
 | Phase | Work | Exit evidence |
 |---|---|---|
@@ -280,7 +303,7 @@ Targets are agreed after pilot baseline data; never optimize volume at the expen
 
 Every phase has a deliverable, requirements IDs, tests, review and decision gate. No phase advances because code was merely written.
 
-## 17. Quality strategy and Definition of Done
+## 18. Quality strategy and Definition of Done
 
 Test cases include:
 - Anonymous visitor sees jobs but cannot access private candidate/employer data.
@@ -299,7 +322,7 @@ Test cases include:
 
 Feature is done only when its requirement ID and issue/PR exist; UI has loading/empty/error/success states; server validation, authorization and ownership are tested; migrations/backup/rollback are documented; unit/integration/end-to-end tests pass; accessibility/mobile/localization are checked; no secrets/private data enter logs or GitHub; docs/changelog updated; commit SHA and CI result are recorded. Production status must be labeled honestly: branch only, staging verified or production verified.
 
-## 18. Initial GitHub work breakdown
+## 19. Initial GitHub work breakdown
 
 - EPIC-00 Product & technical audit.
 - EPIC-01 Data and API foundation.
@@ -313,7 +336,7 @@ Feature is done only when its requirement ID and issue/PR exist; UI has loading/
 
 Every issue must include purpose, user story, FR/EPIC IDs, dependencies, database/API impact, privacy/security risks, acceptance tests, rollback notes and evidence required to close.
 
-## 19. Decisions to resolve in Phase 0
+## 20. Decisions to resolve in Phase 0
 
 1. Exact active host revision and deployment/rollback process.
 2. Existing sign-up/login and verified contact methods.
@@ -331,7 +354,7 @@ Every issue must include purpose, user story, FR/EPIC IDs, dependencies, databas
 
 These are not reasons to stall the project; they are decisions that prevent building on guessed infrastructure or weakening user privacy.
 
-## 20. Project management and change control
+## 21. Project management and change control
 
 **Source of truth**
 - Product baseline: this document in docs/.
@@ -349,7 +372,7 @@ These are not reasons to stall the project; they are decisions that prevent buil
 
 New requirements get IDs and rationale. Changes to homepage, privacy, pricing, candidate consent, product direction or release guardrails require owner decision. Each schema change requires additive migration plus backup/rollback. No secrets, private user data or identity documents in repository. Use feature branch/PR before main; no merge or production release without explicit approval.
 
-## 21. Icyo tubanza gukora
+## 22. Icyo tubanza gukora
 
 Tangira kuri **Phase 0: Product & Technical Audit**. Reba live host n'uko account, DB, email, PWA/push, file storage, backups na deploy bikora. Ibyavuye muri audit bibikwe muri GitHub issues nk'ibipimo n'ibimenyetso. Nyuma y'ibyo, dufate architecture decisions maze dutangire Phase 1. Nta code igomba guhita ishyirwa kuri Production.
 
@@ -361,4 +384,4 @@ Tangira kuri **Phase 0: Product & Technical Audit**. Reba live host n'uko accoun
 
 | Version | Itariki | Ibyahindutse |
 |---|---|---|
-| 1.0 | 12 Ugushyingo 2026 | Planning baseline: product requirements, technical direction, phases, trust/safety, tests and release gates. |
+| 1.0 | 12 Ugushyingo 2026 | Planning baseline: product requirements, technical direction, phases, trust/safety, tests and release gates. |\n| 1.1 | 12 Ugushyingo 2026 | Recorded owner-provided Lightsail hosting facts and clarified VPS-specific Phase 0 checks. |
