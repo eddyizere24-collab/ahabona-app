@@ -105,12 +105,12 @@ function normalizeAnswers(rawAnswers, questions) {
 
 function redactContactText(value, maxLength) {
   return cleanText(value, maxLength)
-    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi, '[contact hidden]')
-    .replace(/(?:\\+?25\\d[\\s().-]*)?(?:\\d[\\s().-]*){8,13}/g, '[contact hidden]');
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[contact hidden]')
+    .replace(/(?:\+?25\d[\s().-]*)?(?:\d[\s().-]*){8,13}/g, '[contact hidden]');
 }
 
 function safeProfileList(value, maxItems) {
-  const forbidden = /phone|email|contact|national|birth|gender|address|social|password|secret|token|document|identity|user_id|profile_id|whatsapp|\\bwa\\b/i;
+  const forbidden = /phone|email|contact|national|birth|gender|address|social|password|secret|token|document|identity|user_id|profile_id|whatsapp|\bwa\b/i;
   const clean = (item, depth) => {
     if (depth > 3 || item === null || item === undefined) return undefined;
     if (typeof item === 'string') return redactContactText(item, 1000);
