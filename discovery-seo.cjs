@@ -22,13 +22,18 @@ function buildRobotsTxt(baseUrl = DEFAULT_BASE_URL) {
     'User-agent: OAI-SearchBot', 'Allow: /', ...commonDisallows, '',
     'User-agent: GPTBot', 'Disallow: /', '', 'Sitemap: ' + base + '/sitemap.xml', ''].join('\n');
 }
-function buildSitemapXml(rows, baseUrl = DEFAULT_BASE_URL) {
+function buildSitemapXml(rows, baseUrl = DEFAULT_BASE_URL, serviceSlugs = []) {
   const base = baseOrigin(baseUrl);
   const entries = [
     '<url><loc>' + escapeXml(base + '/') + '</loc></url>',
     '<url><loc>' + escapeXml(base + '/about') + '</loc></url>',
     '<url><loc>' + escapeXml(base + '/how-it-works') + '</loc></url>'
   ];
+  for (const slug of Array.isArray(serviceSlugs) ? serviceSlugs : []) {
+    if (/^[a-z0-9-]{2,60}$/.test(String(slug))) {
+      entries.push('<url><loc>' + escapeXml(base + '/services/' + slug) + '</loc></url>');
+    }
+  }
   const seen = new Set();
   for (const row of Array.isArray(rows) ? rows : []) {
     const pid = String(row && row.pid || '');
@@ -233,4 +238,121 @@ function renderInfoPageHtml(pageKey, options = {}) {
     '</article></main><footer class="wrap footer">AHABONA — Urugo rw’Izuba. <a href="/">Shakisha abantu cyangwa wigaragaze.</a></footer></body></html>';
 }
 
-module.exports = { DEFAULT_BASE_URL, buildRobotsTxt, buildSitemapXml, renderPublicProfileHtml, renderInfoPageHtml, escapeHtml, isoDate };
+
+const SERVICE_LANDING_PAGES = [
+  { slug: 'umushoferi', query: 'umushoferi', rw: 'Abashoferi mu Rwanda', en: 'Drivers in Rwanda',
+    rwDescription: 'Shaka umushoferi uri muri AHABONA. Reba profiles z’abashoferi, aho bakorera n’uburyo bwo kuvugana na bo.',
+    enDescription: 'Find drivers in Rwanda on AHABONA. Review public profiles, service areas and available contact methods.' },
+  { slug: 'umukozi-wo-mu-rugo', query: 'umukozi wo mu rugo', rw: 'Abakozi bo mu rugo mu Rwanda', en: 'House helpers in Rwanda',
+    rwDescription: 'Shaka abantu bagaragaje ko batanga serivisi zo mu rugo, urebe aho bakorera n’uko wabavugisha.',
+    enDescription: 'Find people who list household services on AHABONA, review their public profiles and contact them directly.' },
+  { slug: 'umubaji', query: 'umubaji', rw: 'Ababaji mu Rwanda', en: 'Carpenters in Rwanda',
+    rwDescription: 'Shaka ababaji bagaragaje ubushobozi bwabo kuri AHABONA, urebe profiles zabo n’aho batangira serivisi.',
+    enDescription: 'Find carpenters who have public profiles on AHABONA and contact them directly.' },
+  { slug: 'umudozi', query: 'umudozi', rw: 'Abadozi mu Rwanda', en: 'Tailors in Rwanda',
+    rwDescription: 'Shaka abadozi bo mu Rwanda kuri AHABONA, urebe ibyo bagaragaje n’uburyo bwo kubavugisha.',
+    enDescription: 'Discover tailors in Rwanda through their public AHABONA profiles.' },
+  { slug: 'umukanishi-wimodoka', query: 'umukanishi wimodoka', rw: 'Abakanishi b’imodoka mu Rwanda', en: 'Car mechanics in Rwanda',
+    rwDescription: 'Shaka abakanishi b’imodoka bagaragaje serivisi batanga kuri AHABONA.',
+    enDescription: 'Find car mechanics with public AHABONA profiles and contact them directly.' },
+  { slug: 'umufundi', query: 'umufundi', rw: 'Abafundi n’abubatsi mu Rwanda', en: 'Masons and builders in Rwanda',
+    rwDescription: 'Shaka abafundi n’abubatsi bagaragaje ubumenyi bwabo kuri AHABONA.',
+    enDescription: 'Find masons and builders in Rwanda through public AHABONA profiles.' },
+  { slug: 'umutetsi', query: 'umutetsi', rw: 'Abatetsi mu Rwanda', en: 'Cooks in Rwanda',
+    rwDescription: 'Shaka abatetsi bagaragaje serivisi zabo kuri AHABONA.',
+    enDescription: 'Find cooks who list their services on AHABONA.' },
+  { slug: 'umuhinzi', query: 'umuhinzi', rw: 'Abahinzi mu Rwanda', en: 'Farmers in Rwanda',
+    rwDescription: 'Menya abahinzi bagaragaje ibyo bakora n’ubushobozi bwabo kuri AHABONA.',
+    enDescription: 'Discover farmers and agricultural service providers with public AHABONA profiles.' },
+  { slug: 'umucuruzi', query: 'umucuruzi', rw: 'Abacuruzi n’abatanga ibicuruzwa mu Rwanda', en: 'Traders and sellers in Rwanda',
+    rwDescription: 'Shaka abacuruzi bagaragaje ibikorwa cyangwa ibicuruzwa kuri AHABONA.',
+    enDescription: 'Find traders and sellers who have public profiles on AHABONA.' },
+  { slug: 'umwogoshi', query: 'umwogoshi', rw: 'Abogoshi mu Rwanda', en: 'Barbers in Rwanda',
+    rwDescription: 'Shaka abogoshi bagaragaje aho bakorera n’uburyo bwo kubavugisha kuri AHABONA.',
+    enDescription: 'Find barbers in Rwanda through AHABONA public profiles.' },
+  { slug: 'umuvuzi-wimisatsi', query: 'umuvuzi wimisatsi', rw: 'Abavura imisatsi mu Rwanda', en: 'Hairdressers in Rwanda',
+    rwDescription: 'Shaka abavura imisatsi bagaragaje serivisi zabo kuri AHABONA.',
+    enDescription: 'Find hairdressers and hair stylists with public AHABONA profiles.' },
+  { slug: 'umufotozi', query: 'umufotozi', rw: 'Abafotozi mu Rwanda', en: 'Photographers in Rwanda',
+    rwDescription: 'Shaka abafotozi bagaragaje ibikorwa byabo kuri AHABONA.',
+    enDescription: 'Find photographers in Rwanda with public AHABONA profiles.' },
+  { slug: 'umuganga', query: 'umuganga', rw: 'Abaganga n’abatanga serivisi z’ubuzima', en: 'Healthcare professionals in Rwanda',
+    rwDescription: 'Reba imyirondoro y’abantu bagaragaje serivisi z’ubuzima kuri AHABONA. Banza ugenzure impamyabumenyi n’impushya zabo ku nzego zibifitiye ububasha.',
+    enDescription: 'Browse public profiles of people who list health-related services. Verify professional registration and licensing with the relevant authorities before using healthcare services.' }
+];
+function getServiceLandingDefinition(slug) {
+  return SERVICE_LANDING_PAGES.find(page => page.slug === String(slug || '')) || null;
+}
+function getServiceLandingSlugs() {
+  return SERVICE_LANDING_PAGES.map(page => page.slug);
+}
+function renderServiceLandingHtml(page, profiles, options = {}) {
+  if (!page || !/^[a-z0-9-]{2,60}$/.test(page.slug || '')) throw new TypeError('A valid service landing page is required');
+  const base = baseOrigin(options.baseUrl);
+  const list = Array.isArray(profiles) ? profiles.slice(0, 60) : [];
+  const canonical = base + '/services/' + page.slug;
+  const hasResults = list.length > 0;
+  const title = page.rw + ' | AHABONA';
+  const description = cleanText(page.rwDescription, 260);
+  const cards = list.map(profile => {
+    const pid = String(profile.pid || '');
+    if (!PUBLIC_PID_RE.test(pid)) return '';
+    const name = cleanText(profile.name, 120) || 'Umwirondoro wa AHABONA';
+    const district = cleanText(profile.district, 100);
+    const province = cleanText(profile.province, 100);
+    const location = [district, province].filter(Boolean).join(', ');
+    const skills = Array.isArray(profile.caps) ? profile.caps.map(value => cleanText(value, 70)).filter(Boolean).slice(0, 4) : [];
+    const photo = safePhotoPath(profile.thumb) || (Array.isArray(profile.photos) ? profile.photos.map(safePhotoPath).find(Boolean) : '') || '';
+    const intro = cleanText(profile.intro, 260);
+    return '<article class="profile"><a class="profile-main" href="/u/' + escapeHtml(pid) + '">' +
+      (photo ? '<img src="' + escapeHtml(base + photo) + '" alt="Ifoto ya ' + escapeHtml(name) + '" loading="lazy">' : '') +
+      '<div><h2>' + escapeHtml(name) + '</h2>' +
+      (location ? '<p class="muted">' + escapeHtml(location) + '</p>' : '') +
+      (skills.length ? '<p class="skills">' + skills.map(escapeHtml).join(' · ') + '</p>' : '') +
+      (intro ? '<p>' + escapeHtml(intro) + '</p>' : '') +
+      '<span class="more">Reba umwirondoro</span></div></a></article>';
+  }).filter(Boolean).join('');
+  const structuredData = {
+    '@context': 'https://schema.org', '@type': 'CollectionPage', name: title, description,
+    url: canonical, inLanguage: ['rw', 'en'],
+    mainEntity: {
+      '@type': 'ItemList',
+      numberOfItems: list.length,
+      itemListElement: list.filter(profile => PUBLIC_PID_RE.test(String(profile.pid || ''))).map((profile, index) => ({
+        '@type': 'ListItem', position: index + 1,
+        url: base + '/u/' + profile.pid,
+        name: cleanText(profile.name, 120)
+      }))
+    },
+    isPartOf: { '@type': 'WebSite', name: 'AHABONA', url: base + '/' }
+  };
+  return '<!doctype html><html lang="rw"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<meta name="robots" content="' + (hasResults ? 'index,follow' : 'noindex,follow') + '">' +
+    '<meta name="theme-color" content="#1a9b6c"><title>' + escapeHtml(title) + '</title>' +
+    '<meta name="description" content="' + escapeHtml(description) + '">' +
+    '<link rel="canonical" href="' + escapeHtml(canonical) + '">' +
+    '<meta property="og:type" content="website"><meta property="og:site_name" content="AHABONA">' +
+    '<meta property="og:title" content="' + escapeHtml(title) + '">' +
+    '<meta property="og:description" content="' + escapeHtml(description) + '">' +
+    '<meta property="og:url" content="' + escapeHtml(canonical) + '">' +
+    '<script type="application/ld+json">' + jsonForHtml(structuredData) + '</script>' +
+    '<style>:root{color-scheme:light;--green:#1a9b6c;--deep:#103d2b;--ink:#1e2a32;--muted:#5a6470;--paper:#faf7ef;--line:#e8e4da}' +
+    '*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}' +
+    'a{color:var(--green);text-decoration:none}.wrap{width:min(900px,100% - 28px);margin:0 auto}.top{background:#fff;border-bottom:1px solid var(--line)}' +
+    '.bar{display:flex;align-items:center;justify-content:space-between;padding:14px 0}.brand{font-weight:850;color:var(--deep);font-size:20px}' +
+    'main{margin:24px auto}.lead{background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px}h1{margin:0 0 8px;color:var(--deep);font-size:clamp(27px,5vw,38px);line-height:1.2}' +
+    '.muted{color:var(--muted);font-size:14px}.profiles{display:grid;gap:12px;margin-top:14px}.profile{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}' +
+    '.profile-main{display:flex;gap:14px;padding:14px;color:var(--ink)}.profile img{width:104px;height:104px;object-fit:cover;border-radius:12px;flex:none;background:#edf1ed}' +
+    '.profile h2{font-size:19px;margin:0 0 4px;color:var(--deep)}.profile p{margin:4px 0;font-size:14px}.skills{color:#15583b;font-weight:650}.more{display:inline-block;margin-top:5px;color:var(--green);font-weight:750;font-size:14px}' +
+    '.empty{margin-top:14px;padding:18px;background:#fff;border:1px solid var(--line);border-radius:14px}.foot{text-align:center;padding:4px 0 28px;color:var(--muted);font-size:14px}' +
+    '@media(max-width:520px){.profile-main{gap:10px;padding:11px}.profile img{width:82px;height:82px}}' +
+    '</style></head><body><header class="top"><div class="wrap bar"><a class="brand" href="/">AHABONA</a><a href="/">Subira kuri AHABONA</a></div></header>' +
+    '<main class="wrap"><section class="lead"><h1>' + escapeHtml(page.rw) + '</h1><p>' + escapeHtml(description) + '</p>' +
+    '<p class="muted">Kwiyandikisha no gushakisha kuri AHABONA ni ubuntu. Abantu bavugana kandi bakumvikana hagati yabo.</p></section>' +
+    (hasResults ? '<section class="profiles" aria-label="Abantu bafite public profiles">' + cards + '</section>' :
+      '<section class="empty"><h2>Nta muntu ubonetse muri iki cyiciro ubu</h2><p>Subira kuri AHABONA ushakishe abandi cyangwa ugerageze nyuma.</p></section>') +
+    '<footer class="foot">AHABONA ntitanga akazi kandi ntiyivanga mu masezerano y’abakoresha. <a href="/">Shakisha abantu kuri AHABONA.</a></footer></main></body></html>';
+}
+
+module.exports = { DEFAULT_BASE_URL, buildRobotsTxt, buildSitemapXml, renderPublicProfileHtml, renderInfoPageHtml, getServiceLandingDefinition, getServiceLandingSlugs, renderServiceLandingHtml, escapeHtml, isoDate };
