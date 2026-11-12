@@ -4,7 +4,7 @@
 **Inyandiko-fatizo yo kubaka Job & Opportunity Marketplace ihujwe na AHABONA**
 
 - Document ID: AHABONA-OPP-001
-- Version: 1.2
+- Version: 1.3
 - Itariki: 12 Ugushyingo 2026
 - Status: Planning baseline; si uburenganzira bwo guhindura Production.
 - Repository: eddyizere24-collab/ahabona-app
@@ -72,40 +72,61 @@ Screenshot ya AWS Lightsail nyir'urubuga yatanze igaragaza ibi bikurikira. Ibi n
 Public server IPs ntizishyirwa muri iyi product document; zibikwa mu private operations inventory aho bikenewe.
 
 
-### ADR-001: Database target and separation (recommended; not yet provisioned)
+### ADR-001: Database platform for AHABONA (Neon recommended; not provisioned)
 
-**Recommendation:** Use one dedicated Supabase-managed PostgreSQL project as the long-term authoritative database for AHABONA, while keeping the existing Node.js application/API on Lightsail. Do not create multiple unrelated databases for users, jobs, applications and notifications. Those are related parts of the same platform and should share one transactional source of truth.
+**Status:** Architectural recommendation for owner review. No Neon project, organization, database, migration or production configuration has been created or changed. This decision supersedes the Supabase recommendation in document v1.2.
 
-**Read-only connector discovery (12 Nov 2026):**
-- The connected Supabase organization is currently on the Free plan.
-- It contains one active, healthy project named `iwacu-rwanda-2`, in `eu-central-1`; this is the IWACU project, not AHABONA.
-- Supabase allows two active Free projects across organizations where the owner/admin belongs. One project slot is therefore currently available based on the visible connected account state.
-- The Supabase connector is available in this ChatGPT workspace for project discovery, schema inspection, SQL queries, migrations, logs, advisors and supported project operations.
+**Decision:** Use **Neon Lakebase Postgres as AHABONA's primary relational database/backend**, on a dedicated Neon project in AWS Europe Central 1 (Frankfurt, `eu-central-1`). Keep AHABONA's existing Node.js application/API on the current Lightsail instance during the first phases. Do not add separate databases for jobs, users, applications, matching or notifications: these are connected business entities and must share one PostgreSQL source of truth.
 
-**Separation rule:** Never put AHABONA tables or AHABONA user records inside the IWACU project. Recommended future layout is a separate Supabase Organization named AHABONA, with one AHABONA project in Central EU (Frankfurt, `eu-central-1`). This separates project access, data and later billing. Keeping the AHABONA organization separate means a future Pro upgrade for AHABONA need not upgrade the existing IWACU organization. No organization or project has been created by this recommendation.
+**Why Neon is the current recommendation:**
+- It is native PostgreSQL, suitable for relational entities, transactions, indexes, constraints, search and matching logic.
+- Neon now offers a broader backend set around Postgres: Managed Better Auth, Object Storage and Node.js Functions are GA; AI Gateway is separately metered/prepaid. Neon Realtime remains beta.
+- It has a generous current Free allowance for an early development/pilot project.
+- It has an official Neon MCP server that can connect ChatGPT to Neon using OAuth. The Neon connector/app must be connected by the owner before it is available in this workspace.
+- The Lightsail instance and Neon project can both be placed in Frankfurt, reducing geography mismatch. Measure actual API/database latency from the AHABONA server before release.
 
-**Connection direction:**
-- Lightsail continues hosting the Node.js API and existing AHABONA web application.
-- The Node.js server connects to Supabase PostgreSQL over TLS using a persistent-server connection method and a small application connection pool. Test IPv6 direct connectivity first because the supplied Lightsail instance is dual-stack; use Supabase's IPv4 session pooler if direct IPv6 connectivity is not available.
-- Database credentials stay on the server and never enter browser code, GitHub or logs. Use a least-privilege runtime database role; don't use the project owner/superuser for ordinary API queries.
-- Keep AHABONA's existing authentication/session behavior during the database migration unless an independent review approves a separate Auth change. Supabase Auth is not required just to use Supabase PostgreSQL.
-- Public visitors and candidates continue to use AHABONA server APIs. Do not expose raw database credentials or broad database access to the browser.
-- Use the PostgreSQL database for related structured application data: existing account/profile data, job posts, employer records, applications, preferences, matches, notifications and audit. Separate these through clear table/schema boundaries and access policies, not disconnected databases.
-- Portfolio photos and private documents are files, not relational rows. Store them in controlled object storage (Supabase Storage or an evaluated S3 design), with private buckets, signed access, size/type checks and retention rules.
-- Add cache/search/queue products only when measured workload or product requirements justify them; PostgreSQL remains the source of truth.
+**Neon Free allowances observed on 12 Nov 2026 (re-check before provisioning):**
+- PostgreSQL: 1 GB per project; up to 100 projects per Neon Free account; 10 branches per project.
+- Compute: 100 CU-hours per project per month; compute scales to zero after 5 minutes idle and can autoscale to 2 CU (about 8 GB RAM).
+- Public network transfer: 5 GB per project per month.
+- Managed Better Auth: up to 60,000 monthly active users.
+- Object Storage: 5 GB per project.
+- Functions: 1 million invocations per project per month, with active/waiting capacity-hour limits.
+- Instant restore history: 6 hours, subject to the documented change-history cap.
+- Free usage is bounded: exhausting compute or transfer allowances can suspend compute until the next period or an upgrade. Free quota is not a production uptime or backup guarantee.
 
-**Migration rule:** The current source code uses `node:sqlite` / `DatabaseSync`. Before building a jobs-only database, audit the actual production SQLite schema, data volume, auth/session dependencies and backup location. Prepare a staging Supabase project, migrate the existing AHABONA data with repeatable scripts, preserve stable user IDs and ownership relationships, compare row counts and critical records, test every existing user flow, and prepare cutover/rollback. Do not maintain two competing writable sources of truth. Do not cut production over until the owner approves the migration and the rollback has been rehearsed.
+**ChatGPT access and security:**
+- Neon documents a ChatGPT MCP connection at `https://mcp.neon.tech/mcp` using OAuth. The official Neon documentation labels its MCP server as intended for development and testing only and instructs users to review LLM-requested actions.
+- For the first connection, use **read-only access**, restrict it to the AHABONA project, and restrict the SQL role/tools as tightly as possible. Read-only mode can limit tools to listing projects, describing schemas, querying data and performance metrics; SQL executes in a read-only transaction.
+- Use a separate development/staging Neon project or branch for schema experiments. Do not grant broad write access to production through MCP. Production changes require a reviewed GitHub migration/PR, backup/rollback plan and explicit owner approval.
+- No database credentials, API keys or private personal data may enter GitHub or chat messages.
 
-**Free-plan use versus production-readiness:**
-- Supabase Free is suitable for development, schema experiments and controlled QA. Current published allowances include 500 MB database size per project, 5 GB egress, 1 GB file storage and up to two active Free projects across the owner's/admin memberships.
-- Free projects can pause after seven days of low database activity, and Free does not provide downloadable automatic database backups. This is not an acceptable final reliability posture for a public production system holding job applications and personal data; use scheduled off-site exports while testing.
-- Current Supabase Pro starts at $25/month for an organization, includes $10 monthly compute credits covering one default Micro/Nano compute project, 8 GB database disk, 100 GB file storage, 250 GB egress, and daily backups kept for seven days. Overages, add-ons or a larger compute size can increase cost. Re-check plan terms at the time of upgrade.
-- Production release gate: activate the dedicated AHABONA organization/project on the appropriate paid plan, verify backups and restore, configure spend alerts, RLS/least-privilege access, SSL and monitoring before moving real user data. This is a future readiness condition, not a request to purchase now.
+**Application connection and migration direction:**
+- The current repository server uses `node:sqlite` / `DatabaseSync`; the active production SQLite schema and data must be audited before migration.
+- After staging is prepared, the existing Node.js API on Lightsail connects to Neon Postgres over TLS using the Node PostgreSQL driver and a small, bounded connection pool. Use server-side credentials only; never expose database secrets in frontend JavaScript.
+- Preserve existing AHABONA sign-in/session behavior initially unless the auth audit supports a deliberate migration. Neon Managed Better Auth is available, but moving authentication and migrating user accounts must be treated as a separate controlled workstream, not an automatic side effect of changing the database.
+- Migrate existing users, profiles and related data with stable IDs; verify counts, relationships, private-field rules and existing app flows. Cut over only after repeatable tests, backups and rehearsed rollback.
+- Keep PostgreSQL the source of truth. Object Storage stores files only; database records hold object keys/metadata and access rules.
+- Neon does not replace a dedicated outbound email/SMS provider. In-app notifications can be stored in Postgres; email and push need explicit delivery integrations, consent, queue/retry and unsubscribe logic.
 
-**Alternatives considered:**
-- Keep SQLite on Lightsail: simplest immediate continuity, but not the recommended long-term primary database for the planned relational jobs/applications/matching workflows and future growth.
-- Lightsail managed database: AWS-native PostgreSQL/MySQL with less self-hosting work; published plans start at $15/month for 1 GB RAM/40 GB SSD, but it does not provide the same directly connected Supabase management workflow in this ChatGPT workspace.
-- Supabase PostgreSQL: recommended because it is managed PostgreSQL, has the relevant data/security/backup tools, is accessible through the connected Supabase tools in this workspace, and supports Frankfurt region selection. Re-evaluate on measured requirements rather than locking AHABONA into a provider forever.
+**Important beta boundary:**
+- Neon Realtime is currently public beta and its current announcement explicitly says it does **not** provide row-level security yet. Do not use Neon Realtime directly for private job applications, candidate profiles or employer-only events until its access controls are production-ready and reviewed. Use the AHABONA server to authorize in-app notification delivery and normal push/email channels first.
+- Neon AI Gateway uses prepaid/model usage and must not be treated as included free AI inference.
+
+**Backup and production-readiness rule:**
+- A 6-hour instant restore window is not the same as long-retention independent backups. During Free-plan testing, make scheduled encrypted `pg_dump` exports to storage independent of Neon and test restoration.
+- Before real user applications and private documents are made authoritative in Neon, choose a sustainable production plan, turn on the required backup/recovery retention, set billing/spend alerts, and rehearse restore/cutover. No production launch on a single untested Free-plan copy of personal data.
+- Design for future scale from the beginning. Free quotas support experiments and a controlled pilot; they do not define the target architecture or intended user capacity.
+
+**Alternatives reviewed against AHABONA's needs:**
+- **Supabase:** very strong mature PostgreSQL, RLS, Auth, Storage and Realtime; its connector is already connected in this workspace. Current Free plan is smaller for this workload (500 MB database, 1 GB file storage, 5 GB egress, 50,000 MAU) and pauses projects after seven days of low activity. It remains a valid fallback if integration simplicity outweighs Neon’s larger Free allowance.
+- **Appwrite:** strongest all-in-one alternative and has an official ChatGPT MCP/plugin with OAuth and confirmed write actions. Its Free plan has 5 GB bandwidth, 2 GB storage, 750K executions, 75K MAU, one database, one bucket, two functions, 500K reads and 250K writes per month; projects pause after one week of inactivity. Its pricing page currently lists dedicated native databases as coming soon, so the free database path is not the same direct native PostgreSQL service needed for this data-heavy roadmap. Appwrite may be preferable for a simpler all-in-one app that values bundled Messaging/Sites over raw PostgreSQL control.
+- **Nhost:** good PostgreSQL + Hasura GraphQL, functions and realtime; Free Starter lists one project, 1 GB database, 1 GB storage and 5 GB egress, with pause after one week of inactivity. Strong if GraphQL-first architecture is the priority; not necessary for AHABONA's current Node API design.
+- **Firebase:** very useful mobile ecosystem and Cloud Messaging, and Firestore has daily free quotas (1 GiB, 50K reads/day, 20K writes/day, 10 GiB egress/month). Firestore is a document database, not the natural primary model for AHABONA's relational jobs/applications/matching system. Firebase SQL Connect relies on Cloud SQL; its initial no-cost trial is temporary, so it is not the best fully free relational foundation. Firebase Cloud Messaging may still be evaluated later as a push channel without adopting Firestore as the main database.
+- **PocketBase:** simple, small and self-hostable, but it uses embedded SQLite, scales vertically on one server, has no built-in cloud functions, and its own docs warn it is not recommended for production-critical applications before v1.0. AHABONA already uses SQLite, so PocketBase would not solve the need for a mature relational platform.
+- **Keep current SQLite only:** preserves continuity for Phase 0, but is not the recommended long-term primary database for the full jobs/applications/notifications/matching roadmap.
+
+**Decision guardrail:** Neon is the current recommendation because its PostgreSQL foundation, free early-stage capacity, Frankfurt region and ChatGPT MCP path are the best overall fit among the reviewed options. This is not an instruction to provision or cut over immediately. Phase 0 must validate the connector, project setup, region, security model, backups, actual latency and current product quotas first.
 
 ### AWS Free Plan and billing guardrail
 
@@ -429,4 +450,4 @@ Tangira kuri **Phase 0: Product & Technical Audit**. Reba live host n'uko accoun
 |---|---|---|
 | 1.0 | 12 Ugushyingo 2026 | Planning baseline: product requirements, technical direction, phases, trust/safety, tests and release gates. |
 | 1.1 | 12 Ugushyingo 2026 | Recorded owner-provided Lightsail hosting facts and clarified VPS-specific Phase 0 checks. |
-| 1.2 | 12 Ugushyingo 2026 | Added ADR-001 recommending isolated AHABONA Supabase PostgreSQL, SQLite migration and free-plan/billing guardrails. |
+| 1.2 | 12 Ugushyingo 2026 | Initial database architecture review recommending isolated Supabase PostgreSQL. |\n| 1.3 | 12 Ugushyingo 2026 | Re-evaluated six options; recommends Neon Postgres/backend with ChatGPT MCP safeguards, free-plan limits, beta boundaries and migration gates. |
