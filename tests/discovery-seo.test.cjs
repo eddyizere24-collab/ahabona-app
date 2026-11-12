@@ -27,7 +27,7 @@ test('public profile HTML renders canonical metadata and approved public fields'
   const html = renderPublicProfileHtml({
     pid: 'a1b2c3d4', name: 'Eddy Example', district: 'Gasabo', province: 'Umujyi wa Kigali',
     caps: ['Umushoferi', 'Umukanishi'], intro: 'Mfite uburambe mu gutwara imodoka.',
-    phone: '+250 788 123 456', phones: [], photos: ['/photos/a1b2c3d4-0.jpg?v=1794469200000'],
+    phone: '+250 788 123 456', wa: '0788123456', phones: [], photos: ['/photos/a1b2c3d4-0.jpg?v=1794469200000'],
     thumb: '/photos/a1b2c3d4-t.jpg?v=1794469200000'
   }, { updatedAt: 1794469200000 });
   assert.match(html, /<link rel="canonical" href="https:\/\/ahabona\.duckdns\.org\/u\/a1b2c3d4">/);
