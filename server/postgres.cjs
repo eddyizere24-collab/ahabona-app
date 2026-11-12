@@ -129,6 +129,7 @@ async function withTransaction(pool, work) {
 
   const client = await pool.connect();
   let began = false;
+  let released = false;
   try {
     await client.query('BEGIN');
     began = true;
@@ -140,15 +141,16 @@ async function withTransaction(pool, work) {
     if (began) {
       try {
         await client.query('ROLLBACK');
+        began = false;
       } catch {
+        // A failed rollback makes the client unsafe to return to the pool.
         client.release(error);
-        throw error;
+        released = true;
       }
     }
     throw error;
   } finally {
-    if (began) client.release(new Error('Transaction did not finish cleanly.'));
-    else client.release();
+    if (!released) client.release();
   }
 }
 
