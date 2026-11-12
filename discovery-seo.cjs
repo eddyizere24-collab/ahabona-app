@@ -52,6 +52,10 @@ function safePhone(value) {
   const tel = display.replace(/[^0-9+]/g, '');
   return /^\+?[0-9]{7,15}$/.test(tel) ? { display, tel } : null;
 }
+function safeRwandaWhatsApp(value) {
+  const local = String(value || '').replace(/[\\s-]/g, '').replace(/^\\+?250/, '0');
+  return /^07[2389]\\d{7}$/.test(local) ? 'https://wa.me/250' + local.slice(1) : '';
+}
 function jsonForHtml(value) {
   return JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e')
     .replace(/&/g, '\\u0026').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
@@ -79,18 +83,33 @@ function renderPublicProfileHtml(profile, options = {}) {
   const imageUrl = thumb ? base + thumb : '';
   const phoneValues = [profile.phone].concat(Array.isArray(profile.phones) ? profile.phones : []).map(safePhone).filter(Boolean);
   const uniquePhones = Array.from(new Map(phoneValues.map(phone => [phone.tel, phone])).values()).slice(0, 5);
+  const whatsAppUrl = safeRwandaWhatsApp(profile.wa);
+  const education = cleanText(profile.edu, 300);
+  const serviceAreas = Array.isArray(profile.svc) ? profile.svc.map(value => cleanText(value, 80)).filter(Boolean).slice(0, 8) : [];
+  const languageLabels = { rw: 'Ikinyarwanda', en: 'Icyongereza', fr: 'Igifaransa', sw: 'Igiswahili' };
+  const languages = Array.isArray(profile.languages) ? profile.languages.map(value => languageLabels[String(value)]).filter(Boolean) : [];
+  const experience = Array.isArray(profile.experience) ? profile.experience.slice(0, 8).map(item => {
+    if (typeof item === 'string') return cleanText(item, 240);
+    if (!item || typeof item !== 'object') return '';
+    return [cleanText(item.role, 100), cleanText(item.where, 100), cleanText(item.years, 40)].filter(Boolean).join(' · ');
+  }).filter(Boolean) : [];
   const publicEmail = cleanText(profile.email_public, 254);
   const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(publicEmail);
   const contactLinks = [];
   for (const phone of uniquePhones) contactLinks.push('<a class="contact-link" href="tel:' + escapeHtml(phone.tel) + '">Hamagara: ' + escapeHtml(phone.display) + '</a>');
   if (emailIsValid) contactLinks.push('<a class="contact-link" href="mailto:' + escapeHtml(publicEmail) + '">Ohereza Email</a>');
+  if (whatsAppUrl) contactLinks.push('<a class="contact-link" href="' + escapeHtml(whatsAppUrl) + '" rel="noopener noreferrer">WhatsApp</a>');
   const socialItems = [
     ['Facebook', profile.facebook], ['Instagram', profile.instagram], ['TikTok', profile.tiktok],
-    ['LinkedIn', profile.linkedin], ['Telegram', profile.telegram], ['X', profile.twitter]
+    ['LinkedIn', profile.linkedin], ['Telegram', profile.telegram], ['X', profile.twitter], ['Link', profile.soc]
   ].map(([label, value]) => ({ label, href: safeHttpUrl(value) })).filter(item => item.href);
   for (const item of socialItems) contactLinks.push('<a class="contact-link secondary" href="' + escapeHtml(item.href) + '" rel="noopener noreferrer">' + escapeHtml(item.label) + '</a>');
   const skillHtml = skills.length ? '<section><h2>Ubushobozi n’imyuga</h2><ul class="tags">' + skills.map(skill => '<li>' + escapeHtml(skill) + '</li>').join('') + '</ul></section>' : '';
   const introHtml = intro ? '<section><h2>Ibyerekeye uyu mwirondoro</h2><p class="intro">' + escapeHtml(intro) + '</p></section>' : '';
+  const educationHtml = education ? '<section><h2>Amashuri</h2><p>' + escapeHtml(education) + '</p></section>' : '';
+  const serviceAreasHtml = serviceAreas.length ? '<section><h2>Uturere atangiramo serivisi</h2><ul class="tags">' + serviceAreas.map(value => '<li>' + escapeHtml(value) + '</li>').join('') + '</ul></section>' : '';
+  const languagesHtml = languages.length ? '<section><h2>Indimi</h2><p>' + languages.map(escapeHtml).join(', ') + '</p></section>' : '';
+  const experienceHtml = experience.length ? '<section><h2>Uburambe</h2><ul>' + experience.map(value => '<li>' + escapeHtml(value) + '</li>').join('') + '</ul></section>' : '';
   const galleryHtml = photos.length ? '<section><h2>Amafoto</h2><div class="gallery">' + photos.map((photo, index) =>
     '<img src="' + escapeHtml(base + photo) + '" alt="Ifoto ya ' + escapeHtml(name) + ' (' + (index + 1) + ')" loading="lazy">'
   ).join('') + '</div></section>' : '';
@@ -128,7 +147,7 @@ function renderPublicProfileHtml(profile, options = {}) {
     '.contact-link.secondary{background:#f0f5f1;color:var(--deep);border:1px solid var(--line)}' +
     '.note{margin:24px 0 0;padding:14px 16px;background:#fbf5e5;border-left:4px solid var(--gold);border-radius:10px;color:#51431f;font-size:14px}.foot{padding:0 0 28px;text-align:center;color:var(--muted);font-size:13px}.foot a{font-weight:700}' +
     '</style></head><body><header class="top"><div class="wrap bar"><a class="brand" href="/">AHABONA</a><a class="back" href="/">Subira kuri AHABONA</a></div></header>' +
-    '<main class="wrap"><article class="card"><h1>' + escapeHtml(name) + '</h1>' + locationHtml + skillHtml + introHtml + galleryHtml + contactsHtml +
+    '<main class="wrap"><article class="card"><h1>' + escapeHtml(name) + '</h1>' + locationHtml + skillHtml + introHtml + educationHtml + serviceAreasHtml + languagesHtml + experienceHtml + galleryHtml + contactsHtml +
     '<p class="note">AHABONA ihuza abantu bafite ubushobozi n’abakeneye serivisi. Abakoresha bavugana kandi bakumvikana hagati yabo. AHABONA ntiyishyurisha, ntiyakira amafaranga y’akazi kandi ntiyivanga mu masezerano yabo.</p>' +
     '</article><footer class="foot">Uyu ni umwirondoro wa public washyizwe kuri AHABONA. <a href="/">Shakisha abandi cyangwa wigaragaze kuri AHABONA.</a></footer></main></body></html>';
 }
