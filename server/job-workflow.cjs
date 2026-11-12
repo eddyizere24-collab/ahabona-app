@@ -239,7 +239,7 @@ async function listModerationQueue(pool, options = {}) {
     'j.salary_currency, j.salary_period, j.deadline_at, j.status, j.created_at, ' +
     'j.employer_user_id, j.organization_id, ' +
     'COALESCE(o.name, ep.display_name) AS employer_name, ' +
-    'COALESCE(o.verification_status, ep.verification_status, \\'unverified\\') AS employer_verification_status ' +
+    "COALESCE(o.verification_status, ep.verification_status, 'unverified') AS employer_verification_status " +
     'FROM public.job_posts j ' +
     'LEFT JOIN public.organizations o ON o.id = j.organization_id ' +
     'LEFT JOIN public.employer_profiles ep ON ep.user_id = j.employer_user_id ' +
@@ -273,7 +273,7 @@ async function reviewEmployerJob(pool, actor, rawJobId, rawInput) {
 
     const updated = await client.query(
       'UPDATE public.job_posts SET status = $1, moderation_note = $2, reviewed_by_user_id = $3, ' +
-      'reviewed_at = now(), published_at = CASE WHEN $1 = \\'approved\\' THEN now() ELSE published_at END, ' +
+      "reviewed_at = now(), published_at = CASE WHEN $1 = 'approved' THEN now() ELSE published_at END, " +
       'updated_at = now() WHERE id = $4 RETURNING id, title, status, moderation_note, reviewed_at, published_at',
       [action, note || null, reviewerId, jobId]
     );
