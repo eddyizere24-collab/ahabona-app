@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --pretty",
-    "test:discovery": "node --test tests/discovery-seo.test.cjs"
+    "test:discovery": "node --test tests/discovery-seo.test.cjs",
+    "test:db-adapter": "node --test tests/postgres-adapter.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",
@@ -18,7 +19,8 @@
     "react-dom": "^19.1.1",
     "react-i18next": "^15.7.3",
     "react-router-dom": "^7.9.1",
-    "lucide-react": "^0.468.0"
+    "lucide-react": "^0.468.0",
+    "pg": "8.23.1"
   },
   "devDependencies": {
     "@types/react": "^19.1.13",
