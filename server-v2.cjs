@@ -7969,7 +7969,7 @@ async function handleApi(ctx,req,res,url,p){
 const NOROUTE={};
 const ADMIN_ROUTES=[
   ['GET','/api/admin/summary','dash.view',function(ctx,req,res,mt,u){return adminSummary(ctx,req,res)}],
-  ['GET','/api/admin/jobs','jobs.moderate',function(ctx,req,res,mt,u){return adminJobModerationQueue(ctx,req,res,url)}],
+  ['GET','/api/admin/jobs','jobs.moderate',function(ctx,req,res,mt,u,url){return adminJobModerationQueue(ctx,req,res,url)}],
   ['POST',/^\/api\/admin\/jobs\/([0-9a-fA-F-]{36})\/review$/,'jobs.moderate',function(ctx,req,res,mt,u){return adminJobModerationReview(ctx,req,res,mt[1],u)}],
   ['GET','/api/admin/users','users.view',function(ctx,req,res,mt,u){return adminUsers(ctx,req,res,u)}],
   ['POST','/api/admin/broadcast','broadcast.send',function(ctx,req,res,mt,u){return adminBroadcast(ctx,req,res,u)}],
@@ -8022,7 +8022,7 @@ function adminRoute(ctx,req,res,p,m,u,url){
     if(typeof r[1]==='string'){if(p===r[1])mt=[p]}else mt=p.match(r[1]);
     if(!mt)continue;
     if(r[2]&&!ctx.can(u,r[2]))return sendError(req,res,403,'err.forbidden');
-    return r[3](ctx,req,res,mt,u);
+    return r[3](ctx,req,res,mt,u,url);
   }
   return NOROUTE;
 }
