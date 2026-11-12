@@ -4,7 +4,7 @@
 **Inyandiko-fatizo yo kubaka Job & Opportunity Marketplace ihujwe na AHABONA**
 
 - Document ID: AHABONA-OPP-001
-- Version: 1.3
+- Version: 1.4
 - Itariki: 12 Ugushyingo 2026
 - Status: Planning baseline; si uburenganzira bwo guhindura Production.
 - Repository: eddyizere24-collab/ahabona-app
@@ -127,6 +127,16 @@ Public server IPs ntizishyirwa muri iyi product document; zibikwa mu private ope
 - **Keep current SQLite only:** preserves continuity for Phase 0, but is not the recommended long-term primary database for the full jobs/applications/notifications/matching roadmap.
 
 **Decision guardrail:** Neon is the current recommendation because its PostgreSQL foundation, free early-stage capacity, Frankfurt region and ChatGPT MCP path are the best overall fit among the reviewed options. This is not an instruction to provision or cut over immediately. Phase 0 must validate the connector, project setup, region, security model, backups, actual latency and current product quotas first.
+
+**Live connector verification (12 Nov 2026):**
+- The Neon connector became available in ChatGPT and its read-only discovery tools were called.
+- `list_organizations` returned zero organizations.
+- `list_projects` returned an empty list and `count_projects` returned zero.
+- The region catalogue includes AWS Europe Central 1 (Frankfurt), `aws-eu-central-1`.
+- Result: connector integration is present, but there is currently no Neon organization/project visible to this connection. This may mean no organization is provisioned under the connected Neon account or the connected account is not the intended account. It is not evidence of an AHABONA database.
+- No organization, project, branch, database, role, credential or configuration was created or changed during this inspection.
+- Next step is for the owner to ensure the intended Neon account has an organization, create/select a dedicated AHABONA project in `aws-eu-central-1`, and then re-run read-only inventory through this connector before any schema work.
+
 
 ### AWS Free Plan and billing guardrail
 
@@ -451,4 +461,4 @@ Tangira kuri **Phase 0: Product & Technical Audit**. Reba live host n'uko accoun
 | 1.0 | 12 Ugushyingo 2026 | Planning baseline: product requirements, technical direction, phases, trust/safety, tests and release gates. |
 | 1.1 | 12 Ugushyingo 2026 | Recorded owner-provided Lightsail hosting facts and clarified VPS-specific Phase 0 checks. |
 | 1.2 | 12 Ugushyingo 2026 | Initial database architecture review recommending isolated Supabase PostgreSQL. |
-| 1.3 | 12 Ugushyingo 2026 | Re-evaluated six options; recommends Neon Postgres/backend with ChatGPT MCP safeguards, free-plan limits, beta boundaries and migration gates. |
+| 1.3 | 12 Ugushyingo 2026 | Re-evaluated six options; recommends Neon Postgres/backend with ChatGPT MCP safeguards, free-plan limits, beta boundaries and migration gates. |\n| 1.4 | 12 Ugushyingo 2026 | Recorded live Neon connector inventory: connector available, but zero organizations/projects visible; no resources changed. |
