@@ -86,6 +86,7 @@ test('service landing pages render only matched public profiles and their links'
     { pid: 'invalid<script>', name: 'Should not render', caps: ['Umushoferi'] }
   ]);
   assert.match(html, /Abashoferi mu Rwanda/);
+  assert.match(html, /Drivers in Rwanda/);
   assert.match(html, /Eddy Driver/);
   assert.ok(html.includes('href="/u/a1b2c3d4"'));
   assert.match(html, /og:title/);
