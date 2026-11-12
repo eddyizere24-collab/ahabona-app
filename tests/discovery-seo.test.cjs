@@ -60,7 +60,7 @@ test('about page explains the free discovery model in Kinyarwanda and English', 
   assert.match(html, /AHABONA ni iki/);
   assert.match(html, /ni ubuntu/);
   assert.match(html, /si job board/);
-  assert.match(html, /Direct agreements/);
+  assert.match(html, /People make their own agreements/);
   assert.ok(html.includes('application/ld+json'));
 });
 test('how-it-works page explains direct contact and direct agreements', () => {
