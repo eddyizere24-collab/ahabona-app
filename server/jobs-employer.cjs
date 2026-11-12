@@ -308,7 +308,7 @@ async function createJobPost(pool, actor, rawInput) {
       'display_name = EXCLUDED.display_name, ' +
       'description = COALESCE(EXCLUDED.description, public.employer_profiles.description), ' +
       'public_email = COALESCE(EXCLUDED.public_email, public.employer_profiles.public_email), ' +
-      'public_phone = COALESCE(EXCLUDED.public_phone, public_employer_profiles.public_phone), ' +
+      'public_phone = COALESCE(EXCLUDED.public_phone, public.employer_profiles.public_phone), ' +
       'website_url = COALESCE(EXCLUDED.website_url, public.employer_profiles.website_url), ' +
       'updated_at = now()',
       [
