@@ -60,14 +60,14 @@ test('about page explains the free discovery model in Kinyarwanda and English', 
   assert.match(html, /AHABONA ni iki/);
   assert.match(html, /ni ubuntu/);
   assert.match(html, /si job board/);
-  assert.match(html, /People make their own agreements/);
-  assert.match(html, /application\\/ld\\+json/);
+  assert.match(html, /Direct agreements/);
+  assert.ok(html.includes('application/ld+json'));
 });
 test('how-it-works page explains direct contact and direct agreements', () => {
   const html = renderInfoPageHtml('how-it-works');
   assert.match(html, /Ushaka umuntu\? Shakisha icyo akeneye/);
   assert.match(html, /Muganire ku kazi, igiciro, igihe/);
-  assert.match(html, /contact them directly/);
+  assert.match(html, /contact the person directly/);
 });
 
 test('ISO date conversion accepts Unix milliseconds and seconds', () => {
