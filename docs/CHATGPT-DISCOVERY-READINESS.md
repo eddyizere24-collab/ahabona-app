@@ -12,11 +12,11 @@
 AHABONA's current profile URLs use /u/{pid}, but the active server currently returns the JavaScript application shell for those routes. Profile information is then fetched by the browser from /api/profile/{pid}. The public profile pages therefore need crawlable HTML so search engines and AI search crawlers can understand the actual public profile, not only a generic app shell.
 
 ## Foundation in this branch
-1. Add explicit crawler rules: allow OAI-SearchBot and ChatGPT-User; keep admin, API, password-reset and saved routes out of indexing; block GPTBot separately so allowing search crawling does not silently opt the site into model-training crawling.
+1. Add explicit crawler rules: allow OAI-SearchBot for ChatGPT Search; keep admin, API, password-reset and saved routes out of crawling; block GPTBot separately. ChatGPT-User is used for user-initiated page fetches, not for deciding ChatGPT Search inclusion.
 2. Add a sitemap containing the homepage plus only public profile IDs selected from active users and non-suspended profiles.
 3. Return a server-rendered HTML profile page for direct requests to /u/{pid} with canonical/Open Graph metadata and conservative WebPage structured data.
 4. Use only fields from the existing pubProfile projection. Phone links appear only when the public projection includes the phone; no private account fields are added.
-6. Preserve the existing in-app SPA navigation. A direct link or crawler request receives HTML; existing client-side navigation can continue to open its current modal without a reload.
+5. Preserve the existing in-app SPA navigation. A direct link or crawler request receives HTML; existing client-side navigation can continue to open its current modal without a reload. A direct link or crawler request receives HTML; existing client-side navigation can continue to open its current modal without a reload.
 
 ## Not included
 - No Business Hub claim submission yet.
@@ -29,5 +29,6 @@ AHABONA's current profile URLs use /u/{pid}, but the active server currently ret
 - Confirm the active AHABONA host is running this exact repository server-v2.cjs revision before deployment.
 - Add a consent/visibility review for the public profile contract before expanding structured data.
 - Test robots.txt, sitemap.xml, representative /u/{pid} pages, private phone hiding, suspended/deleted profiles, mobile rendering, and Google/OAI crawler fetches.
+- Verify the Lightsail host firewall or any upstream security layer does not block OpenAI's published OAI-SearchBot IP ranges. robots.txt permission alone cannot override a network block.
 - Only after explicit release approval, deploy to the existing AHABONA host and verify the live endpoints.
 - Attempt Business Hub claim only if AHABONA itself is eligible and the owner can complete the requested verification. A claim does not claim each user's profile or guarantee recommendations.
