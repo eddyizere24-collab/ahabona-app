@@ -7838,7 +7838,7 @@ async function handleApi(ctx,req,res,url,p){
   var m=req.method;
   if(p==='/api/health')return apiHealth(req,res);
   var applicationRoute=await apiOpportunityApplications(ctx,req,res,url,p,m);
-  if(applicationRoute)return applicationRoute;
+  if(applicationRoute!==null)return applicationRoute;
   if(p==='/api/jobs'&&(m==='GET'||m==='HEAD'))return apiPublicJobs(ctx,req,res,url);
   if(p==='/api/jobs'&&m==='POST')return apiCreateJob(ctx,req,res);
   if(p==='/api/me/jobs'&&m==='GET')return apiMyJobs(ctx,req,res);
