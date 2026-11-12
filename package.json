@@ -12,7 +12,8 @@
     "test:db-adapter": "node --test tests/postgres-adapter.test.cjs",
     "audit:sqlite": "node scripts/audit-sqlite-schema.cjs",
     "test:sqlite-audit": "node --test tests/sqlite-audit.test.cjs",
-    "test:public-jobs": "node --test tests/opportunities-public.test.cjs"
+    "test:public-jobs": "node --test tests/opportunities-public.test.cjs",
+    "test:employer-jobs": "node --test tests/jobs-employer.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",
