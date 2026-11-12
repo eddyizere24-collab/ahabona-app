@@ -11,6 +11,7 @@ const {execFile}=require('node:child_process');
 const {createOptionalPostgresPool}=require('./server/postgres.cjs');
 const {listPublicJobs,getPublicJob}=require('./server/opportunities-public.cjs');
 const {createJobPost,listEmployerJobs,JobInputError}=require('./server/jobs-employer.cjs');
+const {ApplicationError,createJobApplication,listMyApplications,listEmployerApplications,updateEmployerApplicationStatus}=require('./server/applications.cjs');
 
 const PROV={
   "Umujyi wa Kigali":["Gasabo","Kicukiro","Nyarugenge"],
@@ -7759,9 +7760,85 @@ async function apiPublicJob(ctx,req,res,jobId){
   }
 }
 
+async function apiOpportunityApplications(ctx,req,res,url,p,m){
+  var applyMatch;
+  if((applyMatch=p.match(/^\/api\/jobs\/([0-9a-fA-F-]{36})\/applications$/))&&m==='POST'){
+    if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+    const actor=ctx.sessionUser(req);
+    if(!actor)return sendError(req,res,401,'err.auth');
+    if(!sameOriginMutation(req))return sendError(req,res,403,'err.forbidden');
+    if(!ctx.rate.allow('job-apply:'+actor.id,8,HOUR))return sendError(req,res,429,'err.rate');
+    const body=await readBody(req,16*1024);
+    if(!body.ok)return sendError(req,res,body.code||400,body.error||'err.server');
+    try{
+      const result=await createJobApplication(ctx.pgPool,actor,applyMatch[1],body.data||{});
+      return sendJson(req,res,201,result);
+    }catch(error){
+      if(error instanceof ApplicationError)return sendJson(req,res,error.status,{error:error.code,field:error.field});
+      const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+      console.error('[job-application] database operation failed ('+code+').');
+      return sendError(req,res,503,'err.server');
+    }
+  }
+
+  if(p==='/api/me/applications'&&m==='GET'){
+    if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+    const actor=ctx.sessionUser(req);
+    if(!actor)return sendError(req,res,401,'err.auth');
+    try{
+      const result=await listMyApplications(ctx.pgPool,actor,{limit:url.searchParams.get('limit')});
+      return sendJson(req,res,200,result);
+    }catch(error){
+      const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+      console.error('[candidate-applications] database operation failed ('+code+').');
+      return sendError(req,res,503,'err.server');
+    }
+  }
+
+  var employerListMatch;
+  if((employerListMatch=p.match(/^\/api\/employer\/jobs\/([0-9a-fA-F-]{36})\/applications$/))&&m==='GET'){
+    if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+    const actor=ctx.sessionUser(req);
+    if(!actor)return sendError(req,res,401,'err.auth');
+    try{
+      const result=await listEmployerApplications(ctx.pgPool,actor,employerListMatch[1],{limit:url.searchParams.get('limit')});
+      return sendJson(req,res,200,result);
+    }catch(error){
+      if(error instanceof ApplicationError)return sendJson(req,res,error.status,{error:error.code});
+      const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+      console.error('[employer-applications] database operation failed ('+code+').');
+      return sendError(req,res,503,'err.server');
+    }
+  }
+
+  var statusMatch;
+  if((statusMatch=p.match(/^\/api\/employer\/applications\/([0-9a-fA-F-]{36})\/status$/))&&m==='POST'){
+    if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+    const actor=ctx.sessionUser(req);
+    if(!actor)return sendError(req,res,401,'err.auth');
+    if(!sameOriginMutation(req))return sendError(req,res,403,'err.forbidden');
+    if(!ctx.rate.allow('job-application-status:'+actor.id,60,HOUR))return sendError(req,res,429,'err.rate');
+    const body=await readBody(req,8*1024);
+    if(!body.ok)return sendError(req,res,body.code||400,body.error||'err.server');
+    try{
+      const result=await updateEmployerApplicationStatus(ctx.pgPool,actor,statusMatch[1],body.data||{});
+      return sendJson(req,res,200,result);
+    }catch(error){
+      if(error instanceof ApplicationError)return sendJson(req,res,error.status,{error:error.code,field:error.field});
+      const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+      console.error('[employer-application-status] database operation failed ('+code+').');
+      return sendError(req,res,503,'err.server');
+    }
+  }
+
+  return null;
+}
+
 async function handleApi(ctx,req,res,url,p){
   var m=req.method;
   if(p==='/api/health')return apiHealth(req,res);
+  var applicationRoute=await apiOpportunityApplications(ctx,req,res,url,p,m);
+  if(applicationRoute)return applicationRoute;
   if(p==='/api/jobs'&&(m==='GET'||m==='HEAD'))return apiPublicJobs(ctx,req,res,url);
   if(p==='/api/jobs'&&m==='POST')return apiCreateJob(ctx,req,res);
   if(p==='/api/me/jobs'&&m==='GET')return apiMyJobs(ctx,req,res);
