@@ -30,7 +30,7 @@ test('public profile HTML renders canonical metadata and approved public fields'
     thumb: '/photos/a1b2c3d4-t.jpg?v=1794469200000', edu: 'Amashuri yisumbuye', svc: ['Gasabo'],
     languages: ['rw', 'en'], experience: [{ role: 'Umushoferi', where: 'Kigali', years: 'Imyaka 4' }]
   }, { updatedAt: 1794469200000 });
-  assert.ok(html.includes('href="/u/a1b2c3d4"'));
+  assert.ok(html.includes('href="https://ahabona.duckdns.org/u/a1b2c3d4"'));
   assert.match(html, /Eddy Example/); assert.match(html, /Umushoferi/);
   assert.match(html, /href="tel:\+250788123456"/); assert.match(html, /https:\/\/wa\.me\/250788123456/); assert.match(html, /Indimi/); assert.match(html, /Gasabo/); assert.match(html, /Imyaka 4/); assert.match(html, /og:image/);
   assert.ok(html.includes('application/ld+json'));
