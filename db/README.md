@@ -55,3 +55,14 @@ Before any migration from SQLite:
 - The Neon development database contains schema only; it has zero user, profile, job-post, and application rows.
 - Neon main is still clean. No live application routes are connected to Postgres yet.
 - No Lightsail environment settings, Production database, or production data have been changed.
+
+
+## SQLite backup audit
+
+To inventory a **protected backup**, set `AHABONA_SQLITE_PATH` to the explicit file path and run:
+
+```bash
+npm run audit:sqlite
+```
+
+The script opens SQLite in read-only mode and outputs schema metadata and counts only. It does not print row values. Do not point it at a live database file while the application is writing. The audit has not yet been run against the real AHABONA backup.
