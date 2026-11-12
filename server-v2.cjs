@@ -10,6 +10,7 @@ const {DatabaseSync}=require('node:sqlite');
 const {execFile}=require('node:child_process');
 const {createOptionalPostgresPool}=require('./server/postgres.cjs');
 const {listPublicJobs,getPublicJob}=require('./server/opportunities-public.cjs');
+const {createJobPost,listEmployerJobs,JobInputError}=require('./server/jobs-employer.cjs');
 
 const PROV={
   "Umujyi wa Kigali":["Gasabo","Kicukiro","Nyarugenge"],
@@ -7684,6 +7685,55 @@ function handleRequest(ctx,req,res){
   return sendText(req,res,200,body,type,{cache:cc});
 }
 
+function sameOriginMutation(req){
+  const fetchSite=String(req.headers['sec-fetch-site']||'').toLowerCase();
+  if(fetchSite&&fetchSite!=='same-origin'&&fetchSite!=='same-site'&&fetchSite!=='none')return false;
+  const origin=req.headers.origin;
+  if(!origin)return true;
+  try{
+    const parsed=new URL(String(origin));
+    const host=String(req.headers.host||'').toLowerCase();
+    return !!host&&parsed.host.toLowerCase()===host;
+  }catch(e){return false}
+}
+
+async function apiCreateJob(ctx,req,res){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  const actor=ctx.sessionUser(req);
+  if(!actor)return sendError(req,res,401,'err.auth');
+  if(!sameOriginMutation(req))return sendError(req,res,403,'err.forbidden');
+  if(!ctx.rate.allow('job-create:'+actor.id,5,HOUR))return sendError(req,res,429,'err.rate');
+
+  const body=await readBody(req,48*1024);
+  if(!body.ok)return sendError(req,res,body.code||400,body.error||'err.server');
+
+  try{
+    const result=await createJobPost(ctx.pgPool,actor,body.data||{});
+    return sendJson(req,res,201,result);
+  }catch(error){
+    if(error instanceof JobInputError){
+      return sendJson(req,res,400,{error:error.message,field:error.field});
+    }
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[job-create] database operation failed ('+code+').');
+    return sendError(req,res,503,'err.server');
+  }
+}
+
+async function apiMyJobs(ctx,req,res){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  const actor=ctx.sessionUser(req);
+  if(!actor)return sendError(req,res,401,'err.auth');
+  try{
+    const result=await listEmployerJobs(ctx.pgPool,actor);
+    return sendJson(req,res,200,result);
+  }catch(error){
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[employer-jobs] database operation failed ('+code+').');
+    return sendError(req,res,503,'err.server');
+  }
+}
+
 async function apiPublicJobs(ctx,req,res,url){
   if(!ctx.pgPool)return sendError(req,res,503,'err.server');
   try{
@@ -7713,6 +7763,8 @@ async function handleApi(ctx,req,res,url,p){
   var m=req.method;
   if(p==='/api/health')return apiHealth(req,res);
   if(p==='/api/jobs'&&(m==='GET'||m==='HEAD'))return apiPublicJobs(ctx,req,res,url);
+  if(p==='/api/jobs'&&m==='POST')return apiCreateJob(ctx,req,res);
+  if(p==='/api/me/jobs'&&m==='GET')return apiMyJobs(ctx,req,res);
   var publicJobMatch;
   if((publicJobMatch=p.match(/^\/api\/jobs\/([0-9a-fA-F-]{36})$/))&&(m==='GET'||m==='HEAD'))return apiPublicJob(ctx,req,res,publicJobMatch[1]);
   if(p==='/api/config'&&(m==='GET'||m==='HEAD'))return apiConfig(ctx,req,res);
