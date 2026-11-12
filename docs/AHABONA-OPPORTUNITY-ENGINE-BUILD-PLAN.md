@@ -4,7 +4,7 @@
 **Inyandiko-fatizo yo kubaka Job & Opportunity Marketplace ihujwe na AHABONA**
 
 - Document ID: AHABONA-OPP-001
-- Version: 1.7
+- Version: 1.8
 - Itariki: 12 Ugushyingo 2026
 - Status: Planning baseline; si uburenganzira bwo guhindura Production.
 - Repository: eddyizere24-collab/ahabona-app
@@ -527,3 +527,15 @@ The workflow logs show 8/8 adapter tests passed and 12/12 discovery tests passed
 6. Only after end-to-end tests, backup/restore rehearsal, data reconciliation, billing review and a separate owner release instruction may Lightsail environment variables or Production be changed.
 
 The Node adapter's unit tests use a fake Pool so they verify adapter setup logic without connecting to a live database. The Neon development branch is separately validated by connector SQL checks. No live end-to-end Node-to-Neon connection from Lightsail has been attempted yet.
+
+
+## 3.3 SQLite migration audit tooling (12 Ugushyingo 2026)
+
+A read-only audit utility is now stored at `scripts/audit-sqlite-schema.cjs`. It requires an explicit `AHABONA_SQLITE_PATH`, opens the file with SQLite read-only mode, enables `query_only`, and reports only table/view names, row counts, column metadata, indexes, foreign-key definitions, SQLite schema version, quick-check result and foreign-key violations. It never exports row values, passwords, email addresses, phone numbers, or profile content. It refuses missing paths, non-regular files and symbolic links.
+
+- Command: `npm run audit:sqlite`
+- Test: `npm run test:sqlite-audit`
+- Tests cover metadata-only output, missing path rejection, and symlink rejection.
+- GitHub Actions run `43274798387` passed on commit `1a797f6e58fd78b058e39772dbefe83363008bcf`: 12/12 discovery tests, 8/8 PostgreSQL adapter tests and 3/3 SQLite audit tests passed; JavaScript syntax checks also passed.
+
+This utility has only been tested with synthetic SQLite fixtures in GitHub Actions. It has **not** been run against the AHABONA Lightsail data file, because no authorised, protected SQLite backup has been brought into the development environment. The actual row counts and production data remain unknown and unchanged.
