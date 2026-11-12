@@ -7544,7 +7544,7 @@ function handleRequest(ctx,req,res){
     const publicBase=process.env.AHABONA_PUBLIC_URL||DEFAULT_BASE_URL;
     return sendText(req,res,200,buildSitemapXml(publicRows,publicBase),'application/xml; charset=utf-8',{cache:'public, max-age=300'});
   }
-  const publicProfileMatch=(req.method==='GET'||req.method==='HEAD')?p.match(/^\\/u\\/([a-z0-9]{8,16})$/):null;
+  const publicProfileMatch=(req.method==='GET'||req.method==='HEAD')?p.match(/^\/u\/([a-z0-9]{8,16})$/):null;
   if(publicProfileMatch){
     const publicRow=ctx.Q("SELECT p.*,u.phone,u.email,u.status,u.id_verified AS owner_verified FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.pid=? AND u.status='active' AND p.suspended=0").get(publicProfileMatch[1]);
     if(!publicRow){
