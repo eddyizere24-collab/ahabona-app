@@ -427,5 +427,6 @@ Tangira kuri **Phase 0: Product & Technical Audit**. Reba live host n'uko accoun
 
 | Version | Itariki | Ibyahindutse |
 |---|---|---|
-| 1.0 | 12 Ugushyingo 2026 | Planning baseline: product requirements, technical direction, phases, trust/safety, tests and release gates. |\n| 1.1 | 12 Ugushyingo 2026 | Recorded owner-provided Lightsail hosting facts and clarified VPS-specific Phase 0 checks. |
+| 1.0 | 12 Ugushyingo 2026 | Planning baseline: product requirements, technical direction, phases, trust/safety, tests and release gates. |
+| 1.1 | 12 Ugushyingo 2026 | Recorded owner-provided Lightsail hosting facts and clarified VPS-specific Phase 0 checks. |
 | 1.2 | 12 Ugushyingo 2026 | Added ADR-001 recommending isolated AHABONA Supabase PostgreSQL, SQLite migration and free-plan/billing guardrails. |
