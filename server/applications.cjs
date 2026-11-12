@@ -103,22 +103,45 @@ function normalizeAnswers(rawAnswers, questions) {
   return output;
 }
 
+function redactContactText(value, maxLength) {
+  return cleanText(value, maxLength)
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi, '[contact hidden]')
+    .replace(/(?:\\+?25\\d[\\s().-]*)?(?:\\d[\\s().-]*){8,13}/g, '[contact hidden]');
+}
+
+function safeProfileList(value, maxItems) {
+  const forbidden = /phone|email|contact|national|birth|gender|address|social|password|secret|token|document|identity|user_id|profile_id|whatsapp|\\bwa\\b/i;
+  const clean = (item, depth) => {
+    if (depth > 3 || item === null || item === undefined) return undefined;
+    if (typeof item === 'string') return redactContactText(item, 1000);
+    if (typeof item === 'number' || typeof item === 'boolean') return item;
+    if (Array.isArray(item)) return item.slice(0, 20).map(value => clean(value, depth + 1)).filter(value => value !== undefined);
+    if (typeof item === 'object') {
+      const out = {};
+      for (const [key, value] of Object.entries(item).slice(0, 24)) {
+        if (forbidden.test(key)) continue;
+        const safeValue = clean(value, depth + 1);
+        if (safeValue !== undefined) out[key.slice(0, 40)] = safeValue;
+      }
+      return out;
+    }
+    return undefined;
+  };
+  return Array.isArray(value) ? value.slice(0, maxItems).map(item => clean(item, 0)).filter(item => item !== undefined) : [];
+}
+
 function buildProfileSnapshot(profile, actor) {
   const source = profile || {};
-  const capabilities = Array.isArray(source.caps) ? source.caps : [];
-  const experience = Array.isArray(source.experience) ? source.experience : [];
-  const languages = Array.isArray(source.languages) ? source.languages : [];
-  const availability = Array.isArray(source.availability) ? source.availability : [];
   return {
     display_name: cleanText(source.name || actor?.display_name || actor?.name || 'AHABONA member', 120),
     district: cleanText(source.district, 80) || null,
-    capabilities: capabilities.slice(0, 40),
-    other_skills: cleanText(source.other_text, 2000) || null,
-    introduction: cleanText(source.intro, 3000) || null,
-    education: cleanText(source.edu || source.edu_level, 500) || null,
-    experience: experience.slice(0, 30),
-    languages: languages.slice(0, 20),
-    availability: availability.slice(0, 20)
+    capabilities: safeProfileList(source.caps, 40),
+    other_skills: redactContactText(source.other_text, 2000) || null,
+    introduction: redactContactText(source.intro, 3000) || null,
+    education: redactContactText(source.edu || source.edu_level, 500) || null,
+    experience: safeProfileList(source.experience, 30),
+    languages: safeProfileList(source.languages, 20),
+    availability: safeProfileList(source.availability, 20)
   };
 }
 
@@ -274,6 +297,15 @@ async function listEmployerApplications(pool, actor, rawJobId, options = {}) {
   );
   return { job, applications: result.rows || [] };
 }
+
+const APPLICATION_STATUS_LABELS = {
+  viewed: 'yarebwe',
+  shortlisted: 'yatoranyijwe ku rutonde rugufi',
+  interview: 'yatumiwe mu kiganiro',
+  offered: 'yahawe amahirwe',
+  hired: 'yahawe akazi',
+  rejected: 'ntiyatoranyijwe'
+};
 
 async function updateEmployerApplicationStatus(pool, actor, rawApplicationId, rawInput) {
   const userId = requireActor(actor);
