@@ -1,0 +1,27 @@
+name: AHABONA discovery checks
+
+on:
+  push:
+    branches:
+      - feature/chatgpt-discovery-foundation-20261112
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discovery-unit-tests:
+    name: Discovery helper unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run focused tests
+        run: npm run test:discovery
