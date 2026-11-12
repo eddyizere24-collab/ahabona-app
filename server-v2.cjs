@@ -5,7 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const crypto=require('node:crypto');
 const zlib=require('node:zlib');
-const {buildRobotsTxt,buildSitemapXml,renderPublicProfileHtml,DEFAULT_BASE_URL}=require('./discovery-seo.cjs');
+const {buildRobotsTxt,buildSitemapXml,renderPublicProfileHtml,renderInfoPageHtml,DEFAULT_BASE_URL}=require('./discovery-seo.cjs');
 const {DatabaseSync}=require('node:sqlite');
 const {execFile}=require('node:child_process');
 
@@ -3269,12 +3269,21 @@ function adminStats(ctx,req,res){
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1a9b6c">
-<meta name="description" content="AHABONA — Menya abantu. Menya amahirwe.">
+<meta name="description" content="AHABONA ni urubuga rw’ubuntu mu Rwanda ruhuza abantu bafite ubumenyi, imyuga, ubushobozi na serivisi n’abantu babikeneye. Shaka umushoferi, umubaji, umudozi n’abandi; bavugane kandi bumvikane hagati yabo.">
+<meta name="robots" content="index,follow,max-image-preview:large">
 <meta name="color-scheme" content="light">
+<link rel="canonical" href="https://ahabona.duckdns.org/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AHABONA">
+<meta property="og:title" content="AHABONA | Menya abantu. Menya amahirwe.">
+<meta property="og:description" content="Urubuga rw’ubuntu mu Rwanda ruhuza abafite ubumenyi na serivisi n’ababikeneye.">
+<meta property="og:url" content="https://ahabona.duckdns.org/">
+<meta name="twitter:card" content="summary">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"AHABONA","alternateName":"Urugo rw’Izuba","url":"https://ahabona.duckdns.org/","description":"Urubuga rw’ubuntu mu Rwanda ruhuza abantu bafite ubumenyi, imyuga, ubushobozi na serivisi n’abantu babikeneye.","inLanguage":["rw","en"]}</script>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon.svg">
-<title>AHABONA</title>
+<title>AHABONA | Shaka umushoferi, umubaji, umudozi n’izindi serivisi mu Rwanda</title>
 <style>
 :root{
   --p:#1a9b6c;
@@ -3653,6 +3662,7 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between}
 <div>
 <button class="lk" data-m="help"><span data-i18n="nav.help">Ubufasha</span></button>
 <button class="lk" data-m="about"><span data-i18n="nav.about">Ibyerekeye</span></button>
+<a class="lk" href="/how-it-works">Uko AHABONA ikora</a>
 <a class="lk" href="/terms" data-i18n="footer.terms">Amabwiriza</a>
 <a class="lk" href="/privacy" data-i18n="footer.privacy">Ibanga</a>
 </div>
@@ -7538,6 +7548,11 @@ function handleRequest(ctx,req,res){
   if((req.method==='GET'||req.method==='HEAD')&&p==='/robots.txt'){
     const publicBase=trustedBaseUrl()||DEFAULT_BASE_URL;
     return sendText(req,res,200,buildRobotsTxt(publicBase),'text/plain; charset=utf-8',{cache:'public, max-age=3600'});
+  }
+  if((req.method==='GET'||req.method==='HEAD')&&(p==='/about'||p==='/how-it-works')){
+    const publicBase=trustedBaseUrl()||DEFAULT_BASE_URL;
+    const page=p==='/about'?'about':'how-it-works';
+    return sendText(req,res,200,renderInfoPageHtml(page,{baseUrl:publicBase}),'text/html; charset=utf-8',{cache:'public, max-age=300'});
   }
   if((req.method==='GET'||req.method==='HEAD')&&p==='/sitemap.xml'){
     const publicRows=ctx.Q("SELECT p.pid,p.updated_at FROM profiles p JOIN users u ON u.id=p.user_id WHERE u.status='active' AND p.suspended=0 ORDER BY p.updated_at DESC LIMIT 49999").all();
