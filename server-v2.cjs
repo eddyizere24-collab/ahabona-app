@@ -7554,7 +7554,7 @@ function handleRequest(ctx,req,res){
     const page=p==='/about'?'about':'how-it-works';
     return sendText(req,res,200,renderInfoPageHtml(page,{baseUrl:publicBase}),'text/html; charset=utf-8',{cache:'public, max-age=300'});
   }
-  const serviceMatch=(req.method==='GET'||req.method==='HEAD')?p.match(/^\\/services\\/([a-z0-9-]{2,60})$/):null;
+  const serviceMatch=(req.method==='GET'||req.method==='HEAD')?p.match(/^\/services\/([a-z0-9-]{2,60})$/):null;
   if(serviceMatch){
     const definition=getServiceLandingDefinition(serviceMatch[1]);
     if(!definition){
