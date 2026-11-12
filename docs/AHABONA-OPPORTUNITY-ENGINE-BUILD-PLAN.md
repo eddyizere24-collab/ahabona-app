@@ -4,7 +4,7 @@
 **Inyandiko-fatizo yo kubaka Job & Opportunity Marketplace ihujwe na AHABONA**
 
 - Document ID: AHABONA-OPP-001
-- Version: 1.6
+- Version: 1.7
 - Itariki: 12 Ugushyingo 2026
 - Status: Planning baseline; si uburenganzira bwo guhindura Production.
 - Repository: eddyizere24-collab/ahabona-app
@@ -484,7 +484,7 @@ The following work was completed after provisioning the Neon project. Evidence i
 | Migration 0002 | Restricted runtime-role read access to the sensitive identity vault and schema migration ledger |
 | Tables | 45 public base tables |
 | Foreign keys | 62 |
-| Migration ledger | 1 applied migration row (0001); 0002 is a privilege-only migration recorded in GitHub and will be added to the database ledger in the next metadata migration |
+| Migration ledger | 2 applied migration rows (`0001_opportunity_foundation`, `0002_restrict_sensitive_runtime_access`) |
 | Empty-data verification | users=0, profiles=0, job_posts=0, job_applications=0 |
 | Runtime role check | `ahabona_app` can use public schema and write job data; cannot create schema objects, read `user_sensitive_records`, or read `schema_migrations` |
 | GitHub files | `db/migrations/0001_opportunity_foundation.sql`, `db/migrations/0002_restrict_sensitive_runtime_access.sql` |
@@ -502,3 +502,28 @@ The following work was completed after provisioning the Neon project. Evidence i
 5. Wire selected routes behind a disabled-by-default development feature gate, preserving SQLite as the current active store until all user journeys pass.
 6. Add jobs, applications and notification APIs with server-side authorization, then UI.
 7. Production cutover requires a separate explicit owner release decision.
+
+
+## 3.2 Node.js PostgreSQL adapter implementation (12 Ugushyingo 2026)
+
+| Item | Verified result |
+|---|---|
+| Runtime driver | `pg` (node-postgres) pinned to `8.23.1` in `package.json` |
+| Adapter | `server/postgres.cjs` |
+| Adapter features | Server-side `DATABASE_URL` only; verified TLS; bounded pool and connection/query timeouts; safe health-check result; transaction helper; no connection-string logging |
+| Tests | `tests/postgres-adapter.test.cjs`, 8 tests |
+| CI | GitHub Actions run `43273817129`, conclusion `success`; commit `04d16fb496d991ac90fd90920eda1c0a22e05dac` |
+| Security tests | Confirm missing/invalid URL rejection, TLS override removal, certificate verification config, bounded pool, health-check shape, commit/rollback and failed-rollback client eviction |
+| Runbook | `db/README.md` |
+
+The workflow logs show 8/8 adapter tests passed and 12/12 discovery tests passed. The adapter is deliberately **not wired into the existing SQLite request handlers yet**. It does not run unless explicitly imported and called by future server code. The current production app remains unchanged.
+
+**Next engineering tasks:**
+1. Inspect the entire current `server-v2.cjs` database bootstrap and query/transaction usage on the working branch; map every SQLite-specific API that must be abstracted.
+2. Build repeatable data export/import tooling that reads from a protected, consistent SQLite backup and writes only to Neon development. Keep capability IDs and user/profile relationships stable.
+3. Seed the authoritative capability taxonomy from the actual source database; do not create duplicate IDs or assume a new seed order matches production.
+4. Implement PostgreSQL repositories for auth/session, profiles, messages, saved profiles, notifications and admin operations, then parity-test each existing journey before routing traffic.
+5. Implement opportunity APIs using server-side authorization and the new schema; add the public job list/details first, then employer creation/moderation, applications, matching and delivery workers.
+6. Only after end-to-end tests, backup/restore rehearsal, data reconciliation, billing review and a separate owner release instruction may Lightsail environment variables or Production be changed.
+
+The Node adapter's unit tests use a fake Pool so they verify adapter setup logic without connecting to a live database. The Neon development branch is separately validated by connector SQL checks. No live end-to-end Node-to-Neon connection from Lightsail has been attempted yet.
