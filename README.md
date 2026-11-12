@@ -18,7 +18,7 @@ AHABONA is not an employer, staffing agency, recruitment intermediary or job boa
 - The public Node.js server is in `server-v2.cjs`.
 - The server uses Node's built-in `node:sqlite` module (Node 22.5+; Node 24+ is also suitable).
 - The Vite/React client is in `src/`.
-- Discovery helpers for robots.txt, sitemap.xml, crawlable public profiles and public information pages are in `discovery-seo.cjs`.
+- Discovery helpers for robots.txt, sitemap.xml, crawlable public profiles, service-category landing pages and public information pages are in `discovery-seo.cjs`.
 - Public information and privacy/release guardrails are documented in `docs/CHATGPT-DISCOVERY-READINESS.md`.
 
 ## Focused tests
