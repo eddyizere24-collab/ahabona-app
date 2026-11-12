@@ -1,0 +1,53 @@
+name: AHABONA discovery checks
+
+on:
+  push:
+    branches:
+      - feature/chatgpt-discovery-foundation-20261112
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discovery-unit-tests:
+    name: Discovery helper unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check whitespace errors
+        run: git diff --check
+      - name: Check server and helper JavaScript syntax
+        run: |
+          node --check server-v2.cjs
+          node --check discovery-seo.cjs
+          node --check tests/discovery-seo.test.cjs
+          node --check server/postgres.cjs
+          node --check tests/postgres-adapter.test.cjs
+          node --check scripts/audit-sqlite-schema.cjs
+          node --check tests/sqlite-audit.test.cjs
+          node --check server/opportunities-public.cjs
+          node --check tests/opportunities-public.test.cjs
+          node --check server/jobs-employer.cjs
+          node --check tests/jobs-employer.test.cjs
+          node --check server/applications.cjs
+          node --check tests/applications.test.cjs
+          node --check server/job-workflow.cjs
+          node --check tests/job-workflow.test.cjs
+      - name: Run focused tests
+        run: |
+          npm run test:discovery
+          npm run test:db-adapter
+          npm run test:sqlite-audit
+          npm run test:public-jobs
+          npm run test:employer-jobs
+          npm run test:applications
+          npm run test:job-workflow
