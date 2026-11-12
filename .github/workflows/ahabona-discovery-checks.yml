@@ -28,5 +28,9 @@ jobs:
           node --check server-v2.cjs
           node --check discovery-seo.cjs
           node --check tests/discovery-seo.test.cjs
+          node --check server/postgres.cjs
+          node --check tests/postgres-adapter.test.cjs
       - name: Run focused tests
-        run: npm run test:discovery
+        run: |
+          npm run test:discovery
+          npm run test:db-adapter
