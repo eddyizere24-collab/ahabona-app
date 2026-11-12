@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildRobotsTxt, buildSitemapXml, renderPublicProfileHtml, isoDate } = require('../discovery-seo.cjs');
+const { buildRobotsTxt, buildSitemapXml, renderPublicProfileHtml, renderInfoPageHtml, isoDate } = require('../discovery-seo.cjs');
 
 test('robots permits ChatGPT search while keeping private routes out', () => {
   const robots = buildRobotsTxt('https://ahabona.duckdns.org/');
@@ -17,7 +17,7 @@ test('sitemap includes only valid public profile ids and safely encodes paths', 
     { pid: 'abc', updated_at: 1794469200000 }, { pid: 'bad<script>', updated_at: 1794469200000 }, { pid: 'e5f6g7h8' }
   ]);
   assert.match(xml, /https:\/\/ahabona\.duckdns\.org\//);
-  assert.equal((xml.match(/<loc>/g) || []).length, 3);
+  assert.equal((xml.match(/<loc>/g) || []).length, 5);
   assert.match(xml, /https:\/\/ahabona\.duckdns\.org\/u\/a1b2c3d4/);
   assert.doesNotMatch(xml, /<script>/);
   assert.match(xml, /<lastmod>2026-11-12T/);
@@ -49,6 +49,27 @@ test('profile text is escaped and unsafe external URLs are omitted', () => {
   assert.doesNotMatch(html, /<script>alert\(/); assert.match(html, /&lt;script&gt;/);
   assert.doesNotMatch(html, /javascript:/);
 });
+
+test('sitemap includes the public explanation pages', () => {
+  const xml = buildSitemapXml([{ pid: 'a1b2c3d4' }]);
+  assert.match(xml, /https:\\/\\/ahabona\\.duckdns\\.org\\/about/);
+  assert.match(xml, /https:\\/\\/ahabona\\.duckdns\\.org\\/how-it-works/);
+});
+test('about page explains the free discovery model in Kinyarwanda and English', () => {
+  const html = renderInfoPageHtml('about');
+  assert.match(html, /AHABONA ni iki/);
+  assert.match(html, /ni ubuntu/);
+  assert.match(html, /si job board/);
+  assert.match(html, /People make their own agreements/);
+  assert.match(html, /application\\/ld\\+json/);
+});
+test('how-it-works page explains direct contact and direct agreements', () => {
+  const html = renderInfoPageHtml('how-it-works');
+  assert.match(html, /Ushaka umuntu\? Shakisha icyo akeneye/);
+  assert.match(html, /Muganire ku kazi, igiciro, igihe/);
+  assert.match(html, /contact them directly/);
+});
+
 test('ISO date conversion accepts Unix milliseconds and seconds', () => {
   assert.equal(isoDate(1794469200), new Date(1794469200000).toISOString());
   assert.equal(isoDate('not a date'), '');
