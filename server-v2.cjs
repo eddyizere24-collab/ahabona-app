@@ -8093,7 +8093,7 @@ async function handleApi(ctx,req,res,url,p){
   if(employerWorkflowRoute!==null)return employerWorkflowRoute;
   if(p==='/api/employer/talent-watches'&&m==='GET')return apiEmployerTalentWatches(ctx,req,res,'GET');
   if(p==='/api/employer/talent-watches'&&m==='POST')return apiEmployerTalentWatches(ctx,req,res,'POST');
-  var talentWatchMatch=p.match(/^\\/api\\/employer\\/talent-watches\\/([0-9a-fA-F-]{36})\\/matches$/);
+  var talentWatchMatch=p.match(/^\/api\/employer\/talent-watches\/([0-9a-fA-F-]{36})\/matches$/);
   if(talentWatchMatch&&m==='GET')return apiEmployerTalentMatches(ctx,req,res,talentWatchMatch[1]);
   if(p==='/api/jobs/capabilities'&&(m==='GET'||m==='HEAD'))return apiJobCapabilities(ctx,req,res);
   if(p==='/api/me/job-preferences'&&m==='GET')return apiMyJobPreferences(ctx,req,res,'GET');
