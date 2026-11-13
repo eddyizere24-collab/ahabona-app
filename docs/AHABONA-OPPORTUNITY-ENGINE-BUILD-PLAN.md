@@ -5,7 +5,7 @@
 
 - Document ID: AHABONA-OPP-001
 - Version: 2.0
-- Itariki: 12 Ugushyingo 2026
+- Itariki: 13 Ugushyingo 2026
 - Status: Planning baseline + development implementation log; si uburenganzira bwo guhindura Production.
 - Repository: eddyizere24-collab/ahabona-app
 - Working branch: feature/chatgpt-discovery-foundation-20261112
@@ -624,3 +624,39 @@ Implemented in server/applications.cjs and mounted in server-v2.cjs:
 - AHABONA_ENABLE_POSTGRES remains off in Lightsail. SQLite remains the live app database. No production environment variable, SQLite file, user data, public site, DNS, service process or Neon main branch has been changed.
 - UI, candidate/employer dashboard, email/push dispatch, matching, capability catalogue seed, real SQLite backup audit, live network smoke test and rollback rehearsal remain release gates.
 
+
+
+## 3.8 Public Opportunity experience and per-reader unread tracking (13 Ugushyingo 2026)
+
+Implemented on the working feature branch. This is a development implementation record; it is not evidence of a Production deployment.
+
+**Files added**
+- `server/opportunities-ui.cjs`: standalone mobile-first public opportunities page served at `/opportunities`.
+- `server/opportunity-reads.cjs`: privacy-preserving job-read identity and SQL helpers.
+- `tests/opportunity-reads.test.cjs`: unit tests for deterministic reader keys, unread counting, valid-job read upserts and input checks.
+- `tests/opportunities-ui.test.cjs`: checks public browsing, job details, in-platform application and employer submission UI.
+- `tests/opportunities-route.test.cjs`: local Node-server smoke test for the root homepage and opportunities route.
+
+**Server integration**
+- `server-v2.cjs` serves `/opportunities` from the new standalone page.
+- The homepage response receives only a small briefcase/opportunity icon beside the existing header controls. The root page still renders the existing profile-discovery grid; no job wall, modal or homepage content replacement is introduced.
+- The public page uses the existing public job list/detail APIs. Public visitors do not need to sign in to read approved, unexpired announcements.
+- The employer form posts through the existing employer API; new announcements remain `pending_review` and do not become public until moderation approves them.
+- In-platform applications use the existing candidate application endpoint and existing profile snapshot protections. External URL and employer-contact options are presented only when selected by the employer.
+- The page includes an initial employer/candidate activity view based on existing APIs.
+
+**Unread announcement behavior**
+- `GET /api/jobs/unread-count` counts only approved, unexpired jobs not yet recorded in `job_post_reads`.
+- `POST /api/jobs/:uuid/read` records a view only for an approved, unexpired job and only after same-origin mutation checks.
+- Reader identity is a SHA-256 digest with domain separation: signed-in users are keyed by AHABONA user ID, anonymous readers by the existing browser device ID. Raw device identifiers are not written to the read-tracking table.
+- Rate limits are applied to count and read endpoints. The homepage badge is hidden when the opportunity backend is unavailable rather than displaying a false count.
+
+**Verification added; not yet reported as passing**
+- CI syntax checks cover the new CommonJS modules and tests.
+- `npm run test:opportunity-reads` runs read-tracking, UI and local route smoke tests.
+- GitHub Actions must be observed on the draft PR before claiming the full suite passes.
+
+**Current boundaries / remaining work**
+- Live Lightsail still uses SQLite; the Postgres opt-in flag has not been enabled in Production. The new page will show a graceful unavailable state until a staged Neon connection is enabled.
+- No Production environment variable, SQLite file, user data, main Neon branch, DNS, PM2 process or live site was changed.
+- Email and web-push delivery, candidate-to-job matching, reverse employer discovery/Talent Watch execution, richer employer application pipeline, moderator UI, data migration and rollback rehearsal remain incomplete.
