@@ -2264,7 +2264,21 @@ async function apiReport(ctx,req,res){
   }
 }
 
-/* ===== END OF IGICE 7/16 ===== */async function apiRegister(ctx,req,res){
+/* ===== END OF IGICE 7/16 ===== */async async function syncOpportunityProfile(ctx,userId,profileRow){
+  if(!ctx.pgPool||!profileRow)return false;
+  const actor=ctx.Q('SELECT id,status,created_at,display_name FROM users WHERE id=?').get(userId);
+  if(!actor||actor.status!=='active')return false;
+  try{
+    const result=await syncLegacyCandidateProfile(ctx.pgPool,actor,profileRow);
+    return result?.synced===true;
+  }catch(error){
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[opportunity-profile-sync] projection failed ('+code+').');
+    return false;
+  }
+}
+
+function apiRegister(ctx,req,res){
   const ip=ctx.ipOf(req)||'';
   if(!ctx.rate.allow('r:'+ip,8,HOUR))return sendError(req,res,429,'err.rate');
   const b=await readBody(req,BODY_MAX);
@@ -2311,6 +2325,7 @@ async function apiReport(ctx,req,res){
     await ctx.mailer.send(f.email,"AHABONA: Murakaza neza","☀️ MURAKAZA NEZA KURI AHABONA!\n\nUmwirondoro wawe uri kuri AHABONA! Abantu bakeneye serivisi utanga bashobora kuwureba, bakakuvugisha.\n\n������ Nawe gira uruhare mu gukura kwa AHABONA! Bwira nibura abantu 3 uzi biyandikishe, bagaragaze ibyo bashoboye. Bashobora kuba inshuti, abaturanyi cyangwa abandi, nk’abadozi, abafundi, abashoferi, abarimu n’abandi bafite ibyo bakora.\n\n������ https://ahabona.duckdns.org\n\n✅ Kwiyandikisha ni ubuntu!\n✅ No gushaka umuntu wo kugukorera serivisi kuri AHABONA ni ubuntu!\n\n������ Ukeneye ubufasha? Duhamagare cyangwa utwandikire kuri WhatsApp kuri 0792 053 086, tugufashe.\n\n❤️ Sangiza abandi AHABONA, kuko uko tugenda twiyongera, ni ko turushaho gufashanya kubona abo dukeneye.\n\n☀️ AHABONA — Uko turushaho kuba benshi, ni ko turushaho kubonana!\n\nMurakoze kuba muri kumwe natwe! ❤️");
   }catch(e){}
   const r=ctx.Q('SELECT p.*,u.phone,u.email,u.status,u.id_verified AS owner_verified FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=?').get(uid);
+  await syncOpportunityProfile(ctx,uid,r);
   sendJson(req,res,201,{profile:pubProfile(r,null,{own:true,email:f.email,status:'active'})});
 }
 
@@ -2389,6 +2404,7 @@ async function apiMePut(ctx,req,res){
     ctx.Q('INSERT INTO cap_requests(user_id,text,created_at) VALUES(?,?,?)').run(u.id,f.other,Date.now());
   }
   const nr=ctx.Q('SELECT p.*,u.phone,u.email,u.status,u.id_verified AS owner_verified FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=?').get(u.id);
+  await syncOpportunityProfile(ctx,u.id,nr);
   sendJson(req,res,200,{profile:pubProfile(nr,null,{own:true,email:u.email,status:u.status})});
 }
 
