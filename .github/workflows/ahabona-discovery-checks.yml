@@ -45,6 +45,12 @@ jobs:
           node --check tests/opportunity-reads.test.cjs
           node --check tests/opportunities-ui.test.cjs
           node --check tests/opportunities-route.test.cjs
+          node --check server/legacy-profile-sync.cjs
+          node --check server/job-preferences.cjs
+          node --check server/opportunity-matching.cjs
+          node --check tests/legacy-profile-sync.test.cjs
+          node --check tests/job-preferences.test.cjs
+          node --check tests/opportunity-matching.test.cjs
       - name: Run focused tests
         run: |
           npm run test:discovery
