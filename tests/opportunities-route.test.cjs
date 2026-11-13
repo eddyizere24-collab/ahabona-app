@@ -41,6 +41,12 @@ test('opportunities route loads while preserving the existing people-discovery h
   assert.match(opportunitiesHtml, /id="post-form"/);
   assert.match(opportunitiesHtml, /id="detail-view"/);
 
+  const moderation = await fetch(base + '/admin/jobs');
+  assert.equal(moderation.status, 200);
+  const moderationHtml = await moderation.text();
+  assert.match(moderationHtml, /Genzura amatangazo y'akazi/);
+  assert.match(moderationHtml, /\/api\/admin\/jobs/);
+
   const health = await fetch(base + '/api/health');
   assert.equal(health.status, 200);
   const healthBody = await health.json();
