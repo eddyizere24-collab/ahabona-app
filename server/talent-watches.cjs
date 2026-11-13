@@ -135,6 +135,67 @@ async function listEmployerTalentMatches(pool, actor, watchId) {
   return { matches: result.rows || [] };
 }
 
+async function matchCandidatesForTalentWatch(pool, actor, watchId) {
+  const employerId = requireActor(actor);
+  const id = String(watchId || '');
+  if (!/^[0-9a-fA-F-]{36}$/.test(id)) throw new TalentWatchError(404, 'WATCH_NOT_FOUND');
+
+  return withTransaction(pool, async client => {
+    const watchResult = await client.query(
+      'SELECT id,created_by_user_id,name,criteria FROM public.employer_talent_watches ' +
+      'WHERE id=$1 AND created_by_user_id=$2 AND active=true FOR SHARE',
+      [id, employerId]
+    );
+    const watch = watchResult.rows?.[0];
+    if (!watch) throw new TalentWatchError(404, 'WATCH_NOT_FOUND');
+    const criteria = typeof watch.criteria === 'string' ? safeJsonObject(watch.criteria) : (watch.criteria || {});
+    const candidates = await client.query(
+      'SELECT p.user_id,p.district,p.caps,cp.preferred_districts,cp.preferred_provinces ' +
+      'FROM public.profiles p ' +
+      'JOIN public.users u ON u.id=p.user_id AND u.status=\\'active\\' ' +
+      'JOIN public.candidate_job_preferences cp ON cp.user_id=p.user_id ' +
+      'WHERE p.suspended=false AND cp.seeking_work=true AND cp.reverse_discovery_enabled=true ' +
+      'AND p.user_id<>$1 ORDER BY cp.updated_at DESC LIMIT 2000',
+      [employerId]
+    );
+    let matched = 0;
+    let notified = 0;
+    for (const candidate of candidates.rows || []) {
+      const result = calculateTalentWatchMatch(criteria, candidate);
+      if (!result) continue;
+      const inserted = await client.query(
+        "INSERT INTO public.talent_discovery_matches (watch_id,candidate_user_id,match_score,match_reasons,state) " +
+        "VALUES ($1,$2,$3,$4::jsonb,'matched') ON CONFLICT (watch_id,candidate_user_id) DO NOTHING RETURNING id",
+        [watch.id, candidate.user_id, result.score, JSON.stringify(result.reasons)]
+      );
+      if (!inserted.rows?.length) continue;
+      matched += 1;
+      const preference = await client.query(
+        'SELECT in_app_enabled FROM public.notification_preferences WHERE user_id=$1',
+        [employerId]
+      );
+      if (preference.rows?.[0]?.in_app_enabled === false) continue;
+      await client.query(
+        'INSERT INTO public.notifications (user_id,kind,title,body,link,created_at) VALUES ($1,$2,$3,$4,$5,$6)',
+        [
+          employerId,
+          'talent_match',
+          'Abantu bahuye n’ibyo ukeneye',
+          'Habonetse umukandida wemeye kugaragara ku bakoresha kandi ufite ubuhanga bujyanye na "' + String(watch.name || 'Talent Watch').slice(0, 100) + '".',
+          '/opportunities',
+          Date.now()
+        ]
+      );
+      await client.query(
+        "UPDATE public.talent_discovery_matches SET state='notified' WHERE watch_id=$1 AND candidate_user_id=$2",
+        [watch.id, candidate.user_id]
+      );
+      notified += 1;
+    }
+    return { checked: (candidates.rows || []).length, matched, notified };
+  });
+}
+
 async function matchTalentWatchesForCandidate(pool, candidateUserId) {
   const userId = Number(candidateUserId);
   if (!Number.isSafeInteger(userId) || userId < 1) throw new TypeError('A valid candidate user ID is required.');
@@ -208,5 +269,6 @@ module.exports = {
   createEmployerTalentWatch,
   listEmployerTalentWatches,
   listEmployerTalentMatches,
+  matchCandidatesForTalentWatch,
   matchTalentWatchesForCandidate
 };
