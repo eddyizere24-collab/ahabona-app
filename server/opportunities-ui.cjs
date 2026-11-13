@@ -1,6 +1,6 @@
 'use strict';
 
-const OPPORTUNITIES_HTML = String.raw\`<!doctype html>
+const OPPORTUNITIES_HTML = String.raw`<!doctype html>
 <html lang="rw">
 <head>
 <meta charset="utf-8">
@@ -316,6 +316,6 @@ checkUser();refreshUnread();toggleApplyFields();
 })();
 </script>
 </body>
-</html>\`;
+</html>`;
 
 module.exports = { OPPORTUNITIES_HTML };
