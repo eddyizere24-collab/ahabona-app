@@ -7785,8 +7785,9 @@ function handleRequest(ctx,req,res){
     '.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8',
     '.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8'
   })[ext]||'text/html; charset=utf-8';
-  var cc=ext==='.html'?'public, max-age=60':(ext==='.js'?'no-cache':'public, max-age=3600');
-  return sendText(req,res,200,body,type,{cache:cc});
+  const isPasswordReset=/^\\/reset\\/[A-Za-z0-9_-]+$/.test(p);
+  var cc=isPasswordReset?'no-store':(ext==='.html'?'public, max-age=60':(ext==='.js'?'no-cache':'public, max-age=3600'));
+  return sendText(req,res,200,body,type,isPasswordReset?{noCache:true}:{cache:cc});
 }
 
 function studioApiError(req,res,e){
@@ -8232,7 +8233,7 @@ EMBED['splash.js'] = `(function(){
 `;
 
 EMBED['sw.js'] = `/* AHABONA Service Worker v2 */
-const SHELL='ahabona-shell-v9';
+const SHELL='ahabona-shell-v10';
 const DATA='ahabona-data-v9';
 const PHOTOS='ahabona-photos-v9';
 const SHELL_URLS=['/','/manifest.webmanifest','/icon.svg','/splash.js'];
@@ -8295,7 +8296,14 @@ self.addEventListener('fetch',function(e){
     );
     return;
   }
-  if(req.mode==='navigate'||p==='/'||/^\\/(u|reset|saved|about|help|terms|privacy|admin)\\b/.test(p)){
+  // Password-reset URLs contain bearer tokens. Always fetch them from the network and never persist them in Cache Storage.
+  if(p==='/reset'||p.indexOf('/reset/')===0){
+    e.respondWith(fetch(req).catch(function(){
+      return new Response('offline',{status:503,headers:{'Cache-Control':'no-store'}});
+    }));
+    return;
+  }
+  if(req.mode==='navigate'||p==='/'||/^\\/(u|saved|about|help|terms|privacy|admin)\\b/.test(p)){
     e.respondWith(
       fetch(req).then(function(r){
         if(r&&r.ok){
