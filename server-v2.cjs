@@ -5,6 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const crypto=require('node:crypto');
 const zlib=require('node:zlib');
+const {buildRobotsTxt,buildSitemapXml,renderPublicProfileHtml,renderInfoPageHtml,getServiceLandingDefinition,getServiceLandingSlugs,renderServiceLandingHtml,DEFAULT_BASE_URL}=require('./discovery-seo.cjs');
 const {DatabaseSync}=require('node:sqlite');
 const {execFile}=require('node:child_process');
 const STUDIO_BETA=process.env.AHABONA_STUDIO_BETA==='1';
@@ -3279,7 +3280,16 @@ function adminStats(ctx,req,res){
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1a9b6c">
-<meta name="description" content="AHABONA — Menya abantu. Menya amahirwe.">
+<meta name="description" content="AHABONA ni urubuga rw’ubuntu mu Rwanda ruhuza abantu bafite ubumenyi, imyuga, ubushobozi na serivisi n’abantu babikeneye. Shaka umushoferi, umubaji, umudozi n’abandi; bavugane kandi bumvikane hagati yabo.">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<link rel="canonical" href="https://ahabona.duckdns.org/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AHABONA">
+<meta property="og:title" content="AHABONA | Menya abantu. Menya amahirwe.">
+<meta property="og:description" content="Urubuga rw’ubuntu mu Rwanda ruhuza abafite ubumenyi na serivisi n’ababikeneye.">
+<meta property="og:url" content="https://ahabona.duckdns.org/">
+<meta name="twitter:card" content="summary">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"AHABONA","alternateName":"Urugo rw’Izuba","url":"https://ahabona.duckdns.org/","description":"Urubuga rw’ubuntu mu Rwanda ruhuza abantu bafite ubumenyi, imyuga, ubushobozi na serivisi n’abantu babikeneye.","inLanguage":["rw","en"]}</script>
 <meta name="color-scheme" content="light">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -3663,6 +3673,7 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between}
 <div>
 <button class="lk" data-m="help"><span data-i18n="nav.help">Ubufasha</span></button>
 <button class="lk" data-m="about"><span data-i18n="nav.about">Ibyerekeye</span></button>
+<a class="lk" href="/how-it-works">Uko AHABONA ikora</a>
 <a class="lk" href="/terms" data-i18n="footer.terms">Amabwiriza</a>
 <a class="lk" href="/privacy" data-i18n="footer.privacy">Ibanga</a>
 </div>
@@ -7616,6 +7627,50 @@ function handleRequest(ctx,req,res){
       console.error('[studio-ui] asset unavailable:',file,e&&e.message||String(e));
       return sendError(req,res,404,'err.notfound');
     }
+  }
+  // Public search-discovery routes. These use the existing public profile projection.
+  if((req.method==='GET'||req.method==='HEAD')&&p==='/robots.txt'){
+    const publicBase=trustedBaseUrl()||DEFAULT_BASE_URL;
+    return sendText(req,res,200,buildRobotsTxt(publicBase),'text/plain; charset=utf-8',{cache:'public, max-age=3600'});
+  }
+  if((req.method==='GET'||req.method==='HEAD')&&(p==='/about'||p==='/how-it-works')){
+    const publicBase=trustedBaseUrl()||DEFAULT_BASE_URL;
+    const page=p==='/about'?'about':'how-it-works';
+    return sendText(req,res,200,renderInfoPageHtml(page,{baseUrl:publicBase}),'text/html; charset=utf-8',{cache:'public, max-age=300'});
+  }
+  const serviceMatch=(req.method==='GET'||req.method==='HEAD')?p.match(/^\/services\/([a-z0-9-]{2,60})$/):null;
+  if(serviceMatch){
+    const definition=getServiceLandingDefinition(serviceMatch[1]);
+    if(!definition){
+      res.setHeader('X-Robots-Tag','noindex, nofollow');
+      return sendError(req,res,404,'err.notfound');
+    }
+    const ranked=rank({q:definition.query,prov:'',dist:'',dv:null,epoch:0,limit:60});
+    const publicProfiles=ranked.list.map(profile=>pubProfile(profile,null,{}));
+    const publicBase=trustedBaseUrl()||DEFAULT_BASE_URL;
+    const html=renderServiceLandingHtml(definition,publicProfiles,{baseUrl:publicBase});
+    return sendText(req,res,200,html,'text/html; charset=utf-8',{cache:'public, max-age=60'});
+  }
+  if((req.method==='GET'||req.method==='HEAD')&&p==='/sitemap.xml'){
+    const publicRows=ctx.Q("SELECT p.pid,p.updated_at FROM profiles p JOIN users u ON u.id=p.user_id WHERE u.status='active' AND p.suspended=0 ORDER BY p.updated_at DESC LIMIT 49999").all();
+    const publicServiceSlugs=getServiceLandingSlugs().filter(slug=>{
+      const definition=getServiceLandingDefinition(slug);
+      return definition&&rank({q:definition.query,prov:'',dist:'',dv:null,epoch:0,limit:1}).list.length>0;
+    });
+    const publicBase=trustedBaseUrl()||DEFAULT_BASE_URL;
+    return sendText(req,res,200,buildSitemapXml(publicRows,publicBase,publicServiceSlugs),'application/xml; charset=utf-8',{cache:'public, max-age=300'});
+  }
+  const publicProfileMatch=(req.method==='GET'||req.method==='HEAD')?p.match(/^\/u\/([a-z0-9]{8,16})$/):null;
+  if(publicProfileMatch){
+    const publicRow=ctx.Q("SELECT p.*,u.phone FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.pid=? AND u.status='active' AND p.suspended=0").get(publicProfileMatch[1]);
+    if(!publicRow){
+      res.setHeader('X-Robots-Tag','noindex, nofollow');
+      return sendText(req,res,404,'<!doctype html><html lang="rw"><meta charset="utf-8"><title>Umwirondoro ntiwabonetse | AHABONA</title><body><main><h1>Umwirondoro ntiwabonetse</h1><p>Uyu mwirondoro ntukiri ku mugaragaro cyangwa ntiwabashije kuboneka.</p><a href="/">Subira kuri AHABONA</a></main></body></html>','text/html; charset=utf-8',{cache:'public, max-age=30'});
+    }
+    const publicProfile=pubProfile(publicRow,null,{});
+    const publicBase=trustedBaseUrl()||DEFAULT_BASE_URL;
+    const profileHtml=renderPublicProfileHtml(publicProfile,{baseUrl:publicBase,updatedAt:publicRow.updated_at});
+    return sendText(req,res,200,profileHtml,'text/html; charset=utf-8',{cache:'public, max-age=30'});
   }
   if(p==='/icon.svg'){
     var svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="34" fill="#1a9b6c"/><g stroke="#d4a838" stroke-width="6" stroke-linecap="round"><line x1="96" y1="42" x2="96" y2="20"/><line x1="120" y1="48" x2="135" y2="30"/><line x1="138" y1="72" x2="158" y2="62"/><line x1="142" y1="96" x2="164" y2="96"/><line x1="138" y1="120" x2="158" y2="130"/><line x1="120" y1="144" x2="135" y2="162"/><line x1="72" y1="144" x2="57" y2="162"/><line x1="54" y1="120" x2="34" y2="130"/><line x1="50" y1="96" x2="28" y2="96"/><line x1="54" y1="72" x2="34" y2="62"/><line x1="72" y1="48" x2="57" y2="30"/></g><circle cx="96" cy="96" r="40" fill="#d4a838"/><text x="96" y="164" text-anchor="middle" fill="#fff" font-family="system-ui,sans-serif" font-size="22" font-weight="800">AHABONA</text></svg>';
