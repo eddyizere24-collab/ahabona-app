@@ -59,10 +59,11 @@ async function syncLegacyProfile(pool, actor, sourceProfile, sourceCapabilities 
   if (!pid || !name || !district) throw new TypeError('The legacy profile is missing required public fields.');
 
   const capabilityIds = safeIdList(sourceProfile.caps);
-  const allowedIds = new Set(capabilityIds);
+  // Mirror the trusted active capability catalogue, not just the skills on
+  // this user's profile. Employers may select any catalogue skill for a job,
+  // and candidates may watch skills they have not yet added to their profile.
   const capabilities = (Array.isArray(sourceCapabilities) ? sourceCapabilities : [])
-    .filter(item => allowedIds.has(Number(item && item.id)))
-    .slice(0, 40)
+    .slice(0, 200)
     .map(item => ({
       id: Number(item.id),
       name: safeText(item.name, 120),
