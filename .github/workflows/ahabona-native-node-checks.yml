@@ -1,0 +1,35 @@
+name: AHABONA native Node checks
+
+on:
+  push:
+    branches:
+      - studio/backend-foundation-20261027
+      - chore/native-node-project-tooling-20261113
+  pull_request:
+    branches:
+      - studio/backend-foundation-20261027
+  workflow_dispatch:
+
+concurrency:
+  group: ahabona-native-node-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install exact locked dependencies
+        run: npm ci
+      - name: Run project checks and isolated tests
+        run: npm test
