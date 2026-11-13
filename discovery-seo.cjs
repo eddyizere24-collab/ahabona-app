@@ -158,7 +158,7 @@ function renderPublicProfileHtml(profile, options = {}) {
     '</style></head><body><header class="top"><div class="wrap bar"><a class="brand" href="/">AHABONA</a><a class="back" href="/">Subira kuri AHABONA</a></div></header>' +
     '<main class="wrap"><article class="card"><h1>' + escapeHtml(name) + '</h1>' + locationHtml + skillHtml + introHtml + educationHtml + serviceAreasHtml + languagesHtml + experienceHtml + galleryHtml + contactsHtml +
     '<p class="note">AHABONA ihuza abantu bafite ubushobozi n’abakeneye serivisi. Abakoresha bavugana kandi bakumvikana hagati yabo. AHABONA ntiyishyurisha, ntiyakira amafaranga y’akazi kandi ntiyivanga mu masezerano yabo.</p>' +
-    '</article><footer class="foot">Uyu ni umwirondoro wa public washyizwe kuri AHABONA. <a href="/">Shakisha abandi cyangwa wigaragaze kuri AHABONA.</a></footer></main></body></html>';
+    '</article><footer class="foot">Uyu ni umwirondoro wa public washyizwe kuri AHABONA. <a href="/people">Shakisha abandi kuri AHABONA.</a></footer></main></body></html>';
 }
 
 const INFO_PAGES = {
@@ -236,7 +236,7 @@ function renderInfoPageHtml(pageKey, options = {}) {
     '</style></head><body><header class="top"><div class="wrap bar"><a class="brand" href="/">AHABONA</a><a href="/">Subira ku rubuga</a></div></header>' +
     '<main class="wrap"><article><h1>' + escapeHtml(page.title) + '</h1><p class="lead">' + escapeHtml(page.description) + '</p>' +
     rwSections + '<div class="lang" lang="en"><h2>' + escapeHtml(page.englishTitle) + '</h2><p class="lead">' + escapeHtml(page.englishDescription) + '</p>' + enSections + '</div>' +
-    '</article></main><footer class="wrap footer">AHABONA — Urugo rw’Izuba. <a href="/">Shakisha abantu cyangwa wigaragaze.</a></footer></body></html>';
+    '</article></main><footer class="wrap footer">AHABONA — Urugo rw’Izuba. <a href="/people">Shakisha abantu kuri AHABONA.</a></footer></body></html>';
 }
 
 
@@ -357,7 +357,7 @@ function renderServiceLandingHtml(page, profiles, options = {}) {
     '<div class="english" lang="en"><h2>' + escapeHtml(page.en) + '</h2><p>' + escapeHtml(page.enDescription) + '</p></div></section>' +
     (hasResults ? '<section class="profiles" aria-label="Abantu bafite public profiles">' + cards + '</section>' :
       '<section class="empty"><h2>Nta muntu ubonetse muri iki cyiciro ubu</h2><p>Subira kuri AHABONA ushakishe abandi cyangwa ugerageze nyuma.</p><p lang="en">No active public profile is currently listed in this category.</p></section>') +
-    '<footer class="foot">AHABONA ntitanga akazi kandi ntiyivanga mu masezerano y’abakoresha. <a href="/">Shakisha abantu kuri AHABONA.</a></footer></main></body></html>';
+    '<footer class="foot">AHABONA ntitanga akazi kandi ntiyivanga mu masezerano y’abakoresha. <a href="/people">Reba abantu bafite public profiles kuri AHABONA.</a></footer></main></body></html>';
 }
 
 
