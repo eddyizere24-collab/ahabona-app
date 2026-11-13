@@ -20,6 +20,12 @@ jobs:
           node-version: 24
       - name: Install PostgreSQL driver
         run: npm install --no-audit --no-fund
+      - name: Export resolved lockfile for reproducible install
+        run: |
+          echo LOCKFILE_EXPORT_BEGIN
+          base64 -w0 package-lock.json
+          echo
+          echo LOCKFILE_EXPORT_END
       - name: JavaScript syntax checks
         run: |
           node --check server-v2.cjs
