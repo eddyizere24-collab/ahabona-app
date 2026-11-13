@@ -116,7 +116,7 @@ async function checkServiceWorkerCachePolicy(source, origin) {
     assert.match(sitemap.body, /<urlset/);
     assert.match(sitemap.body, /\/about/);
     assert.match(sitemap.body, /\/how-it-works/);
-    assert.match(sitemap.body, /\/people/);
+    assert.doesNotMatch(sitemap.body, /\/people/);
 
     for (const route of ['/about', '/how-it-works', '/people', '/services/umushoferi']) {
       const result = await get(base, route);
