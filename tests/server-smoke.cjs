@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const previousFlag = process.env.AHABONA_STUDIO_BETA;
 delete process.env.AHABONA_STUDIO_BETA;
@@ -19,6 +20,66 @@ async function get(base, route) {
   let json = null;
   try { json = JSON.parse(body); } catch (_) {}
   return { response, body, json };
+}
+
+async function checkServiceWorkerCachePolicy(source, origin) {
+  const handlers = {};
+  const calls = { fetch: 0, match: 0, open: 0, put: 0 };
+  const cache = {
+    addAll: async function () {},
+    put: async function () { calls.put += 1; },
+    keys: async function () { return []; }
+  };
+  const cacheStorage = {
+    keys: async function () { return []; },
+    open: async function () { calls.open += 1; return cache; },
+    match: async function () { calls.match += 1; return null; }
+  };
+  const serviceWorker = {
+    location: { origin: origin },
+    addEventListener: function (name, handler) { handlers[name] = handler; },
+    clients: { claim: async function () {} },
+    skipWaiting: async function () {}
+  };
+  const workerFetch = async function () {
+    calls.fetch += 1;
+    return new Response('network response', { status: 200 });
+  };
+  vm.runInNewContext(source, {
+    self: serviceWorker,
+    caches: cacheStorage,
+    URL: URL,
+    Response: Response,
+    fetch: workerFetch,
+    Promise: Promise
+  }, { filename: 'ahabona-sw.js' });
+  assert.equal(source.includes("ahabona-shell-v10"), true, 'cache version must advance to evict the old shell containing reset URLs');
+  assert.equal(typeof handlers.fetch, 'function', 'service worker fetch handler must be registered');
+
+  async function dispatch(pathname) {
+    const event = {
+      request: { method: 'GET', url: origin + pathname, mode: 'navigate' },
+      respondWith: function (promise) { event.response = promise; }
+    };
+    handlers.fetch(event);
+    assert.ok(event.response, pathname + ' must be handled');
+    const response = await event.response;
+    await new Promise(function (resolve) { setImmediate(resolve); });
+    return response;
+  }
+
+  const resetResponse = await dispatch('/reset/test-reset-token');
+  assert.equal(resetResponse.status, 200);
+  assert.equal(calls.fetch, 1, 'reset route must use the network');
+  assert.equal(calls.match, 0, 'reset route must not read from Cache Storage');
+  assert.equal(calls.open, 0, 'reset route must not open a cache');
+  assert.equal(calls.put, 0, 'reset route must not be written to Cache Storage');
+
+  const publicResponse = await dispatch('/u/a1b2c3d4');
+  assert.equal(publicResponse.status, 200);
+  assert.equal(calls.fetch, 2);
+  assert.equal(calls.open, 1, 'ordinary public pages should retain normal shell caching');
+  assert.equal(calls.put, 1, 'ordinary public pages should still be cached');
 }
 
 (async function main() {
@@ -55,6 +116,15 @@ async function get(base, route) {
       assert.equal(result.response.status, 200, route);
       assert.match(result.body, /canonical/);
     }
+
+    const resetPage = await fetch(base + '/reset/test-reset-token');
+    assert.equal(resetPage.status, 200);
+    assert.equal(resetPage.headers.get('cache-control'), 'no-store');
+
+    const serviceWorker = await get(base, '/sw.js');
+    assert.equal(serviceWorker.response.status, 200);
+    assert.match(serviceWorker.body, /ahabona-shell-v10/);
+    await checkServiceWorkerCachePolicy(serviceWorker.body, base);
 
     const missingProfile = await fetch(base + '/u/zzzzzzzz');
     assert.equal(missingProfile.status, 404);
