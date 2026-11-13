@@ -16,7 +16,7 @@ test('public opportunities page is a standalone, mobile-first job discovery expe
 
 test('public visitors can view opportunities without signing in', () => {
   assert.match(OPPORTUNITIES_HTML, /Reba imyanya y'akazi yatangajwe/);
-  assert.match(OPPORTUNITIES_HTML, /gusoma utariyandikishije/);
+  assert.match(OPPORTUNITIES_HTML, /Ushobora kuyisoma utariyandikishije/);
   assert.match(OPPORTUNITIES_HTML, /GET','\/api\/jobs/);
 });
 
