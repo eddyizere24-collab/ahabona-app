@@ -92,6 +92,11 @@ async function checkServiceWorkerCachePolicy(source, origin) {
     const home = await get(base, '/');
     assert.equal(home.response.status, 200);
     assert.match(home.body, /AHABONA/);
+    assert.match(home.body, /<title>AHABONA \| Shaka abantu bafite ubumenyi na serivisi mu Rwanda<\/title>/);
+    assert.match(home.body, /<h1 class="home-heading" data-i18n="home.heading">/);
+    const homeDescription = home.body.match(/<meta name="description" content="([^"]+)"/);
+    assert.ok(homeDescription, 'homepage meta description must exist');
+    assert.ok(homeDescription[1].length <= 160, 'homepage meta description must be search-snippet length');
     assert.match(home.body, /rel="canonical"/);
     assert.match(home.body, /application\/ld\+json/);
 
