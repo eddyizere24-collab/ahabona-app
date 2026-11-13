@@ -354,7 +354,7 @@ async function openEmployerApplications(jobId,title){
  var result=await api('GET','/api/employer/jobs/'+encodeURIComponent(jobId)+'/applications');
  if(!result.ok){$('dashboard-content').innerHTML='<div class="notice error">Applications ntizashoboye kuboneka. Reba ko winjiye nka nyir\'itangazo.</div>';return}
  var rows=result.data.applications||[];
- var header='<div class="detail-head"><div><h3>'+esc(title||result.data.job&&result.data.job.title||'Applications')+'</h3><p class="hint">'+rows.length+' applications</p></div><button class="btn" id="back-employer-jobs" type="button">← Subira ku matangazo yanjye</button></div>';
+ var header='<div class="detail-head"><div><h3>'+esc(title||result.data.job&&result.data.job.title||'Applications')+'</h3><p class="hint">'+rows.length+' applications</p></div><button class="btn" id="back-employer-jobs" type="button">← Subira ku matangazo yanjye</button></div><div id="dashboard-message" aria-live="polite"></div>';
  if(!rows.length){$('dashboard-content').innerHTML=header+'<div class="empty">Nta muntu urasaba aka kazi.</div>';return}
  $('dashboard-content').innerHTML=header+'<div class="dashboard-list">'+rows.map(function(app){
   var next=nextApplicationStatuses(app.status);
