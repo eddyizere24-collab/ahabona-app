@@ -16,7 +16,7 @@
     "test:employer-jobs": "node --test tests/jobs-employer.test.cjs",
     "test:applications": "node --test tests/applications.test.cjs",
     "test:opportunity": "node --test tests/opportunities-public.test.cjs tests/jobs-employer.test.cjs tests/job-workflow.test.cjs tests/applications.test.cjs tests/opportunity-reads.test.cjs tests/opportunities-ui.test.cjs tests/opportunities-route.test.cjs",
-    "test:opportunity-reads": "node --test tests/opportunity-reads.test.cjs tests/opportunities-ui.test.cjs tests/opportunities-route.test.cjs tests/legacy-profile-sync.test.cjs tests/job-preferences.test.cjs tests/opportunity-matching.test.cjs",
+    "test:opportunity-reads": "node --test tests/opportunity-reads.test.cjs tests/opportunities-ui.test.cjs tests/opportunities-route.test.cjs tests/legacy-profile-sync.test.cjs tests/job-preferences.test.cjs tests/opportunity-matching.test.cjs tests/job-moderation-ui.test.cjs",
     "test:job-workflow": "node --test tests/job-workflow.test.cjs"
   },
   "dependencies": {
