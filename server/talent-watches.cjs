@@ -152,7 +152,7 @@ async function matchCandidatesForTalentWatch(pool, actor, watchId) {
     const candidates = await client.query(
       'SELECT p.user_id,p.district,p.caps,cp.preferred_districts,cp.preferred_provinces ' +
       'FROM public.profiles p ' +
-      'JOIN public.users u ON u.id=p.user_id AND u.status='active' ' +
+      "JOIN public.users u ON u.id=p.user_id AND u.status='active' " +
       'JOIN public.candidate_job_preferences cp ON cp.user_id=p.user_id ' +
       'WHERE p.suspended=false AND cp.seeking_work=true AND cp.reverse_discovery_enabled=true ' +
       'AND p.user_id<>$1 ORDER BY cp.updated_at DESC LIMIT 2000',
