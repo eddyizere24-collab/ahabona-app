@@ -2382,6 +2382,10 @@ async function apiMePut(ctx,req,res){
     ctx.Q('INSERT INTO cap_requests(user_id,text,created_at) VALUES(?,?,?)').run(u.id,f.other,Date.now());
   }
   const nr=ctx.Q('SELECT p.*,u.phone,u.email,u.status,u.id_verified AS owner_verified FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=?').get(u.id);
+  if(ctx.pgPool){
+    try{await syncActorProfileToNeon(ctx,{...u,status:'active'})}
+    catch(error){const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';console.error('[profile-neon-sync] sync deferred ('+code+').')}
+  }
   sendJson(req,res,200,{profile:pubProfile(nr,null,{own:true,email:u.email,status:u.status})});
 }
 
