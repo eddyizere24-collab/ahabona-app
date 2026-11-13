@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildRobotsTxt, buildSitemapXml, renderPublicProfileHtml, renderInfoPageHtml, getServiceLandingDefinition, renderServiceLandingHtml, isoDate } = require('../discovery-seo.cjs');
+const { buildRobotsTxt, buildSitemapXml, renderPublicProfileHtml, renderInfoPageHtml, getServiceLandingDefinition, renderServiceLandingHtml, renderDiscoveryDirectoryHtml, isoDate } = require('../discovery-seo.cjs');
 
 test('robots permits ChatGPT search while keeping private routes out', () => {
   const robots = buildRobotsTxt('https://ahabona.duckdns.org/');
@@ -17,7 +17,7 @@ test('sitemap includes only valid public profile ids and safely encodes paths', 
     { pid: 'abc', updated_at: 1794469200000 }, { pid: 'bad<script>', updated_at: 1794469200000 }, { pid: 'e5f6g7h8' }
   ]);
   assert.match(xml, /https:\/\/ahabona\.duckdns\.org\//);
-  assert.equal((xml.match(/<loc>/g) || []).length, 5);
+  assert.equal((xml.match(/<loc>/g) || []).length, 6);
   assert.match(xml, /https:\/\/ahabona\.duckdns\.org\/u\/a1b2c3d4/);
   assert.doesNotMatch(xml, /<script>/);
   assert.match(xml, /<lastmod>2026-11-12T/);
@@ -54,6 +54,7 @@ test('sitemap includes the public explanation pages', () => {
   const xml = buildSitemapXml([{ pid: 'a1b2c3d4' }]);
   assert.ok(xml.includes('https://ahabona.duckdns.org/about'));
   assert.ok(xml.includes('https://ahabona.duckdns.org/how-it-works'));
+  assert.ok(xml.includes('https://ahabona.duckdns.org/people'));
 });
 test('about page explains the free discovery model in Kinyarwanda and English', () => {
   const html = renderInfoPageHtml('about');
@@ -98,6 +99,27 @@ test('empty service landing pages are noindex until matching public profiles exi
   const html = renderServiceLandingHtml(definition, []);
   assert.match(html, /name="robots" content="noindex,follow"/);
   assert.match(html, /Nta muntu ubonetse muri iki cyiciro ubu/);
+});
+
+test('public people directory links only validated public profiles and active service categories', () => {
+  const html = renderDiscoveryDirectoryHtml([
+    { pid: 'a1b2c3d4', name: 'Eddy Example', district: 'Gasabo', province: 'Umujyi wa Kigali',
+      caps: ['Umushoferi'], intro: 'Nkorera mu Rwanda.', phone: '+250788123456',
+      email: 'private@example.test', thumb: '/photos/a1b2c3d4-t.jpg?v=1794469200000' },
+    { pid: 'invalid<script>', name: 'Must not render', caps: ['Umushoferi'] }
+  ], ['umushoferi', 'invalid<script>']);
+  assert.match(html, /href="\/u\/a1b2c3d4"/);
+  assert.match(html, /href="\/services\/umushoferi"/);
+  assert.match(html, /Eddy Example/);
+  assert.doesNotMatch(html, /Must not render/);
+  assert.doesNotMatch(html, /\+250788123456|private@example\.test/);
+  assert.match(html, /name="robots" content="index,follow"/);
+  assert.ok(html.includes('application/ld+json'));
+});
+test('empty public people directory is noindex', () => {
+  const html = renderDiscoveryDirectoryHtml([], []);
+  assert.match(html, /name="robots" content="noindex,follow"/);
+  assert.match(html, /Nta mwirondoro wa public urashyirwaho ubu/);
 });
 
 test('ISO date conversion accepts Unix milliseconds and seconds', () => {
