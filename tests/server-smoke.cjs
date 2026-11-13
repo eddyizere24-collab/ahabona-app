@@ -94,6 +94,7 @@ async function checkServiceWorkerCachePolicy(source, origin) {
     assert.match(home.body, /AHABONA/);
     assert.match(home.body, /<title>AHABONA \| Shaka abantu bafite ubumenyi na serivisi mu Rwanda<\/title>/);
     assert.match(home.body, /<h1 class="home-heading" data-i18n="home.heading">/);
+    assert.match(home.body, /href="\/people"/);
     const homeDescription = home.body.match(/<meta name="description" content="([^"]+)"/);
     assert.ok(homeDescription, 'homepage meta description must exist');
     assert.ok(homeDescription[1].length <= 160, 'homepage meta description must be search-snippet length');
@@ -115,12 +116,17 @@ async function checkServiceWorkerCachePolicy(source, origin) {
     assert.match(sitemap.body, /<urlset/);
     assert.match(sitemap.body, /\/about/);
     assert.match(sitemap.body, /\/how-it-works/);
+    assert.match(sitemap.body, /\/people/);
 
-    for (const route of ['/about', '/how-it-works', '/services/umushoferi']) {
+    for (const route of ['/about', '/how-it-works', '/people', '/services/umushoferi']) {
       const result = await get(base, route);
       assert.equal(result.response.status, 200, route);
       assert.match(result.body, /canonical/);
     }
+
+    const peopleDirectory = await get(base, '/people');
+    assert.equal(peopleDirectory.response.status, 200);
+    assert.match(peopleDirectory.body, /name="robots" content="noindex,follow"/);
 
     for (const [route, title] of [
       ['/terms', 'Amabwiriza yo gukoresha AHABONA'],
