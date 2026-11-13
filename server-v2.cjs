@@ -269,7 +269,7 @@ function rolesCatalog(){return STAFF_LEVELS.map(k=>({id:k,rw:ROLES[k].rw,en:ROLE
     "nav.home":"Ahabanza","nav.about":"Ibyerekeye","nav.help":"Ubufasha","nav.saved":"Abitse",
     "nav.login":"Injira","nav.logout":"Sohoka","nav.register":"Iyandikishe","nav.profile":"Umwirondoro",
     "nav.admin":"Ubuyobozi","nav.lang":"Ururimi",
-    "home.search.ph":"Shaka uwo ukeneye","home.search.label":"Shaka kuri AHABONA",
+    "home.search.ph":"Shaka uwo ukeneye","home.search.label":"Shaka kuri AHABONA","home.heading":"Shaka abantu bafite ubumenyi na serivisi mu Rwanda",
     "home.results":"Ibisubizo {{count}}","home.empty":"Nta muntu ubonetse hano.",
     "home.empty.filt":"Nta muntu ubonetse hano. Gerageza filters zindi.",
     "home.first":"Nta muntu urabona hano. Iyandikishe kugira ngo ube uwa mbere.",
@@ -417,7 +417,7 @@ function rolesCatalog(){return STAFF_LEVELS.map(k=>({id:k,rw:ROLES[k].rw,en:ROLE
     "nav.home":"Home","nav.about":"About","nav.help":"Help","nav.saved":"Saved",
     "nav.login":"Log in","nav.logout":"Log out","nav.register":"Sign up","nav.profile":"Profile",
     "nav.admin":"Admin","nav.lang":"Language",
-    "home.search.ph":"Search for who you need","home.search.label":"Search on AHABONA",
+    "home.search.ph":"Search for who you need","home.search.label":"Search on AHABONA","home.heading":"Find people with skills and services in Rwanda",
     "home.results":"{{count}} results","home.empty":"No one found here.",
     "home.empty.filt":"No one found. Try other filters.",
     "home.first":"No one to show. Sign up to be the first.",
@@ -3280,7 +3280,7 @@ function adminStats(ctx,req,res){
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1a9b6c">
-<meta name="description" content="AHABONA ni urubuga rw’ubuntu mu Rwanda ruhuza abantu bafite ubumenyi, imyuga, ubushobozi na serivisi n’abantu babikeneye. Shaka umushoferi, umubaji, umudozi n’abandi; bavugane kandi bumvikane hagati yabo.">
+<meta name="description" content="AHABONA ni urubuga rw’ubuntu mu Rwanda rugufasha kubona abantu bafite ubumenyi, imyuga na serivisi, mukavugana mukumvikana.">
 <meta name="robots" content="index,follow,max-image-preview:large">
 <link rel="canonical" href="https://ahabona.duckdns.org/">
 <meta property="og:type" content="website">
@@ -3294,7 +3294,7 @@ function adminStats(ctx,req,res){
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon.svg">
-<title>AHABONA</title>
+<title>AHABONA | Shaka abantu bafite ubumenyi na serivisi mu Rwanda</title>
 <style>
 :root{
   --p:#1a9b6c;
@@ -3365,6 +3365,7 @@ header{position:sticky;top:0;z-index:5;background:var(--s);border-bottom:1px sol
 .strip:hover{color:var(--t)}
 .strip.on{display:block}
 .hero{position:relative;margin:12px 0 14px;border-radius:22px;overflow:hidden;color:#fff;box-shadow:var(--sh);isolation:isolate}
+.home-heading{margin:0 0 10px;color:var(--th);font-size:clamp(20px,4.8vw,27px);line-height:1.2;font-weight:800;letter-spacing:-.02em}
 .hero-track{display:flex;transition:transform .55s cubic-bezier(.22,.61,.36,1);will-change:transform}
 .hero-slide{position:relative;flex:0 0 100%;box-sizing:border-box;min-height:200px;padding:20px 20px 44px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;background:var(--hb,linear-gradient(135deg,#0f5c45,#1a9b6c 58%,#d4a838));overflow:hidden}
 .hero-slide::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.30),rgba(0,0,0,0) 75%);pointer-events:none}
@@ -3645,6 +3646,7 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between}
 </div>
 </aside>
 <div>
+<h1 class="home-heading" data-i18n="home.heading">Shaka abantu bafite ubumenyi na serivisi mu Rwanda</h1>
 <section class="hero" id="hero" aria-roledescription="carousel" aria-label="AHABONA">
 <div class="hero-track" id="heroTrack">
 <div class="hero-slide" data-th="ijoro">
@@ -7534,6 +7536,8 @@ p,li{margin:.3em 0}`;
 
 EMBED['terms.html'] = `<!doctype html><html lang="rw"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,follow">
+<meta name="description" content="Soma inyandiko y’agateganyo isobanura uko wakoresha AHABONA. Itegereje isuzuma n’iyemezwa ry’umunyamategeko mu Rwanda.">
 <title>Amabwiriza yo gukoresha AHABONA</title>
 <link rel="stylesheet" href="/legal.css">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -7571,6 +7575,8 @@ EMBED['terms.html'] = `<!doctype html><html lang="rw"><head><meta charset="utf-8
 
 EMBED['privacy.html'] = `<!doctype html><html lang="rw"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,follow">
+<meta name="description" content="Soma inyandiko y’agateganyo isobanura amakuru AHABONA ikusanya n’uko ayakoresha. Itegereje isuzuma n’iyemezwa mu Rwanda.">
 <title>Amabwiriza y’Ibanga | AHABONA</title>
 <link rel="stylesheet" href="/legal.css">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">

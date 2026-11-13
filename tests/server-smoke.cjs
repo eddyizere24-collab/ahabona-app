@@ -92,6 +92,11 @@ async function checkServiceWorkerCachePolicy(source, origin) {
     const home = await get(base, '/');
     assert.equal(home.response.status, 200);
     assert.match(home.body, /AHABONA/);
+    assert.match(home.body, /<title>AHABONA \| Shaka abantu bafite ubumenyi na serivisi mu Rwanda<\/title>/);
+    assert.match(home.body, /<h1 class="home-heading" data-i18n="home.heading">/);
+    const homeDescription = home.body.match(/<meta name="description" content="([^"]+)"/);
+    assert.ok(homeDescription, 'homepage meta description must exist');
+    assert.ok(homeDescription[1].length <= 160, 'homepage meta description must be search-snippet length');
     assert.match(home.body, /rel="canonical"/);
     assert.match(home.body, /application\/ld\+json/);
 
@@ -115,6 +120,20 @@ async function checkServiceWorkerCachePolicy(source, origin) {
       const result = await get(base, route);
       assert.equal(result.response.status, 200, route);
       assert.match(result.body, /canonical/);
+    }
+
+    for (const [route, title] of [
+      ['/terms', 'Amabwiriza yo gukoresha AHABONA'],
+      ['/privacy', 'Amabwiriza y’Ibanga']
+    ]) {
+      const legal = await get(base, route);
+      assert.equal(legal.response.status, 200, route);
+      assert.ok(legal.body.includes(title), route + ' must keep its visible title');
+      assert.match(legal.body, /name="robots" content="noindex,follow"/, route + ' draft must stay out of search results until approved');
+      const description = legal.body.match(/<meta name="description" content="([^"]+)"/);
+      assert.ok(description, route + ' must have an accurate description');
+      assert.ok(description[1].length <= 160, route + ' description must fit a search snippet');
+      assert.match(legal.body, /INYANDIKO Y’AGATEGANYO/, route + ' must retain its draft notice');
     }
 
     const resetPage = await fetch(base + '/reset/test-reset-token');
