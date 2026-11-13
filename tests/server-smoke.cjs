@@ -122,6 +122,20 @@ async function checkServiceWorkerCachePolicy(source, origin) {
       assert.match(result.body, /canonical/);
     }
 
+    for (const [route, title] of [
+      ['/terms', 'Amabwiriza yo gukoresha AHABONA'],
+      ['/privacy', 'Amabwiriza y’Ibanga']
+    ]) {
+      const legal = await get(base, route);
+      assert.equal(legal.response.status, 200, route);
+      assert.ok(legal.body.includes(title), route + ' must keep its visible title');
+      assert.match(legal.body, /name="robots" content="noindex,follow"/, route + ' draft must stay out of search results until approved');
+      const description = legal.body.match(/<meta name="description" content="([^"]+)"/);
+      assert.ok(description, route + ' must have an accurate description');
+      assert.ok(description[1].length <= 160, route + ' description must fit a search snippet');
+      assert.match(legal.body, /INYANDIKO Y’AGATEGANYO/, route + ' must retain its draft notice');
+    }
+
     const resetPage = await fetch(base + '/reset/test-reset-token');
     assert.equal(resetPage.status, 200);
     assert.equal(resetPage.headers.get('cache-control'), 'no-store');
