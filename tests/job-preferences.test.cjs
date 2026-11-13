@@ -1,0 +1,6 @@
+'use strict';
+const test=require('node:test');const assert=require('node:assert/strict');
+const {normalizeCandidateJobPreferences,JobPreferenceError}=require('../server/job-preferences.cjs');
+test('validates and normalizes Rwanda job preferences',()=>{const value=normalizeCandidateJobPreferences({seeking_work:true,matching_enabled:true,reverse_discovery_enabled:true,preferred_capability_ids:[1,2],preferred_provinces:['Umujyi wa Kigali'],preferred_districts:['Gasabo'],employment_types:['full_time'],min_salary:'300000',in_app_enabled:true},[1,2,3]);assert.equal(value.matching_enabled,true);assert.equal(value.min_salary,300000);assert.deepEqual(value.preferred_districts,['Gasabo']);});
+test('disables matching when the candidate is not seeking work',()=>{const value=normalizeCandidateJobPreferences({seeking_work:false,matching_enabled:true,reverse_discovery_enabled:true},[]);assert.equal(value.matching_enabled,false);assert.equal(value.reverse_discovery_enabled,false);});
+test('rejects unknown skills, districts and invalid salary',()=>{assert.throws(()=>normalizeCandidateJobPreferences({preferred_capability_ids:[99]},[1]),JobPreferenceError);assert.throws(()=>normalizeCandidateJobPreferences({preferred_districts:['Ntabwo ari akarere']},[]),JobPreferenceError);assert.throws(()=>normalizeCandidateJobPreferences({min_salary:-5},[]),JobPreferenceError);});
