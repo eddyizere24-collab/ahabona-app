@@ -27,7 +27,8 @@ function buildSitemapXml(rows, baseUrl = DEFAULT_BASE_URL, serviceSlugs = []) {
   const entries = [
     '<url><loc>' + escapeXml(base + '/') + '</loc></url>',
     '<url><loc>' + escapeXml(base + '/about') + '</loc></url>',
-    '<url><loc>' + escapeXml(base + '/how-it-works') + '</loc></url>'
+    '<url><loc>' + escapeXml(base + '/how-it-works') + '</loc></url>',
+    '<url><loc>' + escapeXml(base + '/people') + '</loc></url>'
   ];
   for (const slug of Array.isArray(serviceSlugs) ? serviceSlugs : []) {
     if (/^[a-z0-9-]{2,60}$/.test(String(slug))) {
@@ -359,4 +360,84 @@ function renderServiceLandingHtml(page, profiles, options = {}) {
     '<footer class="foot">AHABONA ntitanga akazi kandi ntiyivanga mu masezerano y’abakoresha. <a href="/">Shakisha abantu kuri AHABONA.</a></footer></main></body></html>';
 }
 
-module.exports = { DEFAULT_BASE_URL, buildRobotsTxt, buildSitemapXml, renderPublicProfileHtml, renderInfoPageHtml, getServiceLandingDefinition, getServiceLandingSlugs, renderServiceLandingHtml, escapeHtml, isoDate };
+
+function renderDiscoveryDirectoryHtml(profiles, categorySlugs, options = {}) {
+  const base = baseOrigin(options.baseUrl);
+  const seen = new Set();
+  const list = (Array.isArray(profiles) ? profiles : []).filter(profile => {
+    const pid = String(profile && profile.pid || '');
+    if (!PUBLIC_PID_RE.test(pid) || seen.has(pid)) return false;
+    seen.add(pid);
+    return true;
+  }).slice(0, 200);
+  const categories = (Array.isArray(categorySlugs) ? categorySlugs : [])
+    .map(slug => getServiceLandingDefinition(slug))
+    .filter(Boolean);
+  const title = 'Abantu bafite ubumenyi na serivisi mu Rwanda | AHABONA';
+  const description = 'Shakisha abantu bafite ubumenyi, imyuga na serivisi kuri AHABONA. Reba public profiles n’aho bakorera, uvugane na bo ku buntu.';
+  const canonical = base + '/people';
+  const categoryHtml = categories.map(page =>
+    '<a class="category" href="/services/' + escapeHtml(page.slug) + '">' +
+    '<strong>' + escapeHtml(page.rw) + '</strong><span>' + escapeHtml(page.en) + '</span></a>'
+  ).join('');
+  const profileHtml = list.map(profile => {
+    const pid = String(profile.pid || '');
+    if (!PUBLIC_PID_RE.test(pid)) return '';
+    const name = cleanText(profile.name, 120) || 'Umwirondoro wa AHABONA';
+    const location = [cleanText(profile.district, 100), cleanText(profile.province, 100)].filter(Boolean).join(', ');
+    const skills = Array.isArray(profile.caps) ? profile.caps.map(value => cleanText(value, 70)).filter(Boolean).slice(0, 4) : [];
+    const photo = safePhotoPath(profile.thumb) || (Array.isArray(profile.photos) ? profile.photos.map(safePhotoPath).find(Boolean) : '') || '';
+    const intro = cleanText(profile.intro, 180);
+    return '<article class="profile"><a class="profile-main" href="/u/' + escapeHtml(pid) + '">' +
+      (photo ? '<img src="' + escapeHtml(base + photo) + '" alt="Ifoto ya ' + escapeHtml(name) + '" loading="lazy">' : '') +
+      '<div><h2>' + escapeHtml(name) + '</h2>' +
+      (location ? '<p class="muted">' + escapeHtml(location) + '</p>' : '') +
+      (skills.length ? '<p class="skills">' + skills.map(escapeHtml).join(' · ') + '</p>' : '') +
+      (intro ? '<p>' + escapeHtml(intro) + '</p>' : '') +
+      '<span class="more">Reba umwirondoro</span></div></a></article>';
+  }).filter(Boolean).join('');
+  const structuredData = {
+    '@context': 'https://schema.org', '@type': 'CollectionPage', name: title,
+    description, url: canonical, inLanguage: ['rw', 'en'],
+    mainEntity: {
+      '@type': 'ItemList',
+      numberOfItems: list.length,
+      itemListElement: list.map((profile, index) => ({
+        '@type': 'ListItem', position: index + 1,
+        url: base + '/u/' + profile.pid,
+        name: cleanText(profile.name, 120)
+      }))
+    },
+    isPartOf: { '@type': 'WebSite', name: 'AHABONA', url: base + '/' }
+  };
+  return '<!doctype html><html lang="rw"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<meta name="robots" content="' + (list.length ? 'index,follow' : 'noindex,follow') + '">' +
+    '<meta name="theme-color" content="#1a9b6c"><title>' + escapeHtml(title) + '</title>' +
+    '<meta name="description" content="' + escapeHtml(description) + '">' +
+    '<link rel="canonical" href="' + escapeHtml(canonical) + '">' +
+    '<meta property="og:type" content="website"><meta property="og:site_name" content="AHABONA">' +
+    '<meta property="og:title" content="' + escapeHtml(title) + '">' +
+    '<meta property="og:description" content="' + escapeHtml(description) + '">' +
+    '<meta property="og:url" content="' + escapeHtml(canonical) + '">' +
+    '<script type="application/ld+json">' + jsonForHtml(structuredData) + '</script>' +
+    '<style>:root{color-scheme:light;--green:#1a9b6c;--deep:#103d2b;--ink:#1e2a32;--muted:#5a6470;--paper:#faf7ef;--line:#e8e4da}' +
+    '*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}' +
+    'a{color:var(--green);text-decoration:none}.wrap{width:min(1000px,100% - 28px);margin:0 auto}.top{background:#fff;border-bottom:1px solid var(--line)}' +
+    '.bar{display:flex;align-items:center;justify-content:space-between;padding:14px 0}.brand{font-weight:850;color:var(--deep);font-size:20px}' +
+    'main{margin:24px auto}.lead{background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px}.lead h1{margin:0 0 8px;color:var(--deep);font-size:clamp(27px,5vw,38px);line-height:1.2}' +
+    '.muted{color:var(--muted);font-size:14px}.categories{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-top:14px}.category{display:flex;flex-direction:column;gap:3px;background:#fff;border:1px solid var(--line);border-radius:13px;padding:13px;color:var(--deep)}.category span{font-size:13px;color:var(--muted)}' +
+    '.profiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:18px}.profile{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}.profile-main{display:flex;gap:12px;padding:12px;color:var(--ink)}' +
+    '.profile img{width:88px;height:88px;object-fit:cover;border-radius:12px;flex:none;background:#edf1ed}.profile h2{font-size:17px;margin:0 0 4px;color:var(--deep)}.profile p{margin:4px 0;font-size:13px}.skills{color:#15583b;font-weight:650}.more{display:inline-block;margin-top:4px;color:var(--green);font-weight:750;font-size:13px}' +
+    '.empty{margin-top:14px;padding:18px;background:#fff;border:1px solid var(--line);border-radius:14px}.foot{text-align:center;padding:20px 0 28px;color:var(--muted);font-size:14px}.foot a{font-weight:700}' +
+    '</style></head><body><header class="top"><div class="wrap bar"><a class="brand" href="/">AHABONA</a><a href="/">Subira kuri AHABONA</a></div></header>' +
+    '<main class="wrap"><section class="lead"><h1>Abantu bafite ubumenyi na serivisi mu Rwanda</h1>' +
+    '<p>Shakisha abantu bagaragaje ubumenyi, imyuga n’ibyo bashoboye gukora. Kwiyandikisha no gushakisha kuri AHABONA ni ubuntu; abantu bavugana kandi bakumvikana hagati yabo.</p>' +
+    '<p lang="en">Find people with skills and services in Rwanda. Registration and discovery are free; people contact and make their own agreements directly.</p></section>' +
+    (categories.length ? '<section class="categories" aria-label="Ibyiciro bya serivisi">' + categoryHtml + '</section>' : '') +
+    (list.length ? '<section class="profiles" aria-label="Public profiles">' + profileHtml + '</section>' :
+      '<section class="empty"><h2>Nta mwirondoro wa public urashyirwaho ubu</h2><p>Subira kuri AHABONA nyuma cyangwa wiyandikishe ku buntu.</p><p lang="en">No active public profiles are listed yet.</p></section>') +
+    '<footer class="foot"><a href="/about">Ibyerekeye AHABONA</a> · <a href="/how-it-works">Uko ikora</a></footer></main></body></html>';
+}
+
+module.exports = { DEFAULT_BASE_URL, buildRobotsTxt, buildSitemapXml, renderPublicProfileHtml, renderInfoPageHtml, getServiceLandingDefinition, getServiceLandingSlugs, renderServiceLandingHtml, renderDiscoveryDirectoryHtml, escapeHtml, isoDate };
