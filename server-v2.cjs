@@ -19,7 +19,7 @@ const {JOB_MODERATION_HTML}=require('./server/job-moderation-ui.cjs');
 const {syncLegacyProfile}=require('./server/legacy-profile-sync.cjs');
 const {JobPreferenceError,getCandidateJobPreferences,saveCandidateJobPreferences}=require('./server/job-preferences.cjs');
 const {matchApprovedJob,matchApprovedJobsForCandidate}=require('./server/opportunity-matching.cjs');
-const {TalentWatchError,createEmployerTalentWatch,listEmployerTalentWatches,listEmployerTalentMatches,matchTalentWatchesForCandidate}=require('./server/talent-watches.cjs');
+const {TalentWatchError,createEmployerTalentWatch,listEmployerTalentWatches,listEmployerTalentMatches,matchCandidatesForTalentWatch,matchTalentWatchesForCandidate}=require('./server/talent-watches.cjs');
 EMBED['opportunities.html']=OPPORTUNITIES_HTML;
 EMBED['job-moderation.html']=JOB_MODERATION_HTML;
 
@@ -7753,7 +7753,8 @@ async function apiEmployerTalentWatches(ctx,req,res,method){
     await syncActorProfileToNeon(ctx,actor);
     const validIds=(ctx.caps||[]).map(item=>Number(item.id)).filter(id=>Number.isSafeInteger(id)&&id>0);
     const result=await createEmployerTalentWatch(ctx.pgPool,actor,body.data||{},validIds);
-    return sendJson(req,res,201,result);
+    const matches=await matchCandidatesForTalentWatch(ctx.pgPool,actor,result.watch.id);
+    return sendJson(req,res,201,{...result,matches});
   }catch(error){
     if(error instanceof TalentWatchError)return sendJson(req,res,error.status,{error:error.code,field:error.field});
     const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
