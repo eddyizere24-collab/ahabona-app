@@ -80,12 +80,11 @@ function renderPublicProfileHtml(profile, options = {}) {
   const location = [district, province].filter(Boolean).join(', ');
   const intro = cleanText(profile.intro, 1200);
   const skillSummary = skills.join(', ');
-  const title = [name, skillSummary, 'AHABONA'].filter(Boolean).join(' | ').slice(0, 180);
-  const descriptionParts = ['Umwirondoro wa ' + name + ' kuri AHABONA.'];
-  if (skillSummary) descriptionParts.push('Ubushobozi: ' + skillSummary + '.');
-  if (location) descriptionParts.push('Aho abarizwa: ' + location + '.');
-  if (intro) descriptionParts.push(intro.slice(0, 150));
-  const description = descriptionParts.join(' ').slice(0, 300);
+  const title = cleanText(name, 44) + ' | AHABONA';
+  const primarySkill = skills[0] || '';
+  const description = cleanText('Reba umwirondoro wa ' + cleanText(name, 70) + ' kuri AHABONA.' +
+    (primarySkill ? ' Ubushobozi: ' + primarySkill + '.' : '') +
+    (district ? ' Aho abarizwa: ' + district + '.' : ''), 155);
   const canonical = base + '/u/' + pid;
   const photos = (Array.isArray(profile.photos) ? profile.photos : []).map(safePhotoPath).filter(Boolean).slice(0, 6);
   const thumb = safePhotoPath(profile.thumb) || photos[0] || '';
@@ -163,8 +162,8 @@ function renderPublicProfileHtml(profile, options = {}) {
 
 const INFO_PAGES = {
   about: {
-    title: 'AHABONA ni iki? Urubuga rw’ubuntu ruhuza abafite ubumenyi n’ababukeneye mu Rwanda',
-    description: 'AHABONA ni urubuga rw’ubuntu rwo mu Rwanda rufasha abantu kugaragaza ubumenyi, imyuga, ubushobozi na serivisi bashobora gutanga, kugira ngo ababikeneye bababone kandi bavugane na bo.',
+    title: 'AHABONA ni iki? Urubuga rw’ubuntu mu Rwanda',
+    description: 'AHABONA ni urubuga rw’ubuntu mu Rwanda ruhuza abafite ubumenyi n’abakeneye serivisi kugira ngo bavugane mu buryo butaziguye.',
     sections: [
       ['AHABONA ni iki?', 'AHABONA ni urubuga rwigenga ruhuza abantu bafite ubumenyi, imyuga, impano, ubushobozi cyangwa serivisi bashobora gutanga n’abantu bashaka kubibona cyangwa kubikoresha. Rugamije gufasha umuntu wese kugaragaza icyo azi gukora no kugera ku bandi bashobora kugikeneye.'],
       ['Kwiyandikisha no gushakisha ni ubuntu', 'Gufungura konti, kugaragaza ibyo ushoboye no gushakisha abantu kuri AHABONA ni ubuntu. AHABONA ntiyishyuza abantu kugira ngo biyandikishe cyangwa bashake umuntu. Ntukishyure umuntu ukwitwaza ko agomba kukwandikisha kuri AHABONA.'],
@@ -181,8 +180,8 @@ const INFO_PAGES = {
     ]
   },
   'how-it-works': {
-    title: 'Uko AHABONA ikora: menya abantu bafite ubumenyi na serivisi mu Rwanda',
-    description: 'Sobanukirwa uko wakwiyandikisha ku buntu, ukagaragaza ibyo ushoboye, ugashaka umukozi cyangwa serivisi, hanyuma mukavugana mukumvikana hagati yanyu.',
+    title: 'Uko AHABONA ikora | Shaka abantu mu Rwanda',
+    description: 'Iyandikishe ku buntu, garagaza ibyo ushoboye, shaka serivisi ukeneye kandi muvugane mukumvikana hagati yanyu.',
     sections: [
       ['1. Ufite icyo ushoboye? Iyandikishe ku buntu', 'Fungura konti yawe kuri AHABONA nta mafaranga wishyuye. Shyiraho umwirondoro wawe n’ibyo ushoboye gukora.'],
       ['2. Garagaza umwirondoro wawe', 'Hitamo ubumenyi cyangwa serivisi utanga, akarere ukoreramo, ibisobanuro bigufi n’uburyo abantu bashobora kukugeraho. Shyiraho amafoto yawe cyangwa y’akazi kawe igihe ubishaka. Tanga amakuru ushaka ko agaragara ku mugaragaro gusa.'],
@@ -296,8 +295,8 @@ function renderServiceLandingHtml(page, profiles, options = {}) {
   }).slice(0, 60);
   const canonical = base + '/services/' + page.slug;
   const hasResults = list.length > 0;
-  const title = page.rw + ' | ' + page.en + ' | AHABONA';
-  const description = cleanText(page.rwDescription + ' ' + page.enDescription, 300);
+  const title = page.rw + ' | AHABONA';
+  const description = cleanText(page.rwDescription, 155);
   const cards = list.map(profile => {
     const pid = String(profile.pid || '');
     if (!PUBLIC_PID_RE.test(pid)) return '';
