@@ -5,7 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const crypto=require('node:crypto');
 const zlib=require('node:zlib');
-const {buildRobotsTxt,buildSitemapXml,renderPublicProfileHtml,renderInfoPageHtml,getServiceLandingDefinition,getServiceLandingSlugs,renderServiceLandingHtml,DEFAULT_BASE_URL}=require('./discovery-seo.cjs');
+const {buildRobotsTxt,buildSitemapXml,renderPublicProfileHtml,renderInfoPageHtml,getServiceLandingDefinition,getServiceLandingSlugs,renderServiceLandingHtml,renderDiscoveryDirectoryHtml,DEFAULT_BASE_URL}=require('./discovery-seo.cjs');
 const {DatabaseSync}=require('node:sqlite');
 const {execFile}=require('node:child_process');
 const STUDIO_BETA=process.env.AHABONA_STUDIO_BETA==='1';
@@ -3675,7 +3675,9 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between}
 <div>
 <button class="lk" data-m="help"><span data-i18n="nav.help">Ubufasha</span></button>
 <button class="lk" data-m="about"><span data-i18n="nav.about">Ibyerekeye</span></button>
+<a class="lk" href="/about">Ibyerekeye AHABONA</a>
 <a class="lk" href="/how-it-works">Uko AHABONA ikora</a>
+<a class="lk" href="/people">Abantu n’ubushobozi</a>
 <a class="lk" href="/terms" data-i18n="footer.terms">Amabwiriza</a>
 <a class="lk" href="/privacy" data-i18n="footer.privacy">Ibanga</a>
 </div>
@@ -7643,6 +7645,17 @@ function handleRequest(ctx,req,res){
     const publicBase=trustedBaseUrl()||DEFAULT_BASE_URL;
     const page=p==='/about'?'about':'how-it-works';
     return sendText(req,res,200,renderInfoPageHtml(page,{baseUrl:publicBase}),'text/html; charset=utf-8',{cache:'public, max-age=300'});
+  }
+  if((req.method==='GET'||req.method==='HEAD')&&p==='/people'){
+    const rows=ctx.Q("SELECT p.*,u.phone FROM profiles p JOIN users u ON u.id=p.user_id WHERE u.status='active' AND p.suspended=0 ORDER BY p.updated_at DESC LIMIT 200").all();
+    const publicProfiles=rows.map(profile=>pubProfile(profile,null,{}));
+    const publicServiceSlugs=getServiceLandingSlugs().filter(slug=>{
+      const definition=getServiceLandingDefinition(slug);
+      return definition&&rank({q:definition.query,prov:'',dist:'',dv:null,epoch:0,limit:1}).list.length>0;
+    });
+    const publicBase=trustedBaseUrl()||DEFAULT_BASE_URL;
+    const html=renderDiscoveryDirectoryHtml(publicProfiles,publicServiceSlugs,{baseUrl:publicBase});
+    return sendText(req,res,200,html,'text/html; charset=utf-8',{cache:'public, max-age=60'});
   }
   const serviceMatch=(req.method==='GET'||req.method==='HEAD')?p.match(/^\/services\/([a-z0-9-]{2,60})$/):null;
   if(serviceMatch){
