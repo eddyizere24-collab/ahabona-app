@@ -15,6 +15,9 @@ const {ApplicationError,createJobApplication,listMyApplications,listEmployerAppl
 const {JobWorkflowError,updateEmployerJobDraft,submitEmployerJobForReview,closeEmployerJob,listModerationQueue,reviewEmployerJob}=require('./server/job-workflow.cjs');
 const {createJobReaderKey,getUnreadPublicJobCount,markPublicJobRead}=require('./server/opportunity-reads.cjs');
 const {OPPORTUNITIES_HTML}=require('./server/opportunities-ui.cjs');
+const {syncLegacyProfile}=require('./server/legacy-profile-sync.cjs');
+const {JobPreferenceError,getCandidateJobPreferences,saveCandidateJobPreferences}=require('./server/job-preferences.cjs');
+const {matchApprovedJob,matchApprovedJobsForCandidate}=require('./server/opportunity-matching.cjs');
 EMBED['opportunities.html']=OPPORTUNITIES_HTML;
 
 const PROV={
@@ -7720,6 +7723,58 @@ function sameOriginMutation(req){
   }catch(e){return false}
 }
 
+async function syncActorProfileToNeon(ctx,actor){
+  const profile=ctx.Q("SELECT p.* FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=? AND u.status='active'").get(Number(actor.id));
+  if(!profile)throw new Error('An active AHABONA profile is required.');
+  const capabilities=ctx.Q('SELECT id,name,category,aliases,name_en,sort_order,active FROM capabilities WHERE active=1 ORDER BY sort_order,id').all();
+  return syncLegacyProfile(ctx.pgPool,actor,profile,capabilities);
+}
+
+function apiJobCapabilities(ctx,req,res){
+  const rows=(ctx.caps||[]).map(item=>({
+    id:Number(item.id),name:String(item.name||''),name_en:String(item.name_en||item.name||''),category:String(item.category||'')
+  })).filter(item=>Number.isSafeInteger(item.id)&&item.id>0&&item.name);
+  return sendJson(req,res,200,{capabilities:rows},{noCache:true});
+}
+
+async function apiMyJobPreferences(ctx,req,res,method){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  const actor=ctx.sessionUser(req);
+  if(!actor)return sendError(req,res,401,'err.auth');
+  if(method==='GET'){
+    try{
+      const result=await getCandidateJobPreferences(ctx.pgPool,actor);
+      const capabilities=(ctx.caps||[]).map(item=>({id:Number(item.id),name:String(item.name||''),name_en:String(item.name_en||item.name||''),category:String(item.category||'')})).filter(item=>Number.isSafeInteger(item.id)&&item.id>0&&item.name);
+      return sendJson(req,res,200,{...result,capabilities},{noCache:true});
+    }catch(error){
+      const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+      console.error('[job-preferences-get] database operation failed ('+code+').');
+      return sendError(req,res,503,'err.server');
+    }
+  }
+  if(method!=='PUT')return sendError(req,res,405,'err.method');
+  if(!sameOriginMutation(req))return sendError(req,res,403,'err.forbidden');
+  if(!ctx.rate.allow('job-preferences:'+actor.id,12,HOUR))return sendError(req,res,429,'err.rate');
+  const body=await readBody(req,12*1024);
+  if(!body.ok)return sendError(req,res,body.code||400,body.error||'err.server');
+  try{
+    await syncActorProfileToNeon(ctx,actor);
+    const allowedIds=(ctx.caps||[]).map(item=>Number(item.id)).filter(id=>Number.isSafeInteger(id)&&id>0);
+    const result=await saveCandidateJobPreferences(ctx.pgPool,actor,body.data||{},allowedIds);
+    let matching={checked:0,matched:0,notified:0};
+    if(result.preferences.matching_enabled){
+      try{matching=await matchApprovedJobsForCandidate(ctx.pgPool,actor.id,100)}
+      catch(error){const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';console.error('[job-preferences-match] matching failed ('+code+').');}
+    }
+    return sendJson(req,res,200,{...result,matching});
+  }catch(error){
+    if(error instanceof JobPreferenceError)return sendJson(req,res,400,{error:error.message,field:error.field});
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[job-preferences-save] database operation failed ('+code+').');
+    return sendError(req,res,503,'err.server');
+  }
+}
+
 async function apiCreateJob(ctx,req,res){
   if(!ctx.pgPool)return sendError(req,res,503,'err.server');
   const actor=ctx.sessionUser(req);
@@ -7731,6 +7786,7 @@ async function apiCreateJob(ctx,req,res){
   if(!body.ok)return sendError(req,res,body.code||400,body.error||'err.server');
 
   try{
+    await syncActorProfileToNeon(ctx,actor);
     const result=await createJobPost(ctx.pgPool,actor,body.data||{});
     return sendJson(req,res,201,result);
   }catch(error){
@@ -7826,6 +7882,7 @@ async function apiOpportunityApplications(ctx,req,res,url,p,m){
     const body=await readBody(req,16*1024);
     if(!body.ok)return sendError(req,res,body.code||400,body.error||'err.server');
     try{
+      await syncActorProfileToNeon(ctx,actor);
       const result=await createJobApplication(ctx.pgPool,actor,applyMatch[1],body.data||{});
       return sendJson(req,res,201,result);
     }catch(error){
@@ -7953,6 +8010,10 @@ async function adminJobModerationReview(ctx,req,res,jobId,actor){
   if(!body.ok)return sendError(req,res,body.code||400,body.error||'err.server');
   try{
     const result=await reviewEmployerJob(ctx.pgPool,actor,jobId,body.data||{});
+    if(result.job?.status==='approved'){
+      try{await matchApprovedJob(ctx.pgPool,jobId)}
+      catch(error){const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';console.error('[approved-job-match] matching failed ('+code+').');}
+    }
     ctx.adminLog(actor.id,'job_'+String(body.data?.action||'review'),'job_post',jobId,{
       action:String(body.data?.action||''),note:typeof body.data?.note==='string'?body.data.note.slice(0,300):null
     },ctx.ipOf(req));
@@ -7972,6 +8033,9 @@ async function handleApi(ctx,req,res,url,p){
   if(applicationRoute!==null)return applicationRoute;
   var employerWorkflowRoute=await apiEmployerJobWorkflow(ctx,req,res,url,p,m);
   if(employerWorkflowRoute!==null)return employerWorkflowRoute;
+  if(p==='/api/jobs/capabilities'&&(m==='GET'||m==='HEAD'))return apiJobCapabilities(ctx,req,res);
+  if(p==='/api/me/job-preferences'&&m==='GET')return apiMyJobPreferences(ctx,req,res,'GET');
+  if(p==='/api/me/job-preferences'&&m==='PUT')return apiMyJobPreferences(ctx,req,res,'PUT');
   if(p==='/api/jobs/unread-count'&&(m==='GET'||m==='HEAD'))return apiJobUnreadCount(ctx,req,res);
   var jobReadMatch=p.match(/^\/api\/jobs\/([0-9a-fA-F-]{36})\/read$/);
   if(jobReadMatch&&m==='POST')return apiMarkJobRead(ctx,req,res,jobReadMatch[1]);
