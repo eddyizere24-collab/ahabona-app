@@ -19,6 +19,7 @@ const {JOB_MODERATION_HTML}=require('./server/job-moderation-ui.cjs');
 const {syncLegacyProfile}=require('./server/legacy-profile-sync.cjs');
 const {JobPreferenceError,getCandidateJobPreferences,saveCandidateJobPreferences}=require('./server/job-preferences.cjs');
 const {matchApprovedJob,matchApprovedJobsForCandidate}=require('./server/opportunity-matching.cjs');
+const {TalentWatchError,createEmployerTalentWatch,listEmployerTalentWatches,listEmployerTalentMatches,matchTalentWatchesForCandidate}=require('./server/talent-watches.cjs');
 EMBED['opportunities.html']=OPPORTUNITIES_HTML;
 EMBED['job-moderation.html']=JOB_MODERATION_HTML;
 
@@ -2385,8 +2386,11 @@ async function apiMePut(ctx,req,res){
   }
   const nr=ctx.Q('SELECT p.*,u.phone,u.email,u.status,u.id_verified AS owner_verified FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=?').get(u.id);
   if(ctx.pgPool){
-    try{await syncActorProfileToNeon(ctx,{...u,status:'active'})}
-    catch(error){const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';console.error('[profile-neon-sync] sync deferred ('+code+').')}
+    try{
+      const actor={...u,status:'active'};
+      await syncActorProfileToNeon(ctx,actor);
+      try{await matchTalentWatchesForCandidate(ctx.pgPool,u.id)}catch(error){const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';console.error('[profile-talent-watch] matching deferred ('+code+').')}
+    }catch(error){const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';console.error('[profile-neon-sync] sync deferred ('+code+').')}
   }
   sendJson(req,res,200,{profile:pubProfile(nr,null,{own:true,email:u.email,status:u.status})});
 }
@@ -7732,6 +7736,46 @@ function sameOriginMutation(req){
   }catch(e){return false}
 }
 
+async function apiEmployerTalentWatches(ctx,req,res,method){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  const actor=ctx.sessionUser(req);
+  if(!actor)return sendError(req,res,401,'err.auth');
+  if(method==='GET'){
+    try{return sendJson(req,res,200,await listEmployerTalentWatches(ctx.pgPool,actor),{noCache:true})}
+    catch(error){const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';console.error('[talent-watches-list] database operation failed ('+code+').');return sendError(req,res,503,'err.server')}
+  }
+  if(method!=='POST')return sendError(req,res,405,'err.method');
+  if(!sameOriginMutation(req))return sendError(req,res,403,'err.forbidden');
+  if(!ctx.rate.allow('talent-watch-create:'+actor.id,8,HOUR))return sendError(req,res,429,'err.rate');
+  const body=await readBody(req,12*1024);
+  if(!body.ok)return sendError(req,res,body.code||400,body.error||'err.server');
+  try{
+    await syncActorProfileToNeon(ctx,actor);
+    const validIds=(ctx.caps||[]).map(item=>Number(item.id)).filter(id=>Number.isSafeInteger(id)&&id>0);
+    const result=await createEmployerTalentWatch(ctx.pgPool,actor,body.data||{},validIds);
+    return sendJson(req,res,201,result);
+  }catch(error){
+    if(error instanceof TalentWatchError)return sendJson(req,res,error.status,{error:error.code,field:error.field});
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[talent-watch-create] database operation failed ('+code+').');
+    return sendError(req,res,503,'err.server');
+  }
+}
+
+async function apiEmployerTalentMatches(ctx,req,res,watchId){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  const actor=ctx.sessionUser(req);
+  if(!actor)return sendError(req,res,401,'err.auth');
+  if(!ctx.rate.allow('talent-watch-matches:'+actor.id,60,60*1000))return sendError(req,res,429,'err.rate');
+  try{return sendJson(req,res,200,await listEmployerTalentMatches(ctx.pgPool,actor,watchId),{noCache:true})}
+  catch(error){
+    if(error instanceof TalentWatchError)return sendJson(req,res,error.status,{error:error.code});
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[talent-watch-matches] database operation failed ('+code+').');
+    return sendError(req,res,503,'err.server');
+  }
+}
+
 async function syncActorProfileToNeon(ctx,actor){
   const profile=ctx.Q("SELECT p.* FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=? AND u.status='active'").get(Number(actor.id));
   if(!profile)throw new Error('An active AHABONA profile is required.');
@@ -7775,7 +7819,12 @@ async function apiMyJobPreferences(ctx,req,res,method){
       try{matching=await matchApprovedJobsForCandidate(ctx.pgPool,actor.id,100)}
       catch(error){const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';console.error('[job-preferences-match] matching failed ('+code+').');}
     }
-    return sendJson(req,res,200,{...result,matching});
+    let talent={checked:0,matched:0,notified:0};
+    if(result.preferences.reverse_discovery_enabled){
+      try{talent=await matchTalentWatchesForCandidate(ctx.pgPool,actor.id)}
+      catch(error){const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';console.error('[talent-preferences-match] matching failed ('+code+').')}
+    }
+    return sendJson(req,res,200,{...result,matching,talent});
   }catch(error){
     if(error instanceof JobPreferenceError)return sendJson(req,res,400,{error:error.message,field:error.field});
     const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
@@ -8042,6 +8091,10 @@ async function handleApi(ctx,req,res,url,p){
   if(applicationRoute!==null)return applicationRoute;
   var employerWorkflowRoute=await apiEmployerJobWorkflow(ctx,req,res,url,p,m);
   if(employerWorkflowRoute!==null)return employerWorkflowRoute;
+  if(p==='/api/employer/talent-watches'&&m==='GET')return apiEmployerTalentWatches(ctx,req,res,'GET');
+  if(p==='/api/employer/talent-watches'&&m==='POST')return apiEmployerTalentWatches(ctx,req,res,'POST');
+  var talentWatchMatch=p.match(/^\\/api\\/employer\\/talent-watches\\/([0-9a-fA-F-]{36})\\/matches$/);
+  if(talentWatchMatch&&m==='GET')return apiEmployerTalentMatches(ctx,req,res,talentWatchMatch[1]);
   if(p==='/api/jobs/capabilities'&&(m==='GET'||m==='HEAD'))return apiJobCapabilities(ctx,req,res);
   if(p==='/api/me/job-preferences'&&m==='GET')return apiMyJobPreferences(ctx,req,res,'GET');
   if(p==='/api/me/job-preferences'&&m==='PUT')return apiMyJobPreferences(ctx,req,res,'PUT');
