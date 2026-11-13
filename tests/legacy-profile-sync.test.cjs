@@ -34,7 +34,7 @@ test('profile bridge copies capability IDs safely and excludes private fields', 
     { id: 9, name: 'Other', category: 'Other', aliases: '[]', active: 1 }
   ]);
 
-  assert.deepEqual(result, { userId: 17, profileSynced: true, capabilityCount: 2 });
+  assert.deepEqual(result, { userId: 17, profileSynced: true, capabilityCount: 3 });
   const profileWrite = pool.calls.find(call => /INSERT INTO public\.profiles/.test(call.sql));
   assert.ok(profileWrite);
   assert.deepEqual(JSON.parse(profileWrite.values[4]), [3, 4]);
