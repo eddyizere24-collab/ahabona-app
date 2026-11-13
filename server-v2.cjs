@@ -7785,7 +7785,7 @@ function handleRequest(ctx,req,res){
     '.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8',
     '.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8'
   })[ext]||'text/html; charset=utf-8';
-  const isPasswordReset=/^\\/reset\\/[A-Za-z0-9_-]+$/.test(p);
+  const isPasswordReset=p.indexOf('/reset/')===0;
   var cc=isPasswordReset?'no-store':(ext==='.html'?'public, max-age=60':(ext==='.js'?'no-cache':'public, max-age=3600'));
   return sendText(req,res,200,body,type,isPasswordReset?{noCache:true}:{cache:cc});
 }
