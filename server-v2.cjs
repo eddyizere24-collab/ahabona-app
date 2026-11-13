@@ -2264,7 +2264,7 @@ async function apiReport(ctx,req,res){
   }
 }
 
-/* ===== END OF IGICE 7/16 ===== */async async function syncOpportunityProfile(ctx,userId,profileRow){
+/* ===== END OF IGICE 7/16 ===== */async function syncOpportunityProfile(ctx,userId,profileRow){
   if(!ctx.pgPool||!profileRow)return false;
   const actor=ctx.Q('SELECT id,status,created_at,display_name FROM users WHERE id=?').get(userId);
   if(!actor||actor.status!=='active')return false;
@@ -2278,7 +2278,7 @@ async function apiReport(ctx,req,res){
   }
 }
 
-function apiRegister(ctx,req,res){
+async function apiRegister(ctx,req,res){
   const ip=ctx.ipOf(req)||'';
   if(!ctx.rate.allow('r:'+ip,8,HOUR))return sendError(req,res,429,'err.rate');
   const b=await readBody(req,BODY_MAX);
