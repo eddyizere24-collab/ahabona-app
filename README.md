@@ -64,3 +64,8 @@ Crawler access only makes pages eligible for crawling. It does not guarantee ind
 6. Keep rollback copies private and outside the public web root. Do not use a database restore as a substitute for reviewing a failed release.
 
 The Studio feature remains opt-in. Its staging runbook is in `docs/studio-staging-runbook.md`. Legal Terms and Privacy pages are draft material pending owner/controller details and qualified Rwanda legal review; do not present them as approved policies.
+
+
+## Opportunity Engine staged integration
+
+The Opportunity Engine adds a server-only Neon PostgreSQL data path. It remains opt-in with `AHABONA_ENABLE_POSTGRES=1`; SQLite remains authoritative for existing accounts and people discovery during migration. Public job APIs are separate from the people-first homepage.

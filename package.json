@@ -12,6 +12,10 @@
     "check": "node --check server-v2.cjs && node --check discovery-seo.cjs && node --check tests/discovery-seo.test.cjs && node --check tests/server-smoke.cjs && node --check server-v2-modules/studio/schema.cjs && node --check server-v2-modules/studio/store.cjs && node --check server-v2-modules/studio/media.cjs && node --check server-v2-modules/studio/renderer.js && node --check server-v2-modules/studio/editor.js",
     "test:discovery": "node --test tests/discovery-seo.test.cjs",
     "test:server": "node --no-warnings tests/server-smoke.cjs",
-    "test": "npm run check && npm run test:discovery && npm run test:server"
+    "test": "npm run check && npm run test:discovery && npm run test:server",
+    "test:opportunity": "node --test tests/postgres-adapter.test.cjs tests/opportunities-public.test.cjs tests/jobs-employer.test.cjs tests/applications.test.cjs tests/job-workflow.test.cjs"
+  },
+  "dependencies": {
+    "pg": "8.23.1"
   }
 }
