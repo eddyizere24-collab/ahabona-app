@@ -13,6 +13,9 @@ const {listPublicJobs,getPublicJob}=require('./server/opportunities-public.cjs')
 const {createJobPost,listEmployerJobs,JobInputError}=require('./server/jobs-employer.cjs');
 const {ApplicationError,createJobApplication,listMyApplications,listEmployerApplications,updateEmployerApplicationStatus}=require('./server/applications.cjs');
 const {JobWorkflowError,updateEmployerJobDraft,submitEmployerJobForReview,closeEmployerJob,listModerationQueue,reviewEmployerJob}=require('./server/job-workflow.cjs');
+const {createJobReaderKey,getUnreadPublicJobCount,markPublicJobRead}=require('./server/opportunity-reads.cjs');
+const {OPPORTUNITIES_HTML}=require('./server/opportunities-ui.cjs');
+EMBED['opportunities.html']=OPPORTUNITIES_HTML;
 
 const PROV={
   "Umujyi wa Kigali":["Gasabo","Kicukiro","Nyarugenge"],
@@ -5526,6 +5529,15 @@ async function refreshNotifBadge(n){
     else badge.style.display='none';
   }
 }
+async function refreshJobBadge(){
+  var badge=document.getElementById('jobs-unread');
+  if(!badge)return;
+  var result=await api('GET','/api/jobs/unread-count',undefined,{retry:false});
+  if(!result.ok){badge.style.display='none';return}
+  var count=Number(result.data&&result.data.unread)||0;
+  if(count>0){badge.style.display='inline-block';badge.textContent=String(count>99?'99+':count)}
+  else badge.style.display='none';
+}
 function displayCap(p){
   if(LANG==='en'&&p.cap_en)return p.cap_en;
   return p.cap||'';
@@ -6272,6 +6284,7 @@ function boot(){
     renderChips();
     applySaver();
     applyStaticTexts();
+    refreshJobBadge();
     var yr=document.getElementById('yr');
     if(yr)yr.textContent=String(new Date().getFullYear());
     var sunm=document.getElementById('sunm');
@@ -7649,6 +7662,7 @@ function handleRequest(ctx,req,res){
   // Normalize: strip a single trailing slash (but keep "/" itself)
   if(p.length>1&&p.endsWith('/'))p=p.slice(0,-1);
   if(p==='/')key='index.html';
+  else if(p==='/opportunities')key='opportunities.html';
   else if(p==='/admin')key='admin.html';
   else if(p==='/terms')key='terms.html';
   else if(p==='/privacy')key='privacy.html';
@@ -7679,6 +7693,12 @@ function handleRequest(ctx,req,res){
   }
   var body=EMBED[key];
   if(body===undefined)return sendError(req,res,404,'err.notfound');
+  if(key==='index.html'&&p==='/'){
+    body=body.replace(
+      '<button class="ib" data-m="notif" id="bn"',
+      '<a class="ib" href="/opportunities" id="jobs-entry" aria-label="Amahirwe y\'akazi" title="Amahirwe y\'akazi" style="position:relative"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 12v2h4v-2"/></svg><span id="jobs-unread" style="display:none;position:absolute;top:2px;right:2px;background:var(--e);color:#fff;border-radius:10px;font-size:10px;min-width:16px;padding:1px 4px;line-height:14px"></span></a>\n<button class="ib" data-m="notif" id="bn"'
+    );
+  }
   var ext=path.extname(key)||'.html';
   var type=({
     '.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8',
@@ -7758,6 +7778,39 @@ async function apiPublicJob(ctx,req,res,jobId){
   }catch(error){
     const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
     console.error('[public-job-detail] database operation failed ('+code+').');
+    return sendError(req,res,503,'err.server');
+  }
+}
+
+async function apiJobUnreadCount(ctx,req,res){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  const actor=ctx.sessionUser(req);
+  const readerKey=createJobReaderKey({userId:actor&&actor.id,deviceId:ctx.deviceOf(req)});
+  if(!readerKey)return sendJson(req,res,200,{unread:0});
+  if(!ctx.rate.allow('job-unread:'+readerKey,120,MINUTE))return sendError(req,res,429,'err.rate');
+  try{
+    const unread=await getUnreadPublicJobCount(ctx.pgPool,readerKey);
+    return sendJson(req,res,200,{unread:unread});
+  }catch(error){
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[public-job-unread] database operation failed ('+code+').');
+    return sendError(req,res,503,'err.server');
+  }
+}
+
+async function apiMarkJobRead(ctx,req,res,jobId){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  if(!sameOriginMutation(req))return sendError(req,res,403,'err.forbidden');
+  const actor=ctx.sessionUser(req);
+  const readerKey=createJobReaderKey({userId:actor&&actor.id,deviceId:ctx.deviceOf(req)});
+  if(!readerKey)return sendJson(req,res,200,{marked:false});
+  if(!ctx.rate.allow('job-read:'+readerKey,90,MINUTE))return sendError(req,res,429,'err.rate');
+  try{
+    const result=await markPublicJobRead(ctx.pgPool,readerKey,jobId);
+    return sendJson(req,res,result.marked?200:404,result);
+  }catch(error){
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[public-job-read] database operation failed ('+code+').');
     return sendError(req,res,503,'err.server');
   }
 }
@@ -7919,6 +7972,9 @@ async function handleApi(ctx,req,res,url,p){
   if(applicationRoute!==null)return applicationRoute;
   var employerWorkflowRoute=await apiEmployerJobWorkflow(ctx,req,res,url,p,m);
   if(employerWorkflowRoute!==null)return employerWorkflowRoute;
+  if(p==='/api/jobs/unread-count'&&(m==='GET'||m==='HEAD'))return apiJobUnreadCount(ctx,req,res);
+  var jobReadMatch=p.match(/^\/api\/jobs\/([0-9a-fA-F-]{36})\/read$/);
+  if(jobReadMatch&&m==='POST')return apiMarkJobRead(ctx,req,res,jobReadMatch[1]);
   if(p==='/api/jobs'&&(m==='GET'||m==='HEAD'))return apiPublicJobs(ctx,req,res,url);
   if(p==='/api/jobs'&&m==='POST')return apiCreateJob(ctx,req,res);
   if(p==='/api/me/jobs'&&m==='GET')return apiMyJobs(ctx,req,res);
