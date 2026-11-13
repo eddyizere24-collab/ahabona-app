@@ -53,6 +53,8 @@ jobs:
           node --check tests/opportunity-matching.test.cjs
           node --check server/job-moderation-ui.cjs
           node --check tests/job-moderation-ui.test.cjs
+          node --check server/talent-watches.cjs
+          node --check tests/talent-watches.test.cjs
       - name: Run focused tests
         run: |
           npm run test:discovery
