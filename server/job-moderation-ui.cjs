@@ -1,6 +1,6 @@
 'use strict';
 
-const JOB_MODERATION_HTML = String.raw\`<!doctype html>
+const JOB_MODERATION_HTML = String.raw`<!doctype html>
 <html lang="rw">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -65,6 +65,6 @@ load();
 })();
 </script>
 </body>
-</html>\`;
+</html>`;
 
 module.exports={JOB_MODERATION_HTML};
