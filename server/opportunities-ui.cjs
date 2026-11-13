@@ -106,7 +106,7 @@ const OPPORTUNITIES_HTML = String.raw`<!doctype html>
 
   <section id="dashboard-view" class="panel form-panel hidden">
     <div class="detail-head"><div><h2>Ibikorwa byanjye</h2><p class="hint">Kurikirana amatangazo watanze n'ubusabe bwo gusaba akazi.</p></div><button id="close-dashboard" class="btn" type="button">Funga</button></div>
-    <div class="tabs"><button class="tab active" type="button" data-tab="employer">Amatangazo yanjye</button><button class="tab" type="button" data-tab="candidate">Akazi nasabye</button><button class="tab" type="button" data-tab="preferences">Ibyo nshaka mu kazi</button></div>
+    <div class="tabs"><button class="tab active" type="button" data-tab="employer">Amatangazo yanjye</button><button class="tab" type="button" data-tab="candidate">Akazi nasabye</button><button class="tab" type="button" data-tab="preferences">Ibyo nshaka mu kazi</button><button class="tab" type="button" data-tab="talent">Shaka abakozi</button></div>
     <div id="dashboard-content"><div class="loading">Turimo kureba amakuru…</div></div>
   </section>
   <p class="footer-note">AHABONA · Kwiyandikisha, kureba no gusaba akazi kuri AHABONA ni ubuntu.</p>
@@ -377,7 +377,47 @@ async function updateApplicationStatus(applicationId){
  if(card){var old=card.querySelector('.status');if(old){old.textContent=applicationStatusLabel(select.value);old.className='status'}card.querySelector('strong').textContent=applicationStatusLabel(select.value);card.querySelector('.application-actions').remove()}
  showMessage('dashboard-message','Status ya application yahinduwe neza. Uwasabye akazi azabimenyeshwa muri AHABONA.','');
 }
+async function loadTalentWatches(){
+ $('dashboard-content').innerHTML='<div class="loading">Turimo kureba uburyo bwo gushaka abakozi…</div>';
+ var results=await Promise.all([api('GET','/api/employer/talent-watches'),api('GET','/api/jobs/capabilities')]);
+ if(!results[0].ok||!results[1].ok){$('dashboard-content').innerHTML='<div class="empty">Ugomba kwinjira muri AHABONA kandi database igomba kuba ihujwe kugira ngo ukoreshe Talent Watch.</div>';return}
+ var watches=results[0].data.watches||[],caps=results[1].data.capabilities||[];
+ var groups={};caps.forEach(function(cap){(groups[cap.category]||(groups[cap.category]=[])).push(cap)});
+ var capabilityHtml=Object.keys(groups).sort().map(function(category){return '<div class="field"><strong>'+esc(category)+'</strong><div class="skill-picks">'+groups[category].map(function(cap){return '<label class="check-row"><input type="checkbox" name="watch-capability" value="'+esc(cap.id)+'"> <span>'+esc(cap.name)+' / '+esc(cap.name_en)+'</span></label>'}).join('')+'</div></div>'}).join('');
+ var provinces=Object.keys(DISTRICTS),districts=Object.keys(DISTRICTS).flatMap(function(x){return DISTRICTS[x]});
+ var watchCards=watches.length?watches.map(function(w){
+  var criteria=w.criteria||{},names=(criteria.capability_ids||[]).map(function(id){var c=caps.find(function(x){return Number(x.id)===Number(id)});return c?c.name:String(id)});
+  return '<article class="panel dashboard-item" style="padding:14px"><div><strong>'+esc(w.name)+'</strong><div class="hint">'+esc(names.join(', '))+' · '+esc(w.match_count||0)+' abantu bahuye</div><div class="hint">'+esc([].concat(criteria.districts||[],criteria.provinces||[]).join(', ')||'Aho ari ho hose')+'</div></div><button class="btn primary" type="button" data-open-talent="'+esc(w.id)+'" data-watch-name="'+esc(w.name)+'">Reba abahuye ('+esc(w.match_count||0)+')</button></article>';
+ }).join(''):'<div class="empty">Nta Talent Watch urashyiraho. Kora imwe kugira ngo AHABONA igutangire gushakira abantu bujuje ibyo ukeneye.</div>';
+ $('dashboard-content').innerHTML='<div class="panel form-panel" style="margin:0 0 14px"><h3>Shyiraho uburyo bwo gushaka abakozi</h3><p class="hint">Hitamo ubuhanga n’aho ukeneye abakozi. AHABONA izakumenyesha abantu bemeye ko abakoresha bashobora kubabona.</p><form id="talent-watch-form"><div class="form-grid"><div class="field wide"><label for="watch-name">Izina ry’icyo ushaka *</label><input id="watch-name" required minlength="2" maxlength="100" placeholder="Urugero: Abashoferi bo muri Kigali"></div><div class="field wide"><strong>Ubuhanga ukeneye *</strong>'+capabilityHtml+'</div><div class="field"><label for="watch-provinces">Intara</label><select id="watch-provinces" multiple size="5">'+provinces.map(function(x){return '<option>'+esc(x)+'</option>'}).join('')+'</select></div><div class="field"><label for="watch-districts">Uturere</label><select id="watch-districts" multiple size="6">'+districts.map(function(x){return '<option>'+esc(x)+'</option>'}).join('')+'</select></div></div><div class="form-actions"><button class="btn primary" type="submit" id="save-watch">Bika uburyo bwo gushaka abakozi</button></div></form></div><div class="dashboard-list">'+watchCards+'</div>';
+ $('talent-watch-form').addEventListener('submit',createTalentWatch);
+}
+async function createTalentWatch(event){
+ event.preventDefault();
+ var skills=Array.from(document.querySelectorAll('input[name="watch-capability"]:checked')).map(function(x){return Number(x.value)});
+ var selected=function(id){return Array.from($(id).selectedOptions).map(function(o){return o.value})};
+ var button=$('save-watch');button.disabled=true;
+ var result=await api('POST','/api/employer/talent-watches',{name:$('watch-name').value.trim(),capability_ids:skills,provinces:selected('watch-provinces'),districts:selected('watch-districts')});
+ button.disabled=false;
+ if(!result.ok){showMessage('dashboard-message',(result.data&&result.data.error)||'Talent Watch ntiyabashije kubikwa.','error');return}
+ await loadTalentWatches();
+ showMessage('dashboard-message','Talent Watch yabitswe. AHABONA izajya igenzura abantu bashya bemeye kugaragara ku bakoresha.','');
+}
+async function openTalentMatches(watchId,name){
+ $('dashboard-content').innerHTML='<div class="loading">Turimo kureba abantu bahuye n’ibyo ushaka…</div>';
+ var result=await api('GET','/api/employer/talent-watches/'+encodeURIComponent(watchId)+'/matches');
+ if(!result.ok){$('dashboard-content').innerHTML='<div class="notice error">Abantu bahuye n’ibi bisabwa ntibashoboye kuboneka.</div>';return}
+ var rows=result.data.matches||[];
+ var header='<div class="detail-head"><div><h3>'+esc(name||'Abantu bahuye n’ibisabwa')+'</h3><p class="hint">'+rows.length+' abantu bemeye ko bashakishwa n’abakoresha</p></div><button class="btn" id="back-talent-watches" type="button">← Subira kuri Talent Watch</button></div><div id="dashboard-message" aria-live="polite"></div>';
+ if(!rows.length){$('dashboard-content').innerHTML=header+'<div class="empty">Nta muntu urahuza n’ibi bisabwa. AHABONA izakomeza kugenzura profiles nshya.</div>';return}
+ $('dashboard-content').innerHTML=header+'<div class="dashboard-list">'+rows.map(function(p){
+  var skills=Array.isArray(p.capabilities)?p.capabilities:[];
+  var experience=Array.isArray(p.experience)?p.experience:[];
+  return '<article class="panel" style="padding:15px"><div class="dashboard-item" style="border:0;padding:0"><div><strong>'+esc(p.name||'Ukoresha AHABONA')+'</strong><div class="hint">'+esc(p.district||'Aho atuye ntihasobanuwe')+' · Match '+Math.round(Number(p.match_score||0)*100)+'%</div></div><span class="status approved">Yemeye kugaragara</span></div><div class="chips">'+skills.map(function(x){return '<span class="chip">'+esc(x)+'</span>'}).join('')+'</div>'+(p.intro?'<p>'+esc(p.intro)+'</p>':'')+(experience.length?'<p class="hint"><strong>Uburambe:</strong> '+esc(experience.map(function(x){return typeof x==='string'?x:(x.title||x.role||x.description||'')}).filter(Boolean).join(' · '))+'</p>':'')+'<a class="btn" href="/u/'+encodeURIComponent(p.pid)+'" target="_blank" rel="noopener">Reba profile</a></article>';
+ }).join('')+'</div>';
+}
 async function loadDashboard(tab){
+ if(tab==='talent')return loadTalentWatches();
  if(tab==='preferences')return loadJobPreferences();
  $('dashboard-content').innerHTML='<div class="loading">Turimo kureba amakuru…</div>';
  var endpoint=tab==='candidate'?'/api/me/applications':'/api/me/jobs';
@@ -418,6 +458,9 @@ $('dashboard-content').addEventListener('click',function(e){
  var save=e.target.closest('[data-save-application]');
  if(save)updateApplicationStatus(save.getAttribute('data-save-application'));
  if(e.target.closest('#back-employer-jobs'))loadDashboard('employer');
+ if(e.target.closest('#back-talent-watches'))loadTalentWatches();
+ var watch=e.target.closest('[data-open-talent]');
+ if(watch)openTalentMatches(watch.getAttribute('data-open-talent'),watch.getAttribute('data-watch-name'));
 });
 $('primary-capability').addEventListener('change',function(){var selected=this.options[this.selectedIndex];if(selected&&selected.dataset.category&&!$('category').value)$('category').value=selected.dataset.category});
 $('close-dashboard').addEventListener('click',function(){show('list-view')});
