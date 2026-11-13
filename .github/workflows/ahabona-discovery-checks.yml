@@ -40,6 +40,11 @@ jobs:
           node --check tests/applications.test.cjs
           node --check server/job-workflow.cjs
           node --check tests/job-workflow.test.cjs
+          node --check server/opportunity-reads.cjs
+          node --check server/opportunities-ui.cjs
+          node --check tests/opportunity-reads.test.cjs
+          node --check tests/opportunities-ui.test.cjs
+          node --check tests/opportunities-route.test.cjs
       - name: Run focused tests
         run: |
           npm run test:discovery
@@ -49,3 +54,4 @@ jobs:
           npm run test:employer-jobs
           npm run test:applications
           npm run test:job-workflow
+          npm run test:opportunity-reads
