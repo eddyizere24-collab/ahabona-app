@@ -51,6 +51,8 @@ jobs:
           node --check tests/legacy-profile-sync.test.cjs
           node --check tests/job-preferences.test.cjs
           node --check tests/opportunity-matching.test.cjs
+          node --check server/job-moderation-ui.cjs
+          node --check tests/job-moderation-ui.test.cjs
       - name: Run focused tests
         run: |
           npm run test:discovery
