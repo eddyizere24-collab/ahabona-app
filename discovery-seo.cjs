@@ -27,9 +27,11 @@ function buildSitemapXml(rows, baseUrl = DEFAULT_BASE_URL, serviceSlugs = []) {
   const entries = [
     '<url><loc>' + escapeXml(base + '/') + '</loc></url>',
     '<url><loc>' + escapeXml(base + '/about') + '</loc></url>',
-    '<url><loc>' + escapeXml(base + '/how-it-works') + '</loc></url>',
-    '<url><loc>' + escapeXml(base + '/people') + '</loc></url>'
+    '<url><loc>' + escapeXml(base + '/how-it-works') + '</loc></url>'
   ];
+  if ((Array.isArray(rows) ? rows : []).some(row => PUBLIC_PID_RE.test(String(row && row.pid || '')))) {
+    entries.push('<url><loc>' + escapeXml(base + '/people') + '</loc></url>');
+  }
   for (const slug of Array.isArray(serviceSlugs) ? serviceSlugs : []) {
     if (/^[a-z0-9-]{2,60}$/.test(String(slug))) {
       entries.push('<url><loc>' + escapeXml(base + '/services/' + slug) + '</loc></url>');
