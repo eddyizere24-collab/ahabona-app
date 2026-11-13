@@ -34,6 +34,10 @@ test('public profile HTML renders canonical metadata and approved public fields'
   assert.match(html, /Eddy Example/); assert.match(html, /Umushoferi/);
   assert.match(html, /href="tel:\+250788123456"/); assert.match(html, /https:\/\/wa\.me\/250788123456/); assert.match(html, /Indimi/); assert.match(html, /Gasabo/); assert.match(html, /Imyaka 4/); assert.match(html, /og:image/);
   assert.ok(html.includes('application/ld+json'));
+  const profileTitle = html.match(/<title>([^<]+)<\/title>/);
+  const profileDescription = html.match(/<meta name="description" content="([^"]+)"/);
+  assert.ok(profileTitle && profileTitle[1].length <= 60, 'profile title should stay concise');
+  assert.ok(profileDescription && profileDescription[1].length <= 160, 'profile description should fit a search snippet');
 });
 test('profile page cannot leak a phone omitted by the public API projection', () => {
   const html = renderPublicProfileHtml({ pid: 'a1b2c3d4', name: 'Private Phone Example', district: 'Huye', caps: ['Umudozi'], phone: '', phones: [] });
@@ -91,6 +95,10 @@ test('service landing pages render only matched public profiles and their links'
   assert.match(html, /Eddy Driver/);
   assert.ok(html.includes('href="/u/a1b2c3d4"'));
   assert.match(html, /og:title/);
+  const serviceTitle = html.match(/<title>([^<]+)<\/title>/);
+  const serviceDescription = html.match(/<meta name="description" content="([^"]+)"/);
+  assert.ok(serviceTitle && serviceTitle[1].length <= 60, 'service title should stay concise');
+  assert.ok(serviceDescription && serviceDescription[1].length <= 160, 'service description should fit a search snippet');
   assert.doesNotMatch(html, /Should not render/);
   assert.ok(html.includes('application/ld+json'));
 });
