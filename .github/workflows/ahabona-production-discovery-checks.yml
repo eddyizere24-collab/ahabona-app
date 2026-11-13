@@ -1,0 +1,33 @@
+name: AHABONA production discovery checks
+
+on:
+  push:
+    branches:
+      - feature/ahabona-discovery-production-20261113
+  pull_request:
+    branches:
+      - studio/backend-foundation-20261027
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discovery-unit-tests:
+    name: Discovery helper unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check server and helper JavaScript syntax
+        run: |
+          node --check server-v2.cjs
+          node --check discovery-seo.cjs
+          node --check tests/discovery-seo.test.cjs
+      - name: Run focused tests
+        run: npm run test:discovery
