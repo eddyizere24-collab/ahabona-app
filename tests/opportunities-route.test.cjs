@@ -48,6 +48,8 @@ test('opportunities route loads while preserving the existing people-discovery h
   assert.match(moderationHtml, /\/api\/admin\/jobs/);
 
   const health = await fetch(base + '/api/health');
+  const talentWatches = await fetch(base + '/api/employer/talent-watches');
+  assert.equal(talentWatches.status, 503);
   assert.equal(health.status, 200);
   const healthBody = await health.json();
   assert.equal(healthBody.ok, true);
