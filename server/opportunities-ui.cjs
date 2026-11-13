@@ -80,6 +80,7 @@ const OPPORTUNITIES_HTML = String.raw`<!doctype html>
         <div class="field"><label for="job-title">Umwanya w'akazi *</label><input id="job-title" name="title" required minlength="3" maxlength="180" placeholder="Urugero: Abashoferi 5 barakenewe"></div>
         <div class="field wide"><label for="job-description">Ibisobanuro by'akazi *</label><textarea id="job-description" name="description" required minlength="20" maxlength="20000" placeholder="Sobanura icyo abakozi bazakora n'ibyo bakeneye kumenya."></textarea></div>
         <div class="field"><label for="category">Icyiciro cy'akazi</label><input id="category" name="category" maxlength="100" placeholder="Urugero: Ubwikorezi"></div>
+        <div class="field wide"><label for="primary-capability">Ubuhanga nyamukuru bukenewe (bufasha matching)</label><select id="primary-capability" name="primary_capability_id"><option value="">Hitamo ubuhanga niba buhari</option></select><span class="hint">Hitamo ubuhanga nyamukuru kugira ngo AHABONA ibashe guhuza itangazo n'abantu bafite ubwo buhanga.</span></div>
         <div class="field"><label for="employment-type">Ubwoko bw'akazi *</label><select id="employment-type" name="employment_type" required><option value="full_time">Igihe cyose</option><option value="part_time">Igice cy'igihe</option><option value="contract">Amasezerano</option><option value="temporary">Igihe gito</option><option value="casual">By'igihe gito</option><option value="internship">Stage</option><option value="volunteer">Ubukorerabushake</option></select></div>
         <div class="field"><label for="work-arrangement">Aho akazi gakorerwa *</label><select id="work-arrangement" name="work_arrangement"><option value="on_site">Ku kazi</option><option value="hybrid">Ku kazi na online</option><option value="remote">Online</option></select></div>
         <div class="field"><label for="province-post">Intara</label><select id="province-post" name="province"><option value="">Hitamo intara</option><option>Umujyi wa Kigali</option><option>Amajyaruguru</option><option>Amajyepfo</option><option>Iburasirazuba</option><option>Iburengerazuba</option></select></div>
@@ -105,7 +106,7 @@ const OPPORTUNITIES_HTML = String.raw`<!doctype html>
 
   <section id="dashboard-view" class="panel form-panel hidden">
     <div class="detail-head"><div><h2>Ibikorwa byanjye</h2><p class="hint">Kurikirana amatangazo watanze n'ubusabe bwo gusaba akazi.</p></div><button id="close-dashboard" class="btn" type="button">Funga</button></div>
-    <div class="tabs"><button class="tab active" type="button" data-tab="employer">Amatangazo yanjye</button><button class="tab" type="button" data-tab="candidate">Akazi nasabye</button></div>
+    <div class="tabs"><button class="tab active" type="button" data-tab="employer">Amatangazo yanjye</button><button class="tab" type="button" data-tab="candidate">Akazi nasabye</button><button class="tab" type="button" data-tab="preferences">Ibyo nshaka mu kazi</button></div>
     <div id="dashboard-content"><div class="loading">Turimo kureba amakuru…</div></div>
   </section>
   <p class="footer-note">AHABONA · Kwiyandikisha, kureba no gusaba akazi kuri AHABONA ni ubuntu.</p>
@@ -277,7 +278,55 @@ async function submitPost(event){
  if(result.status===401){showMessage('post-message','Ugomba kubanza kwinjira muri AHABONA kugira ngo utangaze akazi. Fungura Ahabanza, winjire, hanyuma ugaruke hano.','warn');return}
  showMessage('post-message',(result.data&&result.data.error)||'Itangazo ntiryashoboye koherezwa. Reba amakuru wanditse wongere ugerageze.','error');
 }
+async function loadPostCapabilities(){
+ var select=$('primary-capability');if(!select)return;
+ var result=await api('GET','/api/jobs/capabilities');
+ if(!result.ok)return;
+ var groups={};(result.data.capabilities||[]).forEach(function(cap){(groups[cap.category]||(groups[cap.category]=[])).push(cap)});
+ select.innerHTML='<option value="">Hitamo ubuhanga niba buhari</option>'+Object.keys(groups).sort().map(function(category){return '<optgroup label="'+esc(category)+'">'+groups[category].map(function(cap){return '<option value="'+esc(cap.id)+'" data-category="'+esc(cap.category)+'">'+esc(cap.name)+' / '+esc(cap.name_en)+'</option>'}).join('')+'</optgroup>'}).join('');
+}
+async function loadJobPreferences(){
+ $('dashboard-content').innerHTML='<div class="loading">Turimo kureba ibyifuzo byawe…</div>';
+ var result=await api('GET','/api/me/job-preferences');
+ if(!result.ok){$('dashboard-content').innerHTML='<div class="empty">Ugomba kubanza kwinjira muri AHABONA kugira ngo ubike ibyo ushaka mu kazi. <a href="/">Fungura ahabanza</a>.</div>';return}
+ var p=result.data.preferences||{},caps=result.data.capabilities||[];
+ var groups={};caps.forEach(function(cap){(groups[cap.category]||(groups[cap.category]=[])).push(cap)});
+ var selectedSkills=new Set((p.preferred_capability_ids||[]).map(Number));
+ var skillsHtml=Object.keys(groups).sort().map(function(category){return '<div class="field"><strong>'+esc(category)+'</strong><div class="skill-picks">'+groups[category].map(function(cap){return '<label class="check-row"><input type="checkbox" name="preferred_capability_ids" value="'+esc(cap.id)+'" '+(selectedSkills.has(Number(cap.id))?'checked':'')+'> <span>'+esc(cap.name)+' / '+esc(cap.name_en)+'</span></label>'}).join('')+'</div></div>'}).join('');
+ var provinces=Object.keys(DISTRICTS),districts=Object.keys(DISTRICTS).flatMap(function(x){return DISTRICTS[x]});
+ var multi=function(id,label,values,selected){return '<div class="field"><label for="'+id+'">'+label+'</label><select id="'+id+'" multiple size="'+Math.min(5,Math.max(3,values.length))+'">'+values.map(function(x){return '<option value="'+esc(x)+'" '+(selected.includes(x)?'selected':'')+'>'+esc(x)+'</option>'}).join('')+'</select><span class="hint">Ushobora guhitamo byinshi ukoresheje urutonde.</span></div>'};
+ var employment=[['full_time','Igihe cyose'],['part_time',"Igice cy'igihe"],['contract','Amasezerano'],['temporary','Igihe gito'],['casual','By’igihe gito'],['internship','Stage'],['volunteer','Ubukorerabushake']];
+ $('dashboard-content').innerHTML='<form id="preferences-form" class="form-panel" style="margin:0;padding:0;border:0;box-shadow:none">'+
+  '<div id="preferences-message" aria-live="polite"></div><p class="hint">Andika icyo ushaka gukora. AHABONA izajya iguhuza n’amatangazo yujuje ibisabwa, kandi ushobora guhindura ibi igihe icyo ari cyo cyose.</p>'+
+  '<label class="check-row"><input id="pref-seeking" type="checkbox" '+(p.seeking_work?'checked':'')+'> <strong>Ndi gushaka akazi ubu</strong></label>'+
+  '<label class="check-row"><input id="pref-matching" type="checkbox" '+(p.matching_enabled?'checked':'')+'> Menyesha akazi gahuje n’ubushobozi n’ibyifuzo byanjye</label>'+
+  '<div class="form-grid" style="margin-top:15px">'+
+   '<div class="field wide"><strong>Ubuhanga nifuza gukoresha</strong><p class="hint">Hitamo ubuhanga bushobora kuguhesha amahirwe. Bushobora kuba ubwo washyize muri profile cyangwa ubundi wifuza gukoresha.</p>'+skillsHtml+'</div>'+
+   multi('pref-provinces','Intara nakoreramo',provinces,p.preferred_provinces||[])+
+   multi('pref-districts','Uturere nakoreramo',districts,p.preferred_districts||[])+
+   '<div class="field"><label for="pref-employment">Ubwoko bw’akazi</label><select id="pref-employment" multiple size="5">'+employment.map(function(x){return '<option value="'+x[0]+'" '+((p.employment_types||[]).includes(x[0])?'selected':'')+'>'+x[1]+'</option>'}).join('')+'</select></div>'+
+   '<div class="field"><label for="pref-min-salary">Umushahara ntarengwa nifuza (RWF)</label><input id="pref-min-salary" type="number" min="0" max="1000000000" step="1000" value="'+(p.min_salary==null?'':esc(p.min_salary))+'"><span class="hint">Si ngombwa kuwushyiraho.</span></div>'+
+  '</div>'+
+  '<hr style="border:0;border-top:1px solid var(--border);margin:20px 0">'+
+  '<label class="check-row"><input id="pref-inapp" type="checkbox" '+(p.in_app_enabled!==false?'checked':'')+'> Nemerera AHABONA kunyoherereza notifications zo muri uru rubuga</label>'+
+  '<p class="hint">Email na push notifications tuzabihuza nyuma y’uko delivery services zigenzuwe. Ntiturakwereka amahitamo atarohereza ubutumwa.</p>'+
+  '<div class="form-actions"><button class="btn primary" type="submit" id="save-preferences">Bika ibyo nshaka mu kazi</button></div></form>';
+ $('pref-seeking').addEventListener('change',function(){$('pref-matching').disabled=!this.checked;if(!this.checked)$('pref-matching').checked=false});
+ $('preferences-form').addEventListener('submit',saveJobPreferences);
+}
+async function saveJobPreferences(event){
+ event.preventDefault();var button=$('save-preferences');button.disabled=true;
+ var selected=function(id){var node=$(id);return Array.from(node.selectedOptions).map(function(o){return o.value})};
+ var skills=Array.from(document.querySelectorAll('input[name="preferred_capability_ids"]:checked')).map(function(x){return Number(x.value)});
+ var minimum=$('pref-min-salary').value;
+ var payload={seeking_work:$('pref-seeking').checked,matching_enabled:$('pref-matching').checked,preferred_capability_ids:skills,preferred_provinces:selected('pref-provinces'),preferred_districts:selected('pref-districts'),employment_types:selected('pref-employment'),min_salary:minimum===''?null:Number(minimum),in_app_enabled:$('pref-inapp').checked};
+ var result=await api('PUT','/api/me/job-preferences',payload);button.disabled=false;
+ if(!result.ok){showMessage('preferences-message',(result.data&&result.data.error)||'Ibyo wahisemo ntibyabashije kubikwa. Gerageza nanone.','error');return}
+ var matched=result.data.matching||{};
+ showMessage('preferences-message','Byabitswe neza. '+(matched.notified||0)+' amahirwe mashya ahuye nawe yabonetse muri AHABONA.','');
+}
 async function loadDashboard(tab){
+ if(tab==='preferences')return loadJobPreferences();
  $('dashboard-content').innerHTML='<div class="loading">Turimo kureba amakuru…</div>';
  var endpoint=tab==='candidate'?'/api/me/applications':'/api/me/jobs';
  var result=await api('GET',endpoint);
@@ -300,13 +349,14 @@ $('prev-page').addEventListener('click',function(){OFFSET=Math.max(0,OFFSET-PAGE
 $('next-page').addEventListener('click',function(){OFFSET+=PAGE_SIZE;loadJobs(false)});
 $('jobs').addEventListener('click',function(e){var b=e.target.closest('[data-job]');if(b)openJob(b.getAttribute('data-job'),true)});
 $('detail-content').addEventListener('click',function(e){if(e.target.closest('#back-list')){history.back();if(window.location.search.indexOf('job=')===-1)show('list-view')}});
-$('open-post').addEventListener('click',async function(){await checkUser();show('post-view')});
+$('open-post').addEventListener('click',async function(){await checkUser();await loadPostCapabilities();show('post-view')});
 $('cancel-post').addEventListener('click',function(){show('list-view')});
 $('post-form').addEventListener('submit',submitPost);
 $('apply-method').addEventListener('change',toggleApplyFields);
 $('work-arrangement').addEventListener('change',function(){var remote=this.value==='remote';$('province-post').disabled=remote;$('district-post').disabled=remote});
 $('province-post').addEventListener('change',function(){var items=DISTRICTS[this.value]||[];$('district-post').innerHTML='<option value="">Hitamo akarere</option>'+items.map(function(x){return '<option>'+esc(x)+'</option>'}).join('')});
 $('open-dashboard').addEventListener('click',function(){show('dashboard-view');loadDashboard('employer')});
+$('primary-capability').addEventListener('change',function(){var selected=this.options[this.selectedIndex];if(selected&&selected.dataset.category&&!$('category').value)$('category').value=selected.dataset.category});
 $('close-dashboard').addEventListener('click',function(){show('list-view')});
 document.querySelectorAll('[data-tab]').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('[data-tab]').forEach(function(x){x.classList.toggle('active',x===b)});loadDashboard(b.getAttribute('data-tab'))})});
 window.addEventListener('popstate',function(){var u=new URL(window.location.href),id=u.searchParams.get('job');if(id)openJob(id,false);else{CURRENT_JOB=null;show('list-view')}});
