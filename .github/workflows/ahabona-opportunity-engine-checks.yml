@@ -1,0 +1,40 @@
+name: AHABONA Opportunity Engine checks
+on:
+  push:
+    branches:
+      - feature/opportunity-engine-integration-20261113
+  pull_request:
+    branches:
+      - studio/backend-foundation-20261027
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  opportunity-engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install PostgreSQL driver
+        run: npm install --no-audit --no-fund
+      - name: JavaScript syntax checks
+        run: |
+          node --check server-v2.cjs
+          node --check server/postgres.cjs
+          node --check server/opportunities-public.cjs
+          node --check server/jobs-employer.cjs
+          node --check server/applications.cjs
+          node --check server/job-workflow.cjs
+          node --check server/job-reads.cjs
+          node --check server/legacy-profile-bridge.cjs
+          node --check server/opportunity-notifications.cjs
+          node --check scripts/audit-sqlite-schema.cjs
+      - name: Existing application checks
+        run: |
+          npm run test:discovery
+          npm run test:server
+      - name: Opportunity Engine tests
+        run: npm run test:opportunity

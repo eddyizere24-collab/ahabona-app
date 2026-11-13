@@ -8,6 +8,14 @@ const zlib=require('node:zlib');
 const {buildRobotsTxt,buildSitemapXml,renderPublicProfileHtml,renderInfoPageHtml,getServiceLandingDefinition,getServiceLandingSlugs,renderServiceLandingHtml,DEFAULT_BASE_URL}=require('./discovery-seo.cjs');
 const {DatabaseSync}=require('node:sqlite');
 const {execFile}=require('node:child_process');
+const {createOptionalPostgresPool}=require('./server/postgres.cjs');
+const {listPublicJobs,getPublicJob}=require('./server/opportunities-public.cjs');
+const {createJobPost,listEmployerJobs,JobInputError}=require('./server/jobs-employer.cjs');
+const {ApplicationError,createJobApplication,listMyApplications,listEmployerApplications,updateEmployerApplicationStatus}=require('./server/applications.cjs');
+const {JobWorkflowError,updateEmployerJobDraft,submitEmployerJobForReview,closeEmployerJob,listModerationQueue,reviewEmployerJob}=require('./server/job-workflow.cjs');
+const {JobReadError,getReaderKey,getUnreadJobCount,markJobRead}=require('./server/job-reads.cjs');
+const {syncLegacyCandidateProfile,ensureLegacyUser}=require('./server/legacy-profile-bridge.cjs');
+const {listOpportunityNotifications,markOpportunityNotificationRead,markAllOpportunityNotificationsRead}=require('./server/opportunity-notifications.cjs');
 const STUDIO_BETA=process.env.AHABONA_STUDIO_BETA==='1';
 const StudioStore=STUDIO_BETA?require('./server-v2-modules/studio/store.cjs'):null;
 const StudioMedia=STUDIO_BETA?require('./server-v2-modules/studio/media.cjs'):null;
@@ -225,6 +233,7 @@ const PERMS={
   "broadcast.send":{rw:"Kohereza ubutumwa kuri bose",en:"Broadcast to everyone"},
   "profiles.moderate":{rw:"Guhagarika no kugarura imyirondoro",en:"Suspend and restore profiles"},
   "reports.handle":{rw:"Gukemura ibibazo (reports)",en:"Handle reports"},
+  "jobs.moderate":{rw:"Kugenzura amatangazo y'akazi",en:"Moderate job posts"},
   "requests.handle":{rw:"Kwemeza ibyifuzo by'imirimo",en:"Approve skill requests"},
   "catalog.edit":{rw:"Imirimo n'ibyiciro",en:"Skills and categories"},
   "content.edit":{rw:"Ikibaho, FAQ n'ubutumwa bw'ubufasha",en:"Hero board, FAQ and help messages"},
@@ -234,8 +243,8 @@ const PERMS={
 };
 const ROLE_PERMS={
   super:Object.keys(PERMS),
-  admin:["dash.view","users.view","users.edit","users.message","profiles.moderate","reports.handle","requests.handle","catalog.edit","content.edit"],
-  mod:["dash.view","users.view","profiles.moderate","reports.handle","requests.handle"],
+  admin:["dash.view","users.view","users.edit","users.message","profiles.moderate","reports.handle","jobs.moderate","requests.handle","catalog.edit","content.edit"],
+  mod:["dash.view","users.view","profiles.moderate","reports.handle","jobs.moderate","requests.handle"],
   editor:["dash.view","catalog.edit","content.edit"],
   viewer:["dash.view"]
 };
@@ -1719,6 +1728,7 @@ function makeCtx(opts){
   const secure=!!opts.secure;
   const proxy=!!opts.proxy;
   const dev=!!opts.dev;
+  const pgPool=createOptionalPostgresPool(process.env);
   fs.mkdirSync(dataDir,{recursive:true});
   fs.mkdirSync(path.join(dataDir,'photos'),{recursive:true});
   const dbFile=path.join(dataDir,'ahabona.db');
@@ -1871,7 +1881,7 @@ function makeCtx(opts){
     return Q("SELECT * FROM strip_ads WHERE active=1 AND (start_at IS NULL OR start_at<=?) AND (end_at IS NULL OR end_at>=?) ORDER BY priority DESC, id ASC").all(t,t);
   };
   return {
-    db,Q,store,settings,rate,mailer,caps,loadCaps,capName,
+    db,Q,store,settings,rate,mailer,caps,loadCaps,capName,pgPool,postgresEnabled:!!pgPool,
     ipOf,deviceOf,parseCookies,sessionUser,newSession,destroySession,
     isAdmin,isSuper,can,adminLog,adminBoot,featureEnabled,stripActive,mediaStore,studio:studioStore,studioMedia:studioMedia,
     secure,dev,proxy,dataDir,pubDir,
@@ -2254,7 +2264,21 @@ async function apiReport(ctx,req,res){
   }
 }
 
-/* ===== END OF IGICE 7/16 ===== */async function apiRegister(ctx,req,res){
+/* ===== END OF IGICE 7/16 ===== */async function syncOpportunityProfile(ctx,userId,profileRow){
+  if(!ctx.pgPool||!profileRow)return false;
+  const actor=ctx.Q('SELECT id,status,created_at,display_name FROM users WHERE id=?').get(userId);
+  if(!actor||actor.status!=='active')return false;
+  try{
+    const result=await syncLegacyCandidateProfile(ctx.pgPool,actor,profileRow);
+    return result?.synced===true;
+  }catch(error){
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[opportunity-profile-sync] projection failed ('+code+').');
+    return false;
+  }
+}
+
+async function apiRegister(ctx,req,res){
   const ip=ctx.ipOf(req)||'';
   if(!ctx.rate.allow('r:'+ip,8,HOUR))return sendError(req,res,429,'err.rate');
   const b=await readBody(req,BODY_MAX);
@@ -2301,6 +2325,7 @@ async function apiReport(ctx,req,res){
     await ctx.mailer.send(f.email,"AHABONA: Murakaza neza","☀️ MURAKAZA NEZA KURI AHABONA!\n\nUmwirondoro wawe uri kuri AHABONA! Abantu bakeneye serivisi utanga bashobora kuwureba, bakakuvugisha.\n\n������ Nawe gira uruhare mu gukura kwa AHABONA! Bwira nibura abantu 3 uzi biyandikishe, bagaragaze ibyo bashoboye. Bashobora kuba inshuti, abaturanyi cyangwa abandi, nk’abadozi, abafundi, abashoferi, abarimu n’abandi bafite ibyo bakora.\n\n������ https://ahabona.duckdns.org\n\n✅ Kwiyandikisha ni ubuntu!\n✅ No gushaka umuntu wo kugukorera serivisi kuri AHABONA ni ubuntu!\n\n������ Ukeneye ubufasha? Duhamagare cyangwa utwandikire kuri WhatsApp kuri 0792 053 086, tugufashe.\n\n❤️ Sangiza abandi AHABONA, kuko uko tugenda twiyongera, ni ko turushaho gufashanya kubona abo dukeneye.\n\n☀️ AHABONA — Uko turushaho kuba benshi, ni ko turushaho kubonana!\n\nMurakoze kuba muri kumwe natwe! ❤️");
   }catch(e){}
   const r=ctx.Q('SELECT p.*,u.phone,u.email,u.status,u.id_verified AS owner_verified FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=?').get(uid);
+  await syncOpportunityProfile(ctx,uid,r);
   sendJson(req,res,201,{profile:pubProfile(r,null,{own:true,email:f.email,status:'active'})});
 }
 
@@ -2379,6 +2404,7 @@ async function apiMePut(ctx,req,res){
     ctx.Q('INSERT INTO cap_requests(user_id,text,created_at) VALUES(?,?,?)').run(u.id,f.other,Date.now());
   }
   const nr=ctx.Q('SELECT p.*,u.phone,u.email,u.status,u.id_verified AS owner_verified FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=?').get(u.id);
+  await syncOpportunityProfile(ctx,u.id,nr);
   sendJson(req,res,200,{profile:pubProfile(nr,null,{own:true,email:u.email,status:u.status})});
 }
 
@@ -7936,9 +7962,316 @@ async function adminStudioSettingsUpdate(ctx,req,res,admin){
   }catch(e){studioApiError(req,res,e)}
 }
 
+function sameOriginMutation(req){
+  const fetchSite=String(req.headers['sec-fetch-site']||'').toLowerCase();
+  if(fetchSite&&fetchSite!=='same-origin'&&fetchSite!=='same-site'&&fetchSite!=='none')return false;
+  const origin=req.headers.origin;
+  if(!origin)return true;
+  try{
+    const parsed=new URL(String(origin));
+    const host=String(req.headers.host||'').toLowerCase();
+    return !!host&&parsed.host.toLowerCase()===host;
+  }catch(e){return false}
+}
+
+async function apiCreateJob(ctx,req,res){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  const actor=ctx.sessionUser(req);
+  if(!actor)return sendError(req,res,401,'err.auth');
+  if(!sameOriginMutation(req))return sendError(req,res,403,'err.forbidden');
+  if(!ctx.rate.allow('job-create:'+actor.id,5,HOUR))return sendError(req,res,429,'err.rate');
+
+  const body=await readBody(req,48*1024);
+  if(!body.ok)return sendError(req,res,body.code||400,body.error||'err.server');
+
+  try{
+    const result=await createJobPost(ctx.pgPool,actor,body.data||{});
+    return sendJson(req,res,201,result);
+  }catch(error){
+    if(error instanceof JobInputError){
+      return sendJson(req,res,400,{error:error.message,field:error.field});
+    }
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[job-create] database operation failed ('+code+').');
+    return sendError(req,res,503,'err.server');
+  }
+}
+
+async function apiMyJobs(ctx,req,res){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  const actor=ctx.sessionUser(req);
+  if(!actor)return sendError(req,res,401,'err.auth');
+  try{
+    const result=await listEmployerJobs(ctx.pgPool,actor);
+    return sendJson(req,res,200,result);
+  }catch(error){
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[employer-jobs] database operation failed ('+code+').');
+    return sendError(req,res,503,'err.server');
+  }
+}
+
+async function apiPublicJobs(ctx,req,res,url){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  try{
+    const result=await listPublicJobs(ctx.pgPool,url.searchParams);
+    return sendJson(req,res,200,result);
+  }catch(error){
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[public-jobs-list] database operation failed ('+code+').');
+    return sendError(req,res,503,'err.server');
+  }
+}
+
+async function apiPublicJob(ctx,req,res,jobId){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  try{
+    const result=await getPublicJob(ctx.pgPool,jobId);
+    if(!result)return sendError(req,res,404,'err.notfound');
+    const readerKey=getReaderKey(req,ctx.sessionUser(req));
+    if(readerKey){try{await markJobRead(ctx.pgPool,readerKey,jobId)}catch(error){const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';console.error('[job-read] tracking failed ('+code+').')}}
+    return sendJson(req,res,200,result);
+  }catch(error){
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[public-job-detail] database operation failed ('+code+').');
+    return sendError(req,res,503,'err.server');
+  }
+}
+
+async function apiJobUnreadCount(ctx,req,res){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  const actor=ctx.sessionUser(req);
+  const readerKey=createJobReaderKey({userId:actor&&actor.id,deviceId:ctx.deviceOf(req)});
+  if(!readerKey)return sendJson(req,res,200,{unread:0});
+  if(!ctx.rate.allow('job-unread:'+readerKey,120,60*1000))return sendError(req,res,429,'err.rate');
+  try{
+    const unread=await getUnreadPublicJobCount(ctx.pgPool,readerKey);
+    return sendJson(req,res,200,{unread:unread});
+  }catch(error){
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[public-job-unread] database operation failed ('+code+').');
+    return sendError(req,res,503,'err.server');
+  }
+}
+
+async function apiMarkJobRead(ctx,req,res,jobId){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  if(!sameOriginMutation(req))return sendError(req,res,403,'err.forbidden');
+  const actor=ctx.sessionUser(req);
+  const readerKey=createJobReaderKey({userId:actor&&actor.id,deviceId:ctx.deviceOf(req)});
+  if(!readerKey)return sendJson(req,res,200,{marked:false});
+  if(!ctx.rate.allow('job-read:'+readerKey,90,60*1000))return sendError(req,res,429,'err.rate');
+  try{
+    const result=await markPublicJobRead(ctx.pgPool,readerKey,jobId);
+    return sendJson(req,res,result.marked?200:404,result);
+  }catch(error){
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[public-job-read] database operation failed ('+code+').');
+    return sendError(req,res,503,'err.server');
+  }
+}
+
+async function apiOpportunityApplications(ctx,req,res,url,p,m){
+  var applyMatch;
+  if((applyMatch=p.match(/^\/api\/jobs\/([0-9a-fA-F-]{36})\/applications$/))&&m==='POST'){
+    if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+    const actor=ctx.sessionUser(req);
+    if(!actor)return sendError(req,res,401,'err.auth');
+    if(!sameOriginMutation(req))return sendError(req,res,403,'err.forbidden');
+    if(!ctx.rate.allow('job-apply:'+actor.id,8,HOUR))return sendError(req,res,429,'err.rate');
+    const body=await readBody(req,16*1024);
+    if(!body.ok)return sendError(req,res,body.code||400,body.error||'err.server');
+    try{
+      const legacyProfile=ctx.Q('SELECT * FROM profiles WHERE user_id=? LIMIT 1').get(actor.id);
+      if(legacyProfile)await syncLegacyCandidateProfile(ctx.pgPool,actor,legacyProfile);
+      const result=await createJobApplication(ctx.pgPool,actor,applyMatch[1],body.data||{});
+      return sendJson(req,res,201,result);
+    }catch(error){
+      if(error instanceof ApplicationError)return sendJson(req,res,error.status,{error:error.code,field:error.field});
+      const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+      console.error('[job-application] database operation failed ('+code+').');
+      return sendError(req,res,503,'err.server');
+    }
+  }
+
+  if(p==='/api/me/applications'&&m==='GET'){
+    if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+    const actor=ctx.sessionUser(req);
+    if(!actor)return sendError(req,res,401,'err.auth');
+    try{
+      const result=await listMyApplications(ctx.pgPool,actor,{limit:url.searchParams.get('limit')});
+      return sendJson(req,res,200,result);
+    }catch(error){
+      const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+      console.error('[candidate-applications] database operation failed ('+code+').');
+      return sendError(req,res,503,'err.server');
+    }
+  }
+
+  var employerListMatch;
+  if((employerListMatch=p.match(/^\/api\/employer\/jobs\/([0-9a-fA-F-]{36})\/applications$/))&&m==='GET'){
+    if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+    const actor=ctx.sessionUser(req);
+    if(!actor)return sendError(req,res,401,'err.auth');
+    try{
+      const result=await listEmployerApplications(ctx.pgPool,actor,employerListMatch[1],{limit:url.searchParams.get('limit')});
+      return sendJson(req,res,200,result);
+    }catch(error){
+      if(error instanceof ApplicationError)return sendJson(req,res,error.status,{error:error.code});
+      const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+      console.error('[employer-applications] database operation failed ('+code+').');
+      return sendError(req,res,503,'err.server');
+    }
+  }
+
+  var statusMatch;
+  if((statusMatch=p.match(/^\/api\/employer\/applications\/([0-9a-fA-F-]{36})\/status$/))&&m==='POST'){
+    if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+    const actor=ctx.sessionUser(req);
+    if(!actor)return sendError(req,res,401,'err.auth');
+    if(!sameOriginMutation(req))return sendError(req,res,403,'err.forbidden');
+    if(!ctx.rate.allow('job-application-status:'+actor.id,60,HOUR))return sendError(req,res,429,'err.rate');
+    const body=await readBody(req,8*1024);
+    if(!body.ok)return sendError(req,res,body.code||400,body.error||'err.server');
+    try{
+      const result=await updateEmployerApplicationStatus(ctx.pgPool,actor,statusMatch[1],body.data||{});
+      return sendJson(req,res,200,result);
+    }catch(error){
+      if(error instanceof ApplicationError)return sendJson(req,res,error.status,{error:error.code,field:error.field});
+      const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+      console.error('[employer-application-status] database operation failed ('+code+').');
+      return sendError(req,res,503,'err.server');
+    }
+  }
+
+  return null;
+}
+
+async function apiEmployerJobWorkflow(ctx,req,res,url,p,m){
+  var editMatch;
+  if((editMatch=p.match(/^\/api\/me\/jobs\/([0-9a-fA-F-]{36})$/))&&m==='PUT'){
+    if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+    const actor=ctx.sessionUser(req);
+    if(!actor)return sendError(req,res,401,'err.auth');
+    if(!sameOriginMutation(req))return sendError(req,res,403,'err.forbidden');
+    if(!ctx.rate.allow('job-edit:'+actor.id,20,HOUR))return sendError(req,res,429,'err.rate');
+    const body=await readBody(req,48*1024);
+    if(!body.ok)return sendError(req,res,body.code||400,body.error||'err.server');
+    try{
+      const result=await updateEmployerJobDraft(ctx.pgPool,actor,editMatch[1],body.data||{});
+      return sendJson(req,res,200,result);
+    }catch(error){
+      if(error instanceof JobWorkflowError)return sendJson(req,res,error.status,{error:error.code,field:error.field});
+      if(error instanceof JobInputError)return sendJson(req,res,400,{error:error.message,field:error.field});
+      const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+      console.error('[job-edit] database operation failed ('+code+').');
+      return sendError(req,res,503,'err.server');
+    }
+  }
+
+  var actionMatch;
+  if((actionMatch=p.match(/^\/api\/me\/jobs\/([0-9a-fA-F-]{36})\/(submit|close)$/))&&m==='POST'){
+    if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+    const actor=ctx.sessionUser(req);
+    if(!actor)return sendError(req,res,401,'err.auth');
+    if(!sameOriginMutation(req))return sendError(req,res,403,'err.forbidden');
+    if(!ctx.rate.allow('job-action:'+actor.id,20,HOUR))return sendError(req,res,429,'err.rate');
+    try{
+      const result=actionMatch[2]==='submit'
+        ? await submitEmployerJobForReview(ctx.pgPool,actor,actionMatch[1])
+        : await closeEmployerJob(ctx.pgPool,actor,actionMatch[1]);
+      return sendJson(req,res,200,result);
+    }catch(error){
+      if(error instanceof JobWorkflowError)return sendJson(req,res,error.status,{error:error.code,field:error.field});
+      const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+      console.error('[job-action] database operation failed ('+code+').');
+      return sendError(req,res,503,'err.server');
+    }
+  }
+  return null;
+}
+
+async function adminJobModerationQueue(ctx,req,res,url){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  try{
+    const result=await listModerationQueue(ctx.pgPool,{limit:url.searchParams.get('limit')});
+    return sendJson(req,res,200,result);
+  }catch(error){
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[admin-job-queue] database operation failed ('+code+').');
+    return sendError(req,res,503,'err.server');
+  }
+}
+
+async function adminJobModerationReview(ctx,req,res,jobId,actor){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  if(!sameOriginMutation(req))return sendError(req,res,403,'err.forbidden');
+  if(!ctx.rate.allow('job-moderate:'+actor.id,120,HOUR))return sendError(req,res,429,'err.rate');
+  const body=await readBody(req,8*1024);
+  if(!body.ok)return sendError(req,res,body.code||400,body.error||'err.server');
+  try{
+    await ensureLegacyUser(ctx.pgPool,actor);
+    const result=await reviewEmployerJob(ctx.pgPool,actor,jobId,body.data||{});
+    ctx.adminLog(actor.id,'job_'+String(body.data?.action||'review'),'job_post',jobId,{
+      action:String(body.data?.action||''),note:typeof body.data?.note==='string'?body.data.note.slice(0,300):null
+    },ctx.ipOf(req));
+    return sendJson(req,res,200,result);
+  }catch(error){
+    if(error instanceof JobWorkflowError)return sendJson(req,res,error.status,{error:error.code,field:error.field});
+    const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';
+    console.error('[admin-job-review] database operation failed ('+code+').');
+    return sendError(req,res,503,'err.server');
+  }
+}
+
+
+async function apiJobUnreadCount(ctx,req,res){
+ if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+ const readerKey=getReaderKey(req,ctx.sessionUser(req));
+ if(!readerKey)return sendJson(req,res,200,{unread_count:0});
+ try{return sendJson(req,res,200,await getUnreadJobCount(ctx.pgPool,readerKey))}
+ catch(error){if(error instanceof JobReadError)return sendJson(req,res,error.status,{error:error.code});const code=typeof error?.code==='string'&&/^[A-Z0-9_]{1,32}$/.test(error.code)?error.code:'UNKNOWN';console.error('[job-unread-count] failed ('+code+').');return sendError(req,res,503,'err.server')}
+}
+async function apiOpportunityNotifications(ctx,req,res,url,p,m){
+ if(p==='/api/me/opportunity-notifications'&&m==='GET'){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  const actor=ctx.sessionUser(req);if(!actor)return sendError(req,res,401,'err.auth');
+  try{return sendJson(req,res,200,await listOpportunityNotifications(ctx.pgPool,actor,{limit:url.searchParams.get('limit')}))}
+  catch(error){console.error('[opportunity-notifications] query failed.');return sendError(req,res,503,'err.server')}
+ }
+ if(p==='/api/me/opportunity-notifications/read-all'&&m==='POST'){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  const actor=ctx.sessionUser(req);if(!actor)return sendError(req,res,401,'err.auth');
+  if(!sameOriginMutation(req))return sendError(req,res,403,'err.forbidden');
+  try{return sendJson(req,res,200,await markAllOpportunityNotificationsRead(ctx.pgPool,actor))}
+  catch(error){console.error('[opportunity-notifications-read-all] failed.');return sendError(req,res,503,'err.server')}
+ }
+ var readMatch;
+ if((readMatch=p.match(/^\/api\/me\/opportunity-notifications\/(\d+)\/read$/))&&m==='POST'){
+  if(!ctx.pgPool)return sendError(req,res,503,'err.server');
+  const actor=ctx.sessionUser(req);if(!actor)return sendError(req,res,401,'err.auth');
+  if(!sameOriginMutation(req))return sendError(req,res,403,'err.forbidden');
+  try{return sendJson(req,res,200,await markOpportunityNotificationRead(ctx.pgPool,actor,readMatch[1]))}
+  catch(error){if(error?.status)return sendJson(req,res,error.status,{error:error.code});console.error('[opportunity-notification-read] failed.');return sendError(req,res,503,'err.server')}
+ }
+ return null;
+}
+
 async function handleApi(ctx,req,res,url,p){
   var m=req.method;
   if(p==='/api/health')return apiHealth(req,res);
+  if(p==='/api/jobs/unread-count'&&m==='GET')return apiJobUnreadCount(ctx,req,res);
+  var opportunityNotificationRoute=await apiOpportunityNotifications(ctx,req,res,url,p,m);
+  if(opportunityNotificationRoute!==null)return opportunityNotificationRoute;
+  var applicationRoute=await apiOpportunityApplications(ctx,req,res,url,p,m);
+  if(applicationRoute!==null)return applicationRoute;
+  var employerWorkflowRoute=await apiEmployerJobWorkflow(ctx,req,res,url,p,m);
+  if(employerWorkflowRoute!==null)return employerWorkflowRoute;
+  if(p==='/api/jobs'&&(m==='GET'||m==='HEAD'))return apiPublicJobs(ctx,req,res,url);
+  if(p==='/api/jobs'&&m==='POST')return apiCreateJob(ctx,req,res);
+  if(p==='/api/me/jobs'&&m==='GET')return apiMyJobs(ctx,req,res);
+  var publicJobMatch;
+  if((publicJobMatch=p.match(/^\/api\/jobs\/([0-9a-fA-F-]{36})$/))&&(m==='GET'||m==='HEAD'))return apiPublicJob(ctx,req,res,publicJobMatch[1]);
   if(p==='/api/config'&&(m==='GET'||m==='HEAD'))return apiConfig(ctx,req,res);
   if(p==='/api/strip'&&(m==='GET'||m==='HEAD'))return apiStrip(ctx,req,res);
   if(p==='/api/studio/playlist'&&(m==='GET'||m==='HEAD'))return apiStudioPlaylist(ctx,req,res);
@@ -7976,7 +8309,7 @@ async function handleApi(ctx,req,res,url,p){
   if(p.indexOf('/api/admin/')===0){
     if(!u)return sendError(req,res,401,'err.auth');
     if(!ctx.isAdmin(u))return sendError(req,res,403,'err.forbidden');
-    var ar=adminRoute(ctx,req,res,p,m,u);
+    var ar=adminRoute(ctx,req,res,p,m,u,url);
     if(ar!==NOROUTE)return ar;
   }
   return sendError(req,res,404,'err.notfound');
@@ -7994,6 +8327,8 @@ const ADMIN_ROUTES=[
   ['PUT',/^\/api\/admin\/studio\/scenes\/(\d+)$/,'content.edit',function(ctx,req,res,mt,u){return adminStudioSceneUpdate(ctx,req,res,+mt[1],u)}],
   ['DELETE',/^\/api\/admin\/studio\/scenes\/(\d+)$/,'content.edit',function(ctx,req,res,mt,u){return adminStudioSceneDelete(ctx,req,res,+mt[1],u)}],
   ['GET','/api/admin/summary','dash.view',function(ctx,req,res,mt,u){return adminSummary(ctx,req,res)}],
+  ['GET','/api/admin/jobs','jobs.moderate',function(ctx,req,res,mt,u,url){return adminJobModerationQueue(ctx,req,res,url)}],
+  ['POST',/^\/api\/admin\/jobs\/([0-9a-fA-F-]{36})\/review$/,'jobs.moderate',function(ctx,req,res,mt,u){return adminJobModerationReview(ctx,req,res,mt[1],u)}],
   ['GET','/api/admin/users','users.view',function(ctx,req,res,mt,u){return adminUsers(ctx,req,res,u)}],
   ['POST','/api/admin/broadcast','broadcast.send',function(ctx,req,res,mt,u){return adminBroadcast(ctx,req,res,u)}],
   ['GET','/api/admin/reports','reports.handle',function(ctx,req,res,mt,u){return adminReports(ctx,req,res)}],
@@ -8037,7 +8372,7 @@ const ADMIN_ROUTES=[
   ['DELETE',/^\/api\/admin\/staff\/(\d+)$/,'staff.manage',function(ctx,req,res,mt,u){return adminStaffDelete(ctx,req,res,+mt[1],u)}],
   ['POST',/^\/api\/admin\/staff\/(\d+)\/invite$/,'staff.manage',function(ctx,req,res,mt,u){return adminStaffInvite(ctx,req,res,+mt[1],u)}]
 ];
-function adminRoute(ctx,req,res,p,m,u){
+function adminRoute(ctx,req,res,p,m,u,url){
   for(let i=0;i<ADMIN_ROUTES.length;i++){
     const r=ADMIN_ROUTES[i];
     if(r[0]!==m)continue;
