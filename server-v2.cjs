@@ -15,10 +15,12 @@ const {ApplicationError,createJobApplication,listMyApplications,listEmployerAppl
 const {JobWorkflowError,updateEmployerJobDraft,submitEmployerJobForReview,closeEmployerJob,listModerationQueue,reviewEmployerJob}=require('./server/job-workflow.cjs');
 const {createJobReaderKey,getUnreadPublicJobCount,markPublicJobRead}=require('./server/opportunity-reads.cjs');
 const {OPPORTUNITIES_HTML}=require('./server/opportunities-ui.cjs');
+const {JOB_MODERATION_HTML}=require('./server/job-moderation-ui.cjs');
 const {syncLegacyProfile}=require('./server/legacy-profile-sync.cjs');
 const {JobPreferenceError,getCandidateJobPreferences,saveCandidateJobPreferences}=require('./server/job-preferences.cjs');
 const {matchApprovedJob,matchApprovedJobsForCandidate}=require('./server/opportunity-matching.cjs');
 EMBED['opportunities.html']=OPPORTUNITIES_HTML;
+EMBED['job-moderation.html']=JOB_MODERATION_HTML;
 
 const PROV={
   "Umujyi wa Kigali":["Gasabo","Kicukiro","Nyarugenge"],
@@ -6555,6 +6557,7 @@ async function doLogout(){
 var TABS=[
   {id:'summary',label:'Incamake',perm:'dash.view'},
   {id:'users',label:'Abakoresha',perm:'users.view'},
+  {id:'jobs',label:'Amatangazo y'akazi',perm:'jobs.moderate'},
   {id:'profiles',label:'Imyirondoro',perm:'users.view'},
   {id:'reports',label:'Ibibazo',perm:'reports.handle'},
   {id:'requests',label:'Ibisabwa',perm:'requests.handle'},
@@ -6591,6 +6594,7 @@ async function loadTab(){
   if(!c)return;
   c.innerHTML='<div class="note">Birimo…</div>';
   try{
+    if(TAB==='jobs'){location.href='/admin/jobs';return;}
     if(TAB==='summary')return await renderSummary(c);
     if(TAB==='users')return await renderUsers(c);
     if(TAB==='profiles')return await renderProfiles(c);
@@ -7670,6 +7674,7 @@ function handleRequest(ctx,req,res){
   if(p.length>1&&p.endsWith('/'))p=p.slice(0,-1);
   if(p==='/')key='index.html';
   else if(p==='/opportunities')key='opportunities.html';
+  else if(p==='/admin/jobs')key='job-moderation.html';
   else if(p==='/admin')key='admin.html';
   else if(p==='/terms')key='terms.html';
   else if(p==='/privacy')key='privacy.html';
