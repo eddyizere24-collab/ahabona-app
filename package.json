@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b --pretty"
+    "typecheck": "tsc -b --pretty",
+    "test:discovery": "node --test tests/discovery-seo.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",
