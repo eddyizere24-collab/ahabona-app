@@ -13,7 +13,17 @@
     "test:discovery": "node --test tests/discovery-seo.test.cjs",
     "test:server": "node --no-warnings tests/server-smoke.cjs",
     "test": "npm run check && npm run test:discovery && npm run test:server",
-    "test:opportunity": "node --test tests/postgres-adapter.test.cjs tests/opportunities-public.test.cjs tests/jobs-employer.test.cjs tests/applications.test.cjs tests/job-workflow.test.cjs"
+    "test:opportunity": "node --test tests/postgres-adapter.test.cjs tests/sqlite-audit.test.cjs tests/opportunities-public.test.cjs tests/jobs-employer.test.cjs tests/applications.test.cjs tests/job-workflow.test.cjs tests/job-reads.test.cjs tests/legacy-profile-bridge.test.cjs tests/opportunity-notifications.test.cjs",
+    "test:db-adapter": "node --test tests/postgres-adapter.test.cjs",
+    "audit:sqlite": "node scripts/audit-sqlite-schema.cjs",
+    "test:sqlite-audit": "node --test tests/sqlite-audit.test.cjs",
+    "test:public-jobs": "node --test tests/opportunities-public.test.cjs",
+    "test:employer-jobs": "node --test tests/jobs-employer.test.cjs",
+    "test:applications": "node --test tests/applications.test.cjs",
+    "test:job-workflow": "node --test tests/job-workflow.test.cjs",
+    "test:job-reads": "node --test tests/job-reads.test.cjs",
+    "test:legacy-profile-bridge": "node --test tests/legacy-profile-bridge.test.cjs",
+    "test:opportunity-notifications": "node --test tests/opportunity-notifications.test.cjs"
   },
   "dependencies": {
     "pg": "8.23.1"

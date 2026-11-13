@@ -1,0 +1,679 @@
+# AHABONA OPPORTUNITY ENGINE
+## Product Requirements, Architecture Direction & Phased Build Plan
+
+**Inyandiko-fatizo yo kubaka Job & Opportunity Marketplace ihujwe na AHABONA**
+
+- Document ID: AHABONA-OPP-001
+- Version: 2.0
+- Itariki: 13 Ugushyingo 2026
+- Status: Planning baseline + development implementation log; si uburenganzira bwo guhindura Production.
+- Repository: eddyizere24-collab/ahabona-app
+- Working branch: feature/chatgpt-discovery-foundation-20261112
+- Baseline commit: 58a406afe238dd8360108ac48cde1aa4a276062d
+
+---
+
+## 1. Icyerekezo n'intego
+
+AHABONA izakomeza kuba urubuga rufasha abantu kwerekana ubumenyi, imyuga, ubushobozi na serivisi, kugira ngo ababikeneye bababone kandi bavugane. Hiyongeraho **AHABONA Opportunity Engine**, system ihuza abatanga akazi n'abashaka akazi, igatuma gutangaza, kubona, gusaba no gucunga amahirwe bishoboka muri AHABONA.
+
+Iyi ntabwo ari job-board y'amatangazo gusa. Ni platform ifite:
+- Job Marketplace: gutangaza, gushakisha no gusoma amatangazo.
+- Progressive onboarding na Talent Passport: umuntu yinjira byoroshye, akuzuza amakuru buhoro buhoro, hanyuma agakoresha profile imwe mu gusaba akazi kenshi.
+- Job Creation Assistant: umukoresha yandika cyangwa akavuga icyo akeneye; system ikabihindura draft, ikabaza ibibuze kandi ntihimbe amakuru.
+- Apply on AHABONA: gusaba akazi no gukurikirana application muri system imwe.
+- Employer Desk: gucunga amatangazo, applicants, interviews n'ibyemezo.
+- Two-way matching na Talent Watch: gushakira candidate akazi no gushakira employer abantu bemeye kugaragara.
+- Notifications: in-app, email na web push yemejwe na user.
+- Trust & Safety: employer checks, moderation, reporting, fraud controls na audit.
+
+**Ihame ry'ingenzi:** AHABONA igomba gufunguka yerekana abantu na profiles zabo ako kanya nk'uko iri ubu. Homepage ntihindurwa kubera jobs. Akamenyetso gato ka notifications kari hejuru ni ko kazaba entry point ijyana ku Job Marketplace. Nta job wall, forced modal cyangwa interstitial.
+
+## 2. Ibyo baseline ya GitHub yagaragaje
+
+Igenzura ryakozwe kuri branch iri hejuru, commit 58a406afe238dd8360108ac48cde1aa4a276062d. Ibi ni source-code observations; si ikimenyetso cy'uko byose biri gukora kuri production.
+
+| Ikintu | Ibyagaragaye |
+|---|---|
+| Server | Node.js public server iri muri server-v2.cjs. |
+| Client | React 19, Vite 7 na TypeScript biri muri src/. |
+| Database | Server source ikoresha node:sqlite / DatabaseSync. |
+| Taxonomy | Categories, skills, aliases n'indimi biri muri server source; bigomba kongerwaho aho guhimba taxonomy ibangikanye. |
+| Discovery work | discovery-seo.cjs na tests biri kuri working branch; bigomba kurindwa. |
+| Existing permissions | PERMS irimo requests.handle; nta jobs.moderate yabonetse kuri baseline. |
+| Banner ads | strip_ads na promotional content ni amatangazo yo kwamamaza; si structured job-post system. |
+| Jobs schema | Nta dedicated job_posts / job_applications module yabonetse mu schema yagenzuwe. |
+| Feature defaults | messaging, email_verification na push_notifications byagaragaye nka OFF; pwa nka ON. Runtime configuration igomba kongera kugenzurwa. |
+| Documentation conflict | README isobanura AHABONA nk'itari job board. Product docs zigomba kuvugururwa kugira ngo zigaragaze icyerekezo gishya, ariko AHABONA ntihinduke employer cyangwa staffing agency. |
+
+**Technical decision:** Ntituzahitamo database nshya kubera ko package dependency iboneka gusa. Phase 0 igomba kwemeza production host, real schema, auth, backups, uploads, email provider, PWA/service worker, deploy method na active source revision. Existing account/profile system ni yo igomba kongerwaho, ntituzubaka accounts ebyiri cyangwa user database nshya.
+
+## 3. Hosting facts zemejwe na nyir'urubuga (12 Ugushyingo 2026)
+
+Screenshot ya AWS Lightsail nyir'urubuga yatanze igaragaza ibi bikurikira. Ibi ni facts zigaragara kuri console igihe screenshot yafashwe; si uko twagenzuye server imbere.
+
+| Ikintu | Icyemejwe |
+|---|---|
+| Cloud platform | Amazon Lightsail (AWS) |
+| Instance name | ahabona-server |
+| Blueprint / application family | Node.js |
+| Instance state | Running |
+| System status check | Passed |
+| Instance status check | Passed |
+| Instance plan | 1 GB RAM, 2 vCPUs, 40 GB SSD |
+| Instance class | General purpose |
+| AWS region / zone | Frankfurt, Zone A (eu-central-1a) |
+| Networking | Dual-stack; Static IPv4 and public IPv6 are assigned |
+
+**Icyo bivuze ku kubaka:** AHABONA igomba gufatwa nka application ikorera kuri Lightsail VPS yayo. Deployment, backup, monitoring, server resource budget, process manager, Node runtime, database na storage bigomba kugenzurwa kuri iyi instance. Ntituzafata Vercel nk'aho ari production host yayo.
+
+**Ibyo screenshot itagaragaza kandi bigomba kugenzurwa kuri Phase 0:** domain/DNS mapping, exact Node.js runtime version, repository path and deployed Git SHA, process manager and startup command, reverse proxy/TLS settings, environment variable names (values never print), database file location and backup/restore procedure, uploaded-file storage, firewall/security group rules, logs and monitoring. Screenshot ya console yonyine ntihamya ko branch cyangwa commit runaka ari yo iri live.
+
+Public server IPs ntizishyirwa muri iyi product document; zibikwa mu private operations inventory aho bikenewe.
+
+
+### ADR-001: Database platform for AHABONA (Neon selected; development provisioned)
+
+**Status:** Neon is selected and an AHABONA-only project plus development branch have been provisioned. Foundation migrations `0001` and `0002` are applied to the Neon `development` branch only. The application code is not yet connected, no live AHABONA user data has been copied, and the Neon `main` branch and Lightsail production remain untouched. This decision supersedes the Supabase recommendation in document v1.2.
+
+**Decision:** Use **Neon Lakebase Postgres as AHABONA's primary relational database/backend**, on a dedicated Neon project in AWS Europe Central 1 (Frankfurt, `eu-central-1`). Keep AHABONA's existing Node.js application/API on the current Lightsail instance during the first phases. Do not add separate databases for jobs, users, applications, matching or notifications: these are connected business entities and must share one PostgreSQL source of truth.
+
+**Why Neon is the current recommendation:**
+- It is native PostgreSQL, suitable for relational entities, transactions, indexes, constraints, search and matching logic.
+- Neon now offers a broader backend set around Postgres: Managed Better Auth, Object Storage and Node.js Functions are GA; AI Gateway is separately metered/prepaid. Neon Realtime remains beta.
+- It has a generous current Free allowance for an early development/pilot project.
+- The official Neon MCP connector is connected in this ChatGPT workspace and can inspect/manage the AHABONA Neon project. Connector SQL access is being restricted to development tasks; it is not used as an unattended production deployment channel.
+- The Lightsail instance and Neon project can both be placed in Frankfurt, reducing geography mismatch. Measure actual API/database latency from the AHABONA server before release.
+
+**Neon Free allowances observed on 12 Nov 2026 (re-check before provisioning):**
+- PostgreSQL: 1 GB per project; up to 100 projects per Neon Free account; 10 branches per project.
+- Compute: 100 CU-hours per project per month; compute scales to zero after 5 minutes idle and can autoscale to 2 CU (about 8 GB RAM).
+- Public network transfer: 5 GB per project per month.
+- Managed Better Auth: up to 60,000 monthly active users.
+- Object Storage: 5 GB per project.
+- Functions: 1 million invocations per project per month, with active/waiting capacity-hour limits.
+- Instant restore history: 6 hours, subject to the documented change-history cap.
+- Free usage is bounded: exhausting compute or transfer allowances can suspend compute until the next period or an upgrade. Free quota is not a production uptime or backup guarantee.
+
+**ChatGPT access and security:**
+- Neon documents a ChatGPT MCP connection at `https://mcp.neon.tech/mcp` using OAuth. The official Neon documentation labels its MCP server as intended for development and testing only and instructs users to review LLM-requested actions.
+- Use the Neon connector only for scoped development operations. The runtime role `ahabona_app` is separate from the database owner and has no schema-creation rights. Sensitive identity vault and migration ledger read access is revoked from `ahabona_app`. Do not place credentials in source code or chat.
+- Use a separate development/staging Neon project or branch for schema experiments. Do not grant broad write access to production through MCP. Production changes require a reviewed GitHub migration/PR, backup/rollback plan and explicit owner approval.
+- No database credentials, API keys or private personal data may enter GitHub or chat messages.
+
+**Application connection and migration direction:**
+- The current repository server uses `node:sqlite` / `DatabaseSync`; the active production SQLite schema and data must be audited before migration.
+- After staging is prepared, the existing Node.js API on Lightsail connects to Neon Postgres over TLS using the Node PostgreSQL driver and a small, bounded connection pool. Use server-side credentials only; never expose database secrets in frontend JavaScript.
+- Preserve existing AHABONA sign-in/session behavior initially unless the auth audit supports a deliberate migration. Neon Managed Better Auth is available, but moving authentication and migrating user accounts must be treated as a separate controlled workstream, not an automatic side effect of changing the database.
+- Migrate existing users, profiles and related data with stable IDs; verify counts, relationships, private-field rules and existing app flows. Cut over only after repeatable tests, backups and rehearsed rollback.
+- Keep PostgreSQL the source of truth. Object Storage stores files only; database records hold object keys/metadata and access rules.
+- Neon does not replace a dedicated outbound email/SMS provider. In-app notifications can be stored in Postgres; email and push need explicit delivery integrations, consent, queue/retry and unsubscribe logic.
+
+**Important beta boundary:**
+- Neon Realtime is currently public beta and its current announcement explicitly says it does **not** provide row-level security yet. Do not use Neon Realtime directly for private job applications, candidate profiles or employer-only events until its access controls are production-ready and reviewed. Use the AHABONA server to authorize in-app notification delivery and normal push/email channels first.
+- Neon AI Gateway uses prepaid/model usage and must not be treated as included free AI inference.
+
+**Backup and production-readiness rule:**
+- A 6-hour instant restore window is not the same as long-retention independent backups. During Free-plan testing, make scheduled encrypted `pg_dump` exports to storage independent of Neon and test restoration.
+- Before real user applications and private documents are made authoritative in Neon, choose a sustainable production plan, turn on the required backup/recovery retention, set billing/spend alerts, and rehearse restore/cutover. No production launch on a single untested Free-plan copy of personal data.
+- Design for future scale from the beginning. Free quotas support experiments and a controlled pilot; they do not define the target architecture or intended user capacity.
+
+**Alternatives reviewed against AHABONA's needs:**
+- **Supabase:** very strong mature PostgreSQL, RLS, Auth, Storage and Realtime; its connector is already connected in this workspace. Current Free plan is smaller for this workload (500 MB database, 1 GB file storage, 5 GB egress, 50,000 MAU) and pauses projects after seven days of low activity. It remains a valid fallback if integration simplicity outweighs Neon’s larger Free allowance.
+- **Appwrite:** strongest all-in-one alternative and has an official ChatGPT MCP/plugin with OAuth and confirmed write actions. Its Free plan has 5 GB bandwidth, 2 GB storage, 750K executions, 75K MAU, one database, one bucket, two functions, 500K reads and 250K writes per month; projects pause after one week of inactivity. Its pricing page currently lists dedicated native databases as coming soon, so the free database path is not the same direct native PostgreSQL service needed for this data-heavy roadmap. Appwrite may be preferable for a simpler all-in-one app that values bundled Messaging/Sites over raw PostgreSQL control.
+- **Nhost:** good PostgreSQL + Hasura GraphQL, functions and realtime; Free Starter lists one project, 1 GB database, 1 GB storage and 5 GB egress, with pause after one week of inactivity. Strong if GraphQL-first architecture is the priority; not necessary for AHABONA's current Node API design.
+- **Firebase:** very useful mobile ecosystem and Cloud Messaging, and Firestore has daily free quotas (1 GiB, 50K reads/day, 20K writes/day, 10 GiB egress/month). Firestore is a document database, not the natural primary model for AHABONA's relational jobs/applications/matching system. Firebase SQL Connect relies on Cloud SQL; its initial no-cost trial is temporary, so it is not the best fully free relational foundation. Firebase Cloud Messaging may still be evaluated later as a push channel without adopting Firestore as the main database.
+- **PocketBase:** simple, small and self-hostable, but it uses embedded SQLite, scales vertically on one server, has no built-in cloud functions, and its own docs warn it is not recommended for production-critical applications before v1.0. AHABONA already uses SQLite, so PocketBase would not solve the need for a mature relational platform.
+- **Keep current SQLite only:** preserves continuity for Phase 0, but is not the recommended long-term primary database for the full jobs/applications/notifications/matching roadmap.
+
+**Decision guardrail:** Neon is the selected development and intended primary relational database because its PostgreSQL foundation, early-stage Free capacity, Frankfurt region and ChatGPT connector best fit AHABONA. This does not authorize Production cutover. Production use still requires a completed data inventory, migration rehearsal, independent backups, authorization review, latency/load tests, billing plan and explicit release approval.
+
+**Live connector verification (12 Nov 2026):**
+- The Neon connector became available in ChatGPT and its read-only discovery tools were called.
+- `list_organizations` returned zero organizations.
+- `list_projects` returned an empty list and `count_projects` returned zero.
+- The region catalogue includes AWS Europe Central 1 (Frankfurt), `aws-eu-central-1`.
+- Result: connector integration is present, but there is currently no Neon organization/project visible to this connection. This may mean no organization is provisioned under the connected Neon account or the connected account is not the intended account. It is not evidence of an AHABONA database.
+- No organization, project, branch, database, role, credential or configuration was created or changed during this inspection.
+- After the owner confirmed the connection, a dedicated Neon Free organization became visible: `org-royal-dream-23363731` (`eddyizere24@gmail.com`). The prior zero-organization result was an earlier connection/account visibility state.
+- Created AHABONA-only Neon project `ahabona-platform` (`damp-lake-50983782`) in AWS Europe Central 1 Frankfurt (`aws-eu-central-1`), PostgreSQL 17.11, Free plan. Default branch `main` is `br-twilight-flower-b9o8noqo`; database `ahabona`; owner role `ahabona_owner`.
+- Created isolated `development` branch `br-super-truth-b9ei5e3y` from `main`; it is ready. Created application role `ahabona_app` scoped to database `ahabona` and schema `public` with read/write data privileges. Verified that it can use the schema but cannot create schema objects. Do not put its password or any connection string in GitHub or chat.
+- Verified PostgreSQL 17.11 connectivity with a harmless SELECT. At initial provisioning the development database had zero application tables; the foundation schema was subsequently applied through versioned GitHub migrations. No production AHABONA data has been copied.
+- Neon Free does not permit changing the suspend interval on this account; the project uses the plan default (`suspend_timeout_seconds=0`). Main-branch protection was also rejected by the Free-plan protected-branch limit. The main branch therefore remains unprotected; use reviewed migrations and keep all schema work on `development` until protection is available.
+- Repository audit reconfirmed the active `server-v2.cjs` imports `node:sqlite` / `DatabaseSync` and contains the live schema/runtime; `package.json` currently has no `pg` driver. Therefore Neon infrastructure is provisioned but the live Lightsail app is **not yet connected**. Do not claim the migration or app integration is complete.
+- Next engineering gate: finish the SQLite data/transaction/auth inventory, implement and test a server-side PostgreSQL adapter, seed the shared capabilities taxonomy, then migrate anonymized or controlled development fixtures and verify all existing flows. Only after that may we prepare a separately approved production migration. Keep the current SQLite database untouched until successful verification.
+
+
+### AWS Free Plan and billing guardrail
+
+The AWS screenshot confirms the Lightsail instance and size, not the AWS account's billing plan or remaining credits. Current AWS documentation says a new AWS Free account plan lasts up to six months or until credits are exhausted, whichever happens first; the plan closes the AWS account at expiry, with a 90-day window to upgrade and regain access before data is erased. New accounts can receive up to $200 in credits. A Paid plan with credits behaves differently, so Phase 0 must record the exact account plan, credit balance and expiry date from the AWS Cost and Usage widget.
+
+The current Lightsail public-IPv4 bundle matching 1 GB RAM / 2 vCPUs / 40 GB SSD is listed at $7/month. That price is not proof of what the owner is currently paying: actual charges depend on plan, credits, trial eligibility, usage and billing period. Build for the intended product scale; use the Free Plan for experimentation and plan the billing transition before it ends, rather than limiting the architecture to today's trial.
+
+
+## 4. Ibyemezo bidahinduka (Guardrails)
+
+1. Homepage iguma yerekana abantu n'ubushobozi bwabo ako kanya; jobs ntizisimbura abantu.
+2. Job icon iba nto kuri header. Badge yerekana jobs notifications zitarasomwa n'umukoresha winjiye; ntigaragaza private unread count ku visitor utinjiye.
+3. Visitor wese ashobora kureba job list na details atariyandikishije.
+4. Kwiyandikisha, gushakisha no gusaba akazi kuri v1 biguma ari ubuntu 100%.
+5. Registration ya mbere iba ngufi. Amakuru y'inyongera asabwa buhoro buhoro igihe akenewe.
+6. Nta AI izihimbira salary, location, qualification, requirements, verification cyangwa availability.
+7. Employer ni we wemeza draft y'itangazo; AI ifasha kuyitunganya gusa.
+8. Candidate ni we ugena niba profile ye igaragara mu matching/reverse discovery n'amakuru yemera gusangiza employer.
+9. Matching score ni recommendation isobanurwa, si icyemezo cyikora cyo kwanga umuntu.
+10. Moderation, audit, reporting, anti-fraud na rate limits biri muri launch criteria.
+11. DB changes ziba additive, zifite backup na rollback plan; nta gusiba data itabanje kugenzurwa.
+12. Nta main merge, Production deploy, PM2 restart, production migration cyangwa host configuration change hatabaye release approval yihariye.
+
+## 5. Roles
+
+- **Visitor:** kureba abantu, profiles, jobs na details; gushakisha no report.
+- **Registered candidate:** preferences, Talent Passport, saved jobs, Apply, application tracking, notifications.
+- **Service provider:** akomeza gukoresha profile asanzwe; ashobora kuba candidate nta konti ya kabiri.
+- **Individual employer:** gutangaza no gucunga jobs ze, kureba applicants no kuvugana na bo.
+- **Organization owner:** gucunga organization, members, access n'amatangazo.
+- **Recruiter/team member:** ibikorwa yahawe uruhushya gusa.
+- **Moderator:** job review, approve/reject/request changes, reports.
+- **Admin/Super Admin:** roles, settings, escalations na audit.
+- **System worker:** expiry, matching, email/push queue na retry; nta user admin privileges.
+
+Umuntu umwe ashobora kuba candidate n'employer kuri account imwe.
+
+## 6. End-to-end journeys
+
+### 5.1 Candidate
+1. Afungura AHABONA akabona homepage isanzwe.
+2. Afungura jobs akareba amatangazo atariyandikishije.
+3. Ashobora gushakisha, filter, save link cyangwa gusangiza itangazo.
+4. Akanda Apply; niba atinjiye, AHABONA imusaba gukora account cyangwa login mu buryo bugumana draft/application intent.
+5. Yuzuza amakuru asabwa kuri ako kazi gusa.
+6. Ahabwa confirmation, application reference na status tracker.
+7. AHABONA imumenyesha updates hakurikijwe preferences.
+
+### 5.2 Progressive onboarding
+- **Starter:** konti n'amakuru make ikora.
+- **Work-ready:** skills/interests, preferred work areas na contact method.
+- **Detailed:** experience, education, portfolio, languages cyangwa references.
+- **Evidence checked:** ibyangombwa byagenzuwe koko; ntibigaragazwe nta verification yabaye.
+System igaragaza progress, ikanasobanura impamvu isaba buri field. User ashobora kubika, gusubika cyangwa gusimbuka ikitari mandatory. Profile completion si qualification cyangwa guarantee yo kubona akazi.
+
+### 5.3 Employer job creation
+1. Akanda Tangaza akazi, agahitamo individual cyangwa organization.
+2. Yandika cyangwa akavuga icyo akeneye.
+3. Assistant ikora structured draft, ikabaza ibibuze.
+4. Required fields zigenzurwa; optional salary/benefits biguma empty iyo bitatanzwe.
+5. Employer areba preview, abika draft cyangwa yohereza moderation.
+6. Moderator yemeje itangazo, riba public; matching/alerts bigatangira.
+7. Employer ashobora pause, edit, close, fill cyangwa renew itangazo.
+
+### 5.4 Apply and hiring
+Candidate yohereza application muri AHABONA. Employer abona applicants mu Employer Desk, akabareba, akabashyira muri stages, akohereza messages cyangwa interview invites. Candidate abona status updates. Internal employer notes ntizigaragarira candidate.
+
+## 7. Functional requirements
+
+| ID | Requirement | Acceptance criteria |
+|---|---|---|
+| FR-001 | Homepage preservation | Profiles zigaragara ako kanya; job module ntihindura homepage layout/order. |
+| FR-002 | Job icon + unread badge | Header icon responsive, accessible; unread count ibara user-specific unread alerts. |
+| FR-003 | Public job browsing | Visitor ashobora kubona list/details, no share, nta account. |
+| FR-004 | Job posting wizard | Draft, preview, edit, save/resume, submit. |
+| FR-005 | Job Creation Assistant | Text/voice to structured draft; asks for missing fields, no invention. |
+| FR-006 | Job lifecycle | draft, pending_review, approved/published, paused, rejected, closed, filled, expired; server validates transitions. |
+| FR-007 | Search/filter | title, skill, category, district/area, job type, date, deadline; pagination. |
+| FR-008 | Work preferences | categories, location, schedule, availability, salary preference optional, channels. |
+| FR-009 | Progressive onboarding | Minimal registration; step-by-step profile completion. |
+| FR-010 | Talent Passport | Reusable profile with skills, experience, education, languages, portfolio and private evidence. |
+| FR-011 | Apply on AHABONA | Apply from Passport plus job-specific questions; confirmation and tracking. |
+| FR-012 | External apply | Employer may choose external URL/email/contact; clear external flow label. |
+| FR-013 | Employer Desk | Employer manages own jobs, applicants, pipeline and interview process. |
+| FR-014 | Application lifecycle | status, messages, employer-private notes and audit are separated. |
+| FR-015 | In-app notifications | history, unread/read, mark read, settings and frequency controls. |
+| FR-016 | Email notifications | verified address, consent, queue, delivery status and retries. |
+| FR-017 | Web Push | explicit opt-in, device/browser support, unsubscribe and revocation. |
+| FR-018 | Two-way matching | relevant jobs for candidates; opted-in talent discovery for employers. |
+| FR-019 | Talent Watch | monitors newly approved jobs/profiles and prevents duplicate alerts. |
+| FR-020 | Job moderation | approve, reject, request changes, pause; reason and audit history. |
+| FR-021 | Reports and anti-fraud | report queue, rate limits, suspicious-content checks and escalation. |
+| FR-022 | Employer verification | contact/organization checks, evidence and truthful badges. |
+| FR-023 | Expiry/freshness | deadlines update state; expired jobs absent from active recommendations. |
+| FR-024 | Languages | Kinyarwanda, English and French for main job flows and notifications. |
+| FR-025 | Accessibility/low bandwidth | mobile-first, tap targets, pagination, compressed images and clear error states. |
+| FR-026 | Audit/analytics | key actions, moderation and delivery attempts logged safely. |
+| FR-027 | Saved jobs | save/unsave, saved list and changed/expired status. |
+| FR-028 | Communication | in-platform communication with consent, ownership, anti-abuse and attachment checks. |
+
+## 8. Job data and experience
+
+### Job types
+Full-time, part-time, temporary, casual/day work, contract, project-based, gig/short task, internship/trainee, apprenticeship. The posting flow must distinguish employment type, work arrangement (on-site/remote/hybrid where relevant), schedule, duration and location.
+
+### Job post fields
+Title, employer identity, category/skills, responsibilities, required/preferred skills, headcount, location, type, schedule, duration, salary or salary range if supplied, benefits if supplied, minimum eligibility, application method, questions, deadline, contact visibility, status, timestamps and audit metadata. Optional fields remain optional; no fake defaults.
+
+### Public job pages
+List and detail cards show title, employer and genuine verification state, location, type, posted date, deadline, and compensation only when declared. Public URL is shareable. Closed/expired jobs are marked clearly and never presented as active.
+
+### Job application
+Candidate uses Talent Passport and only answers missing job-specific questions. Employer selects one of: Apply on AHABONA (preferred), in-platform contact, or external apply link/email. AHABONA must not pretend it handles an external application.
+
+## 9. Talent Passport
+
+Passport is a reusable skills profile, not a rigid CV template. It may include:
+- Basic identity and selected public contact method.
+- Skills, categories, self-described level and optional experience years.
+- District/area and preferred work locations.
+- Availability, schedule and job-type preferences.
+- Work history and project descriptions.
+- Education and qualifications where relevant.
+- Certificates and licenses, private by default.
+- Portfolio photos, work samples and links.
+- References only with permission.
+- Languages and self-described level.
+
+User controls public visibility, employer sharing and matching opt-in. Profile completion must not be confused with verification or job suitability.
+
+## 10. Matching Engine and Talent Watch
+
+Matching must consider user-declared skills/interest, required vs preferred skills, location/commute preferences, work type, availability and declared constraints. It must explain why a job matches and allow user feedback. Do not infer protected attributes or use sensitive personal data to rank candidates. Avoid opaque automated rejection.
+
+- **Candidate-to-job:** approved new jobs are scored against opted-in candidate preferences.
+- **Employer-to-talent:** employer sees only candidates who opted into discovery and only fields permitted by their privacy controls.
+- **Talent Watch:** continues matching when a new job or new consenting candidate appears.
+- Avoid duplicate alerts, expired listings and over-notification.
+- Matching rules require versioning and deterministic tests.
+
+## 11. Notifications
+
+Three channels:
+1. **In-app:** icon badge, notifications center, unread/read state, deep link to relevant job/application, history.
+2. **Email:** transactional and alert email to a verified address, frequency settings and unsubscribe.
+3. **Web Push:** browser/device push after explicit user permission; subscription removal and per-device status.
+
+Controls:
+- User selects channels and alert frequency (instant, digest, weekly, pause).
+- Alerts should only be sent for relevant matches or important application updates.
+- Notification event is persisted before delivery; use an outbox/queue, retry with backoff, idempotency and delivery status.
+- Unread count is per user/device policy, consistent across devices where account identity permits.
+- SMS/WhatsApp are not part of v1; assess costs and consent before adding.
+
+## 12. Logical data model (subject to Phase 0 audit)
+
+Proposed entities, not production SQL:
+- job_posts
+- employer_orgs, employer_members
+- candidate_job_preferences
+- talent_passport_sections / evidence references
+- job_applications
+- application_events
+- job_matches
+- talent_watch_rules
+- notifications
+- notification_preferences
+- notification_outbox
+- push_subscriptions
+- job_reports
+- employer_verifications
+- job_audit_events
+
+Reuse existing users, authentication, profiles and taxonomy. Define foreign keys, indexes, ownership rules, deletion/retention and migration strategy only after inspecting the exact production schema. Files containing certificates or personal documents must use private storage, signed access and retention controls; never commit them to GitHub.
+
+## 13. Architecture direction
+
+- Preserve the existing Node.js server and React/Vite client unless Phase 0 proves a change is necessary.
+- Add bounded modules/services for jobs, employer, applications, matching, notifications, moderation and audit; avoid expanding the existing server into an untestable monolith.
+- Keep validation, authorization and lifecycle rules on the server; frontend is not trusted.
+- Create versioned API contracts and a centralized notification event model.
+- Use a durable outbox/worker for email and push; scheduled expiry and Talent Watch jobs must be idempotent.
+- Do not introduce paid APIs or infrastructure without checking owner budget and free-tier limits.
+- Maintain responsive UI for low-end Android and weak network connections.
+
+## 14. Trust, privacy and safety
+
+- Verify employer email/phone as appropriate; organization verification requires evidence and reviewer process.
+- Show verification badges only when a real check has completed.
+- Use report job / block employer / moderation review and abuse escalation.
+- Detect suspicious claims and requests for candidate fees; do not promise jobs or guarantee recruitment.
+- Collect minimum necessary personal data; protect candidate contact and evidence files.
+- Candidate controls discoverability and data shared before/after applying.
+- Separate employer-only notes from candidate-visible communication.
+- Apply access control by ownership and explicit permissions; add job-specific moderation permissions.
+- Audit admin decisions and important application status changes.
+- Define retention, export and deletion rules before launch.
+- AI can assist with drafting, classification and flagging; humans make moderation and hiring decisions. AI must not fabricate information or reject people autonomously.
+
+## 15. UX, accessibility and performance
+
+- Preserve homepage and current profile discovery priority.
+- Jobs area is separate and reachable from the small header icon.
+- Use short forms, clear field labels, save/resume, preview and progress indication.
+- Public browsing requires no account; account is requested at Apply or account-specific actions.
+- Support Kinyarwanda, English and French; preserve source text and review translations.
+- Provide loading, empty, offline, validation and error recovery states.
+- Keyboard and screen-reader labels, adequate contrast, large tap targets and accessible form errors.
+- Mobile-first; keep bundles, images and network requests light; paginate lists and avoid mandatory animation.
+- Do not show push permission on page load; explain benefit, ask at a meaningful point after user action.
+
+## 16. Measurement / KPIs
+
+Measure, do not invent targets before a baseline:
+- Job publish completion and time to publish.
+- Candidate view-to-Apply and Apply completion.
+- Match relevance feedback and notification delivery/open rate.
+- Employer response time and application outcomes.
+- Talent Passport progression and completion.
+- Fraud/report incidence and moderation response time.
+- Expired-job exposure (target zero in active recommendations).
+- Performance: mobile load, API latency, error rate and notification queue failures.
+
+Targets are agreed after pilot baseline data; never optimize volume at the expense of relevance or trust.
+
+## 17. Phased roadmap and gates
+
+| Phase | Work | Exit evidence |
+|---|---|---|
+| 0. Product & technical audit | verify live host/revision, auth, SQLite schema, backups, email, messaging, PWA, storage, deploy workflow, privacy and product docs | audit report, architecture decision, migration/rollback plan, test plan |
+| 1. Core job foundation | additive schema, job service/API, lifecycle, employer ownership, permissions, audit | unit/API/auth/migration tests; existing profile regression tests |
+| 2. Public Job Marketplace | header entry, public job list/detail, search, filters, share link, expiry, mobile UI | visitor flow works; moderation required; homepage unchanged |
+| 3. Apply & Employer Desk | progressive onboarding, Talent Passport v1, Apply flow, applications, employer pipeline | cross-user isolation, candidate privacy and end-to-end tests |
+| 4. Matching & notifications | explicit preferences, deterministic match v1, in-app center/badge, email outbox/digest | consent, dedupe, retry, unsubscribe, match explanation tests |
+| 5. Push and reverse matching | Web Push, opt-in employer talent discovery, Talent Watch | device/browser matrix, visibility consent, anti-spam and access tests |
+| 6. Trust, insights and scale | enhanced verification, fraud signals, reports, analytics, Opportunity Map only if data supports | privacy/security review, performance, backup/restore and support plan |
+| 7. Controlled release | staging/pilot, owner acceptance, release checklist, backup, live verification | explicit release approval, rollback readiness, no critical defects |
+
+Every phase has a deliverable, requirements IDs, tests, review and decision gate. No phase advances because code was merely written.
+
+## 18. Quality strategy and Definition of Done
+
+Test cases include:
+- Anonymous visitor sees jobs but cannot access private candidate/employer data.
+- Homepage profile discovery remains unchanged.
+- Employer A cannot read or edit Employer B's jobs/applications.
+- A user can be both employer and candidate with one account.
+- Draft and required fields validate server-side; optional fields stay optional.
+- Expired/closed jobs never appear as active matches.
+- Candidate sees only their applications and relevant status.
+- Private profile fields remain private through all public APIs and matching.
+- Push requests happen only after user action/consent.
+- Email/push retry does not send duplicate notifications.
+- Unread count and read state remain consistent.
+- Moderation, verification and audit events are persisted.
+- App works on mobile, low bandwidth and recovery from transient failure.
+
+Feature is done only when its requirement ID and issue/PR exist; UI has loading/empty/error/success states; server validation, authorization and ownership are tested; migrations/backup/rollback are documented; unit/integration/end-to-end tests pass; accessibility/mobile/localization are checked; no secrets/private data enter logs or GitHub; docs/changelog updated; commit SHA and CI result are recorded. Production status must be labeled honestly: branch only, staging verified or production verified.
+
+## 19. Initial GitHub work breakdown
+
+- EPIC-00 Product & technical audit.
+- EPIC-01 Data and API foundation.
+- EPIC-02 Job publishing wizard and moderation queue.
+- EPIC-03 Candidate Passport and progressive onboarding.
+- EPIC-04 Apply and application lifecycle.
+- EPIC-05 Matching and Talent Watch.
+- EPIC-06 In-app, email and push notifications.
+- EPIC-07 Safety, employer verification and admin.
+- EPIC-08 Quality, accessibility and controlled release.
+
+Every issue must include purpose, user story, FR/EPIC IDs, dependencies, database/API impact, privacy/security risks, acceptance tests, rollback notes and evidence required to close.
+
+## 20. Decisions to resolve in Phase 0
+
+1. Exact active host revision and deployment/rollback process.
+2. Existing sign-up/login and verified contact methods.
+3. Full SQLite schema, database location, backup schedule and migration discipline.
+4. Transactional email provider, quotas, costs and deliverability.
+5. PWA/service worker and target Android/browser Web Push support.
+6. Private storage for certificates/portfolio files and retention policy.
+7. Individual vs organization employer verification standard and affordability.
+8. What employer can see before/after Apply; default to least disclosure.
+9. Whether in-platform messaging is enabled in v1 or initially only application updates.
+10. Kinyarwanda/English/French translation ownership and review.
+11. Job categories/job types: reuse current taxonomy, extend only for evidenced gaps.
+12. Closed pilot employer group, candidate test group, support and abuse escalation.
+13. Operational worker model and SQLite reliability/backup under expected traffic.
+
+These are not reasons to stall the project; they are decisions that prevent building on guessed infrastructure or weakening user privacy.
+
+## 21. Project management and change control
+
+**Source of truth**
+- Product baseline: this document in docs/.
+- Implementation source: GitHub repository and feature branch.
+- Work tracking: GitHub issues and PRs with FR/EPIC IDs.
+- Evidence: commit/PR SHA, CI result, migration status, staging URL, screenshots/test output and live verification.
+
+**Progress report format**
+1. Progress: phase completion with denominator (e.g. 6/10 acceptance checks).
+2. Done: change and exact GitHub reference.
+3. Tests: command/workflow and result.
+4. Blockers: specific missing item and why it matters.
+5. Next step: one concrete action.
+6. Release status: branch only, staging verified or production verified.
+
+New requirements get IDs and rationale. Changes to homepage, privacy, pricing, candidate consent, product direction or release guardrails require owner decision. Each schema change requires additive migration plus backup/rollback. No secrets, private user data or identity documents in repository. Use feature branch/PR before main; no merge or production release without explicit approval.
+
+## 22. Icyo tubanza gukora
+
+Tangira kuri **Phase 0: Product & Technical Audit**. Reba live host n'uko account, DB, email, PWA/push, file storage, backups na deploy bikora. Ibyavuye muri audit bibikwe muri GitHub issues nk'ibipimo n'ibimenyetso. Nyuma y'ibyo, dufate architecture decisions maze dutangire Phase 1. Nta code igomba guhita ishyirwa kuri Production.
+
+**Ihame riza imbere ya byose:** niba umuntu atanga akazi, AHABONA imufasha kugatangaza no kubona applicants; niba umuntu ashaka akazi, AHABONA imufasha kukabona no gusaba; bombi bagakomeza gukorera muri system imwe, mu gihe homepage isanzwe ikomeza kwerekana abantu n'ubushobozi bwabo.
+
+---
+
+**Change Log**
+
+| Version | Itariki | Ibyahindutse |
+|---|---|---|
+| 1.0 | 12 Ugushyingo 2026 | Planning baseline: product requirements, technical direction, phases, trust/safety, tests and release gates. |
+| 1.1 | 12 Ugushyingo 2026 | Recorded owner-provided Lightsail hosting facts and clarified VPS-specific Phase 0 checks. |
+| 1.2 | 12 Ugushyingo 2026 | Initial database architecture review recommending isolated Supabase PostgreSQL. |
+| 1.3 | 12 Ugushyingo 2026 | Re-evaluated six options; recommends Neon Postgres/backend with ChatGPT MCP safeguards, free-plan limits, beta boundaries and migration gates. |
+| 1.4 | 12 Ugushyingo 2026 | Recorded live Neon connector inventory: connector available, but zero organizations/projects visible; no resources changed. |\n| 1.5 | 12 Ugushyingo 2026 | Provisioned AHABONA-only Neon Free PostgreSQL 17 project and development branch; verified least-privilege app role and documented remaining SQLite-to-Postgres integration gates. |
+
+
+## 3.1 Development implementation log (12 Ugushyingo 2026)
+
+The following work was completed after provisioning the Neon project. Evidence is from live Neon connector read-backs and GitHub commits; it is not a Production release.
+
+| Item | Verified result |
+|---|---|
+| Neon project | `ahabona-platform`, project ID `damp-lake-50983782`, AWS Europe Central 1 (Frankfurt), PostgreSQL 17.11 |
+| Neon database | `ahabona` |
+| Neon development branch | `development`, branch ID `br-super-truth-b9ei5e3y`, state `ready` |
+| Migration 0001 | Core compatibility projection and Opportunity Engine foundation applied on development |
+| Migration 0002 | Restricted runtime-role read access to the sensitive identity vault and schema migration ledger |
+| Migration 0003 | Added identity-source marker and legacy SQLite ID-only bridge |
+| Migration 0004 | Added explicit draft-save moderation event |
+| Migration 0005 | Added `changes_requested` job status for employer corrections |
+| Tables | 45 public base tables |
+| Foreign keys | 62 |
+| Migration ledger | 5 applied migration rows (`0001` through `0005`) |
+| Empty-data verification | users=0, profiles=0, job_posts=0, job_applications=0 |
+| Runtime role check | `ahabona_app` can use public schema and write job data; cannot create schema objects, read `user_sensitive_records`, or read `schema_migrations` |
+| GitHub files | `db/migrations/0001_opportunity_foundation.sql`, `db/migrations/0002_restrict_sensitive_runtime_access.sql` |
+| Current GitHub commits | `84acb5821a08c1773bde46cc0d69197dc557e60b`, `84c66b0f8fcfd0ab657a41514efdca832d8d7e38` |
+
+**Not done yet:** the live Node.js server still uses SQLite; no `pg` adapter is wired into application routes; capabilities have not yet been seeded into Neon; no user/profile data has been migrated; Neon main is still empty; Lightsail environment variables and production database settings have not been changed; no production deployment or restart has occurred.
+
+**Important schema note:** legacy core tables are compatibility projections intended to preserve existing user/profile IDs during controlled migration. The actual current production counts, column data, referential patterns, transactions and backup state must be measured directly from an authorised SQLite backup before any data transfer. National ID is deliberately excluded from the plain users table in the new schema; sensitive identity material is represented only as encrypted ciphertext in `user_sensitive_records`. No raw national ID or verification OTP should be logged or stored in plaintext.
+
+**Next build order:**
+1. Add a small server-only PostgreSQL pool/health adapter with strict environment validation and no credential logging.
+2. Add migration runner/ledger bookkeeping with a direct (non-pooled) connection and explicit version order.
+3. Seed capabilities from the existing authoritative `TAX` catalogue, preserving IDs only if the source IDs are captured.
+4. Build the migration/export tool against a protected SQLite backup; verify row counts and foreign-key parity using a throwaway development dataset.
+5. Wire selected routes behind a disabled-by-default development feature gate, preserving SQLite as the current active store until all user journeys pass.
+6. Add jobs, applications and notification APIs with server-side authorization, then UI.
+7. Production cutover requires a separate explicit owner release decision.
+
+
+## 3.2 Node.js PostgreSQL adapter implementation (12 Ugushyingo 2026)
+
+| Item | Verified result |
+|---|---|
+| Runtime driver | `pg` (node-postgres) pinned to `8.23.1` in `package.json` |
+| Adapter | `server/postgres.cjs` |
+| Adapter features | Server-side `DATABASE_URL` only; verified TLS; bounded pool and connection/query timeouts; safe health-check result; transaction helper; no connection-string logging |
+| Tests | `tests/postgres-adapter.test.cjs`, 8 tests |
+| CI | GitHub Actions run `43273817129`, conclusion `success`; commit `04d16fb496d991ac90fd90920eda1c0a22e05dac` |
+| Security tests | Confirm missing/invalid URL rejection, TLS override removal, certificate verification config, bounded pool, health-check shape, commit/rollback and failed-rollback client eviction |
+| Runbook | `db/README.md` |
+
+The workflow logs show 8/8 adapter tests passed and 12/12 discovery tests passed. The adapter is wired into the server context behind the explicit `AHABONA_ENABLE_POSTGRES=1` feature flag. The flag defaults off, so current production behavior remains SQLite. The server now mounts public job list/detail endpoints that call the Neon-backed query service only when the flag is enabled. Employer job creation, draft management, moderation and candidate application routes now exist in the feature branch. They remain gated by `AHABONA_ENABLE_POSTGRES=1`; the flag is still off in the live Lightsail environment. No production route has been activated.
+
+**Next engineering tasks:**
+1. Inspect the entire current `server-v2.cjs` database bootstrap and query/transaction usage on the working branch; map every SQLite-specific API that must be abstracted.
+2. Build repeatable data export/import tooling that reads from a protected, consistent SQLite backup and writes only to Neon development. Keep capability IDs and user/profile relationships stable.
+3. Seed the authoritative capability taxonomy from the actual source database; do not create duplicate IDs or assume a new seed order matches production.
+4. Implement PostgreSQL repositories for auth/session, profiles, messages, saved profiles, notifications and admin operations, then parity-test each existing journey before routing traffic.
+5. Implement opportunity APIs using server-side authorization and the new schema; add the public job list/details first, then employer creation/moderation, applications, matching and delivery workers.
+6. Only after end-to-end tests, backup/restore rehearsal, data reconciliation, billing review and a separate owner release instruction may Lightsail environment variables or Production be changed.
+
+The Node adapter and public job-query tests use a fake Pool, so they verify setup and query/visibility logic without connecting from the AHABONA server to Neon. The Neon development branch is separately validated by connector SQL checks. No live end-to-end Node-to-Neon connection from Lightsail has been attempted yet.
+
+
+## 3.3 SQLite migration audit tooling (12 Ugushyingo 2026)
+
+A read-only audit utility is now stored at `scripts/audit-sqlite-schema.cjs`. It requires an explicit `AHABONA_SQLITE_PATH`, opens the file with SQLite read-only mode, enables `query_only`, and reports only table/view names, row counts, column metadata, indexes, foreign-key definitions, SQLite schema version, quick-check result and foreign-key violations. It never exports row values, passwords, email addresses, phone numbers, or profile content. It refuses missing paths, non-regular files and symbolic links.
+
+- Command: `npm run audit:sqlite`
+- Test: `npm run test:sqlite-audit`
+- Tests cover metadata-only output, missing path rejection, and symlink rejection.
+- GitHub Actions run `43274798387` passed on commit `1a797f6e58fd78b058e39772dbefe83363008bcf`: 12/12 discovery tests, 8/8 PostgreSQL adapter tests and 3/3 SQLite audit tests passed; JavaScript syntax checks also passed.
+
+This utility has only been tested with synthetic SQLite fixtures in GitHub Actions. It has **not** been run against the AHABONA Lightsail data file, because no authorised, protected SQLite backup has been brought into the development environment. The actual row counts and production data remain unknown and unchanged.
+
+
+## 3.4 Public Job Marketplace read API (12 Ugushyingo 2026)
+
+The first public-facing server module has been added without changing the existing homepage layout.
+
+| Endpoint | Behavior |
+|---|---|
+| `GET /api/jobs` | Lists approved, unexpired job posts; supports bounded text, province, district, category, employment-type and work-arrangement filters with clamped pagination |
+| `GET /api/jobs/:uuid` | Returns details, required/preferred skills and application questions for an approved, unexpired post |
+
+**Visibility and privacy rules implemented in the SQL projection:**
+- Draft, pending-review, rejected, closed, expired and archived posts are never included in public reads.
+- Deadline-expired jobs are excluded even if their status was not yet changed to `expired`.
+- Salary values are returned only when the publisher sets `salary_visible=true`.
+- External application URLs are returned only for `external_url` applications.
+- Public email/phone are returned only when the post explicitly uses `employer_contact`; private user email/phone are not selected.
+- Query filters are passed as bound SQL parameters; pagination is clamped.
+
+**Server integration:** `server-v2.cjs` mounts both read endpoints. They require `ctx.pgPool`, which is created only when `AHABONA_ENABLE_POSTGRES=1`; without that explicit setting the existing server remains on SQLite and the new endpoints return unavailable. Public job reads have no dependency on user sign-in.
+
+**Test evidence:** `tests/opportunities-public.test.cjs`, 5 tests. GitHub Actions run `43276759101` completed successfully on commit `90389eda49eefdf80f23cdd5bd4d4f7e2a770a5c`. The combined workflow passed 12 discovery tests, 9 database adapter tests, 3 SQLite audit tests and 5 public job API tests (29/29 total).
+
+**Not yet implemented:** public job UI/header entry, employer job wizard/dashboard UI, candidate Apply UI, candidate application tracker UI, in-app job notification UI, email and web-push delivery workers, matching/Talent Watch, complete moderator UI, and the full SQLite-to-Neon parity migration. No real user/job/application data has been inserted into Neon. Node-to-Neon application queries have been unit-tested with a fake pool and Neon permissions/schema were independently verified, but no live Lightsail-to-Neon end-to-end connection has been attempted.
+
+ 
+## 3.5 Employer job lifecycle and moderation APIs (12 Ugushyingo 2026)
+
+The server-side employer workflow is now implemented in server/job-workflow.cjs and routed by server-v2.cjs. It is available only when the server's AHABONA_ENABLE_POSTGRES=1 development/staging gate is enabled.
+
+| Endpoint | Behavior |
+|---|---|
+| PUT /api/me/jobs/:uuid | Owner-only draft editing; merges omitted values from the saved job, validates the complete result, and updates requirements, skills and application questions in one transaction |
+| POST /api/me/jobs/:uuid/submit | Employer submits a draft or changes-requested post into pending_review; it never publishes directly |
+| POST /api/me/jobs/:uuid/close | Owner closes an eligible job and an audit event is recorded |
+| GET /api/admin/jobs | Permissioned moderation queue containing only pending_review posts |
+| POST /api/admin/jobs/:uuid/review | Moderator approves, rejects or requests changes, with a reason required for non-approval outcomes |
+
+**Authorization and safety rules:**
+- Job ownership is checked server-side on every employer edit, submit, close and application-list request.
+- Draft editing is limited to draft, changes_requested and rejected posts; published and pending-review posts cannot be silently edited.
+- Public visibility still requires a moderation decision. Employer submission alone does not publish.
+- jobs.moderate is a distinct server permission granted to admin and mod roles; super receives all permissions. It does not reuse user-management permissions.
+- Moderation review is restricted to pending_review posts and persists reviewed_by_user_id, reviewed_at, moderation_note, published_at and a job_moderation_events event.
+- Employer notifications are created for review outcomes. Database changes and notifications are grouped in transactions.
+- State changes, body sizes and request rates are validated server-side; mutations use same-origin checks.
+
+**Not yet a complete UI:** these are API/service layers only. The actual employer wizard, edit screen and moderator queue UI remain to be built and connected.
+
+## 3.6 Candidate applications and employer pipeline APIs (12 Ugushyingo 2026)
+
+Implemented in server/applications.cjs and mounted in server-v2.cjs:
+
+| Endpoint | Behavior |
+|---|---|
+| POST /api/jobs/:uuid/applications | Signed-in candidate applies to an approved, unexpired job whose application method is in_platform |
+| GET /api/me/applications | Candidate sees only their own applications and status |
+| GET /api/employer/jobs/:uuid/applications | Employer sees applicants only for a job they own |
+| POST /api/employer/applications/:uuid/status | Employer advances an application through permitted status transitions |
+
+**Application rules:**
+- User ID is bridged to Neon without copying email, phone, password hash, national ID or session secrets.
+- The profile snapshot uses only selected profile/work fields and omits private contact channels and identity data.
+- Employer-defined questions are checked for valid question IDs, input types, choices and required answers.
+- Application creation, status history and employer notification are committed in one transaction.
+- A unique (job_post_id, candidate_user_id) constraint prevents repeat applications; duplicate submission returns a conflict.
+- Candidates cannot apply to their own job, suspended profiles are blocked, and external-application jobs are not falsely treated as in-platform applications.
+- Employer ownership is checked for applicant reads and status updates. Invalid or skipped status transitions are rejected.
+- Status changes create an event and candidate notification.
+
+**Test coverage added:** 12 application service tests, including privacy snapshot checks, question validation, duplicate prevention, ownership isolation, unpublished-job rejection, transaction rollback and allowed status transitions. The test suite is run by the branch's GitHub Actions workflow.
+
+## 3.7 Current development verification and exact boundaries
+
+- Neon development still contains schema only: users=0, profiles=0, capabilities=0, job_posts=0, job_applications=0, notifications=0 at the last read-back.
+- Runtime role ahabona_app can read/write job and application data and create notifications, but cannot read user_sensitive_records or schema_migrations.
+- Job public read, employer creation, editing, submit/close, moderation and application services are wired into the Node server behind AHABONA_ENABLE_POSTGRES=1.
+- GitHub CI includes syntax checks and focused tests for PostgreSQL adapter, SQLite audit, public job reads, employer job creation, candidate applications and job workflow/moderation.
+- These service tests use fake PostgreSQL pools. Neon schema/role access was verified separately using connector SQL. This is not the same as a live Node-to-Neon network integration test.
+- AHABONA_ENABLE_POSTGRES remains off in Lightsail. SQLite remains the live app database. No production environment variable, SQLite file, user data, public site, DNS, service process or Neon main branch has been changed.
+- UI, candidate/employer dashboard, email/push dispatch, matching, capability catalogue seed, real SQLite backup audit, live network smoke test and rollback rehearsal remain release gates.
+
+
+
+## 3.8 Public Opportunity experience and per-reader unread tracking (13 Ugushyingo 2026)
+
+Implemented on the working feature branch. This is a development implementation record; it is not evidence of a Production deployment.
+
+**Files added**
+- `server/opportunities-ui.cjs`: standalone mobile-first public opportunities page served at `/opportunities`.
+- `server/opportunity-reads.cjs`: privacy-preserving job-read identity and SQL helpers.
+- `tests/opportunity-reads.test.cjs`: unit tests for deterministic reader keys, unread counting, valid-job read upserts and input checks.
+- `tests/opportunities-ui.test.cjs`: checks public browsing, job details, in-platform application and employer submission UI.
+- `tests/opportunities-route.test.cjs`: local Node-server smoke test for the root homepage and opportunities route.
+
+**Server integration**
+- `server-v2.cjs` serves `/opportunities` from the new standalone page.
+- The homepage response receives only a small briefcase/opportunity icon beside the existing header controls. The root page still renders the existing profile-discovery grid; no job wall, modal or homepage content replacement is introduced.
+- The public page uses the existing public job list/detail APIs. Public visitors do not need to sign in to read approved, unexpired announcements.
+- The employer form posts through the existing employer API; new announcements remain `pending_review` and do not become public until moderation approves them.
+- In-platform applications use the existing candidate application endpoint and existing profile snapshot protections. External URL and employer-contact options are presented only when selected by the employer.
+- The page includes an initial employer/candidate activity view based on existing APIs.
+
+**Unread announcement behavior**
+- `GET /api/jobs/unread-count` counts only approved, unexpired jobs not yet recorded in `job_post_reads`.
+- `POST /api/jobs/:uuid/read` records a view only for an approved, unexpired job and only after same-origin mutation checks.
+- Reader identity is a SHA-256 digest with domain separation: signed-in users are keyed by AHABONA user ID, anonymous readers by the existing browser device ID. Raw device identifiers are not written to the read-tracking table.
+- Rate limits are applied to count and read endpoints. The homepage badge is hidden when the opportunity backend is unavailable rather than displaying a false count.
+
+**Verification added; not yet reported as passing**
+- CI syntax checks cover the new CommonJS modules and tests.
+- `npm run test:opportunity-reads` runs read-tracking, UI and local route smoke tests.
+- GitHub Actions must be observed on the draft PR before claiming the full suite passes.
+
+**Current boundaries / remaining work**
+- Live Lightsail still uses SQLite; the Postgres opt-in flag has not been enabled in Production. The new page will show a graceful unavailable state until a staged Neon connection is enabled.
+- No Production environment variable, SQLite file, user data, main Neon branch, DNS, PM2 process or live site was changed.
+- Email and web-push delivery, candidate-to-job matching, reverse employer discovery/Talent Watch execution, richer employer application pipeline, moderator UI, data migration and rollback rehearsal remain incomplete.
+
+
+---
+
+# Implementation status addendum — 13 Ugushyingo 2026
+
+The Opportunity Engine is being ported onto the current Lightsail application source rather than wholesale-merging an older divergent branch.
+
+- Live source base: `studio/backend-foundation-20261027` at `44376dbb84181d5824dfb165b94a33915e1f2d8a`.
+- Integration branch: `feature/opportunity-engine-integration-20261113`.
+- The Node server has a guarded Neon pool and Opportunity API wiring in this integration branch. The pool remains disabled unless `AHABONA_ENABLE_POSTGRES=1`.
+- SQLite accounts/sessions and people discovery remain authoritative during migration.
+- Candidate profile projection is limited to job-relevant fields; it excludes password hashes, email, phone, national ID, sessions and private contact/social data.
+- Backend APIs are foundations only. The public jobs UI, employer dashboard, candidate Apply UI, notifications UI/delivery and matching engine remain unfinished.
+- No production environment variable, SQLite data, PM2 process, DNS or public deployment was changed.
+
+The active checklist is `docs/AHABONA-BUILD-TRACKER.md`. Do not call the Opportunity Engine production-complete until end-to-end integration, user interface, matching, notifications, migration and rollback tests all pass.
