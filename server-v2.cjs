@@ -7787,7 +7787,7 @@ async function apiJobUnreadCount(ctx,req,res){
   const actor=ctx.sessionUser(req);
   const readerKey=createJobReaderKey({userId:actor&&actor.id,deviceId:ctx.deviceOf(req)});
   if(!readerKey)return sendJson(req,res,200,{unread:0});
-  if(!ctx.rate.allow('job-unread:'+readerKey,120,MINUTE))return sendError(req,res,429,'err.rate');
+  if(!ctx.rate.allow('job-unread:'+readerKey,120,60*1000))return sendError(req,res,429,'err.rate');
   try{
     const unread=await getUnreadPublicJobCount(ctx.pgPool,readerKey);
     return sendJson(req,res,200,{unread:unread});
@@ -7804,7 +7804,7 @@ async function apiMarkJobRead(ctx,req,res,jobId){
   const actor=ctx.sessionUser(req);
   const readerKey=createJobReaderKey({userId:actor&&actor.id,deviceId:ctx.deviceOf(req)});
   if(!readerKey)return sendJson(req,res,200,{marked:false});
-  if(!ctx.rate.allow('job-read:'+readerKey,90,MINUTE))return sendError(req,res,429,'err.rate');
+  if(!ctx.rate.allow('job-read:'+readerKey,90,60*1000))return sendError(req,res,429,'err.rate');
   try{
     const result=await markPublicJobRead(ctx.pgPool,readerKey,jobId);
     return sendJson(req,res,result.marked?200:404,result);
