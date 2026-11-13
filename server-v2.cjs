@@ -7536,6 +7536,8 @@ p,li{margin:.3em 0}`;
 
 EMBED['terms.html'] = `<!doctype html><html lang="rw"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,follow">
+<meta name="description" content="Soma inyandiko y’agateganyo isobanura uko wakoresha AHABONA. Itegereje isuzuma n’iyemezwa ry’umunyamategeko mu Rwanda.">
 <title>Amabwiriza yo gukoresha AHABONA</title>
 <link rel="stylesheet" href="/legal.css">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -7573,6 +7575,8 @@ EMBED['terms.html'] = `<!doctype html><html lang="rw"><head><meta charset="utf-8
 
 EMBED['privacy.html'] = `<!doctype html><html lang="rw"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,follow">
+<meta name="description" content="Soma inyandiko y’agateganyo isobanura amakuru AHABONA ikusanya n’uko ayakoresha. Itegereje isuzuma n’iyemezwa mu Rwanda.">
 <title>Amabwiriza y’Ibanga | AHABONA</title>
 <link rel="stylesheet" href="/legal.css">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
