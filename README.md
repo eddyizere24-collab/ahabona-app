@@ -50,6 +50,7 @@ The public discovery routes are:
 - `/sitemap.xml`: lists the homepage, public information pages, active public profiles and service categories with matching profiles.
 - `/u/{profile-id}`: server-rendered public profile pages.
 - `/about` and `/how-it-works`: bilingual public explanations.
+- `/people`: server-rendered public directory linking to active public profiles and service categories with matching profiles.
 - `/services/{category}`: public category discovery pages.
 
 Crawler access only makes pages eligible for crawling. It does not guarantee indexing, ChatGPT Search inclusion, rankings, leads or work.
