@@ -1,0 +1,2665 @@
+'use strict';
+const EMBED=require('./server-v2-modules/assets.cjs');
+const http=require('node:http');
+const fs=require('node:fs');
+const path=require('node:path');
+const crypto=require('node:crypto');
+const zlib=require('node:zlib');
+const {DatabaseSync}=require('node:sqlite');
+const {execFile}=require('node:child_process');
+
+const {
+  PROV,
+  DIST,
+  provOf,
+  TAX,
+  ALIAS,
+  CAP_EN,
+  CAT_EN,
+  PROV_EN,
+  EDU_LEVELS,
+  GENDERS,
+  LANGS,
+  MAXP,
+  MAXPH,
+  MAXSVC,
+  MAXCAPS,
+  MIN_AGE,
+  MAX_AGE,
+  W,
+  DAY,
+  HOUR,
+  DEL_MS,
+  FRESH_MS,
+  IDLE_MS,
+  BODY_MAX,
+  trustedBaseUrl,
+  FEATURE_DEFAULTS,
+  BLOCKLIST,
+  ROLES,
+  STAFF_LEVELS,
+  PERMS,
+  ROLE_PERMS,
+  isPerm,
+  staffLevelRaw,
+  staffLevel,
+  permsFor,
+  permsOf,
+  rankOfLevel,
+  permsCatalog,
+  rolesCatalog
+} = require('./server-v2-modules/catalogs.cjs');
+const { I18N, t, normLang } = require('./server-v2-modules/i18n.cjs');
+const {
+  nz,
+  clean,
+  np,
+  EM,
+  MP,
+  URL_RE,
+  PID_RE,
+  SLUG_RE,
+  DATE_RE,
+  esc,
+  ini,
+  sha,
+  unit,
+  scrypt,
+  hashPw,
+  checkPw,
+  lev1,
+  isValidCalendarDate,
+  ageFromBirthdate,
+  containsBlocked
+} = require('./server-v2-modules/utils.cjs');
+const { _pickEnc, _compressBody, _etagOf } = require('./server-v2-modules/compression.cjs');
+const { SCHEMA, SCHEMA_V2_TABLES } = require('./server-v2-modules/schema.cjs');
+const { migrate, seedCapabilities, seedStrip, seedHero, seedHelp } = require('./server-v2-modules/database.cjs');
+const { parseJpeg, parseVideoB64, makeMediaStore, makePhotoStore } = require('./server-v2-modules/media.cjs');
+
+function validateProfile(b,opts){
+  opts=opts||{};
+  const creating=!!opts.creating;
+  const primary=opts.primary||'';
+  const f={};
+  let err=null;
+  const bad=(field,msg)=>{if(!err)err={field,msg}};
+  f.name=clean(b.name,60);
+  if(f.name.length<3)bad('name','reg.err.name');
+  f.birthdate=clean(b.birthdate,10);
+  if(f.birthdate&&!isValidCalendarDate(f.birthdate))bad('birthdate','reg.err.birthdate');
+  if(f.birthdate&&DATE_RE.test(f.birthdate)){
+    if(!isValidCalendarDate(f.birthdate))bad('birthdate','reg.err.birthdate');
+    else{
+      const a=ageFromBirthdate(f.birthdate);
+      if(a===null||a<MIN_AGE||a>MAX_AGE)bad('birthdate','reg.err.age');
+    }
+  }
+  f.gender=clean(b.gender,1);
+  if(f.gender&&!['f','m','n','o'].includes(f.gender))bad('gender','reg.err.gender');
+  f.district=clean(b.district,40);
+  if(!DIST.includes(f.district))bad('district','reg.err.district');
+  const jobs=Array.isArray(b.jobs)?[...new Set(b.jobs.map(x=>clean(x,80)))]:[];
+  f.other=clean(b.other,40);
+  f.caps=jobs.map(n=>(caps.find(c=>c.name===n)||{}).id);
+  if(f.caps.some(x=>!x))bad('jobs','reg.err.jobs');
+  if(f.caps.length+(f.other?1:0)<1)bad('jobs','reg.err.jobs');
+  if(f.caps.length+(f.other?1:0)>MAXCAPS)bad('jobs','reg.err.jobs3');
+  if(f.other&&f.other.length<3)bad('other','reg.err.other');
+  f.intro=clean(b.intro,80);
+  f.edu=clean(b.edu,40);
+  f.soc=clean(b.soc,200);
+  if(f.soc&&!URL_RE.test(f.soc))bad('soc','val.soc');
+  function validSocial(s){
+    if(!s)return true;
+    if(/^https?:\/\//i.test(s))return URL_RE.test(s)&&!/^javascript:/i.test(s)&&!/^data:/i.test(s);
+    if(/^javascript:/i.test(s)||/^data:/i.test(s))return false;
+    return /^[a-z0-9._-]{1,60}$/i.test(s);
+  }
+  f.email_public=clean(b.email_public,200).toLowerCase();
+  if(f.email_public&&!EM.test(f.email_public))bad('email_public','reg.err.email');
+  f.facebook=clean(b.facebook,200);
+  if(f.facebook&&f.facebook.charAt(0)==='@')f.facebook=f.facebook.slice(1);
+  if(f.facebook&&!validSocial(f.facebook))bad('facebook','val.soc');
+  f.instagram=clean(b.instagram,200);
+  if(f.instagram&&f.instagram.charAt(0)==='@')f.instagram=f.instagram.slice(1);
+  if(f.instagram&&!validSocial(f.instagram))bad('instagram','val.soc');
+  f.tiktok=clean(b.tiktok,200);
+  if(f.tiktok&&f.tiktok.charAt(0)==='@')f.tiktok=f.tiktok.slice(1);
+  if(f.tiktok&&!validSocial(f.tiktok))bad('tiktok','val.soc');
+  f.linkedin=clean(b.linkedin,200);
+  if(f.linkedin&&f.linkedin.charAt(0)==='@')f.linkedin=f.linkedin.slice(1);
+  if(f.linkedin&&!validSocial(f.linkedin))bad('linkedin','val.soc');
+  f.telegram=clean(b.telegram,200);
+  if(f.telegram&&f.telegram.charAt(0)==='@')f.telegram=f.telegram.slice(1);
+  if(f.telegram&&!validSocial(f.telegram))bad('telegram','val.soc');
+  f.twitter=clean(b.twitter,200);
+  if(f.twitter&&f.twitter.charAt(0)==='@')f.twitter=f.twitter.slice(1);
+  if(f.twitter&&!validSocial(f.twitter))bad('twitter','val.soc');
+  f.wa=b.wa?np(b.wa):'';
+  if(f.wa&&!MP.test(f.wa))bad('wa','reg.err.wa');
+  const pm=creating?np(b.phone):primary;
+  f.phones=[...new Set((Array.isArray(b.phones)?b.phones:[]).map(np).filter(Boolean))].filter(x=>x!==pm);
+  if(f.phones.some(x=>!MP.test(x)))bad('phones','reg.err.phones');
+  if(f.phones.length+1>MAXPH)bad('phones','reg.err.phones');
+  f.svc=[...new Set((Array.isArray(b.svc)?b.svc:[]).map(x=>clean(x,40)))];
+  if(f.svc.some(x=>!DIST.includes(x)))bad('svc','val.svc');
+  if(f.svc.length>MAXSVC)bad('svc','val.svc5');
+  const phoneConsent=b.phone_visible===true||b.phone_visible===1||b.phone_visible==='1'||b.phone_visible==='true';
+  f.phone_visible=b.phone_visible===undefined||b.phone_visible===null?(creating?0:null):(phoneConsent?1:0);
+  if(creating&&f.phone_visible!==1)bad('phone_visible','reg.err.phone.agree');
+  f.languages=[...new Set((Array.isArray(b.languages)?b.languages:[]).map(x=>clean(x,3)).filter(x=>['rw','en','fr','sw'].includes(x)))];
+  f.availability=[...new Set((Array.isArray(b.availability)?b.availability:[]).map(x=>clean(x,20)))].slice(0,6);
+  f.experience=clean(b.experience,500);
+  if(creating){
+    f.phone=np(b.phone);
+    if(!MP.test(f.phone))bad('phone','reg.err.phone');
+    f.email=clean(b.email,254).toLowerCase();
+    if(!EM.test(f.email))bad('email','reg.err.email');
+    if(typeof b.password!=='string'||b.password.length<8||b.password.length>200)bad('password','reg.err.password');
+    if(b.terms!==true)bad('terms','reg.err.terms');
+  }
+  if(!err){
+    const blob=[f.name,f.intro,f.other,f.edu].filter(Boolean).join(' ');
+    if(containsBlocked(blob))err={field:'name',msg:'err.blocklist'};
+  }
+  return {f,err};
+}
+
+/* ===== END OF IGICE 4/16 ===== */function pubProfile(p,u,opt){
+  opt=opt||{};
+  const ids=JSON.parse(p.caps||'[]');
+  const names=ids.map(capName).filter(Boolean);
+  const pend=!!p.other_text;
+  const tot=names.length+(pend&&names.length?1:0);
+  const cap=(names[0]||(pend?'Andi mahitamo (itegereje kwemezwa)':''))+(tot>1?' +'+(tot-1):'');
+  const v=p.updated_at;
+  const age=ageFromBirthdate(p.birthdate);
+  const o2={
+    pid:p.pid,
+    name:p.name,
+    district:p.district,
+    province:provOf(p.district),
+    cap:cap,
+    caps:names,
+    pending:pend,
+    intro:p.intro||'',
+    edu:p.edu||'',
+    edu_level:p.edu_level||'',
+    soc:p.soc||'',
+    email_public:p.email_public||'',
+    facebook:p.facebook||'',
+    instagram:p.instagram||'',
+    tiktok:p.tiktok||'',
+    linkedin:p.linkedin||'',
+    telegram:p.telegram||'',
+    twitter:p.twitter||'',
+    wa:p.wa||'',
+    phone:(p.phone_visible||opt.own)?(p.phone||''):'',
+    photos:Array.from({length:p.nphotos},(_,i)=>'/photos/'+p.pid+'-'+i+'.jpg?v='+v),
+    thumb:'/photos/'+p.pid+'-t.jpg?v='+v,
+    fresh:Date.now()-p.updated_at<FRESH_MS,
+    svc:JSON.parse(p.svc||'[]'),
+    phones:(p.phone_visible||opt.own)?JSON.parse(p.phones||'[]'):[],
+    experience:(function(){try{return p.experience?JSON.parse(p.experience):[]}catch(e){return []}})(),
+    languages:(function(){try{return p.languages?JSON.parse(p.languages):[]}catch(e){return []}})(),
+    availability:(function(){try{return p.availability?JSON.parse(p.availability):[]}catch(e){return []}})(),
+    gender:opt.own?(p.gender||''):'',
+    rating_sum:p.rating_sum||0,
+    rating_count:p.rating_count||0,
+    verified:!!p.owner_verified,
+    cap_en:(function(){const ids2=JSON.parse(p.caps||'[]');const n2=ids2.map(function(id){const c=caps.find(function(x){return x.id===id});return c?(c.name_en||CAP_EN[c.name]||c.name):null}).filter(Boolean);const pend2=!!p.other_text;const tot2=n2.length+(pend2&&n2.length?1:0);return (n2[0]||(pend2?'Other (pending)':''))+(tot2>1?' +'+(tot2-1):'');})(),
+    caps_en:(function(){try{return JSON.parse(p.caps||'[]').map(function(id){const c=caps.find(function(x){return x.id===id});return c?(c.name_en||CAP_EN[c.name]||c.name):null}).filter(Boolean)}catch(e){return []}})(),
+    province_en:PROV_EN[provOf(p.district)]||provOf(p.district),
+  };
+  if(u&&p.user_id===u.id)o2.mine=true;
+  if(opt.saved)o2.saved=opt.saved.has(p.pid);
+  if(opt.own){
+    o2.me=true;
+    o2.phone_visible=!!p.phone_visible;
+    o2.other=p.other_text||'';
+    o2.email=opt.email||'';
+    o2.status=opt.status||'active';
+    o2.birthdate=p.birthdate||'';
+    o2.age=age||null;
+    o2.gender=p.gender||'';
+  }
+  return o2;
+}
+
+const profRow=(w,...a)=>Q('SELECT p.*,u.phone,u.email,u.status,u.national_id,u.id_verified,u.id_verified AS owner_verified FROM profiles p JOIN users u ON u.id=p.user_id WHERE '+w).get(...a);
+
+const savedSet=u=>u?new Set(Q('SELECT pid FROM saved WHERE user_id=?').all(u.id).map(x=>x.pid)):null;
+
+function intentMap(dv){
+  const m=new Map();
+  if(!dv)return m;
+  const t=Date.now();
+  for(const r of Q('SELECT * FROM intent WHERE device=?').all(dv)){
+    m.set(r.key,r.score*Math.pow(0.8,(t-r.at)/DAY));
+  }
+  return m;
+}
+
+const lvl=x=>x>=5?1:x>=3?0.8:x>=2?0.5:x>=1?0.25:0;
+
+function bump(dv,key,add){
+  if(!dv)return;
+  const m=intentMap(dv);
+  const cur=m.get(key)||0;
+  Q('INSERT INTO intent VALUES(?,?,?,?) ON CONFLICT(device,key) DO UPDATE SET score=?,at=?')
+    .run(dv,key,cur+add,Date.now(),cur+add,Date.now());
+}
+
+const capsFor=qn=>{
+  if(!qn)return [];
+  const padded=' '+qn+' ';
+  const toks=qn.split(' ');
+  return caps.filter(c=>c.forms.some(f=>{
+    if(padded.includes(' '+f+' '))return true;
+    if(!f.includes(' ')&&f.length>=5&&toks.some(t=>t.length>=5&&lev1(t,f)))return true;
+    return false;
+  })).map(c=>c.id);
+};
+
+const nameHit=(qn,name)=>{
+  if(qn.length<3)return false;
+  if(nz(name).includes(qn))return true;
+  return qn.split(' ').every(t=>t.length>=3&&nz(name).split(' ').some(w=>w.startsWith(t)||(t.length>=5&&lev1(t,w))));
+};
+
+function rank(opts){
+  const q=opts.q;
+  const prov=opts.prov;
+  const dist=opts.dist;
+  const dv=opts.dv;
+  const epoch=opts.epoch||0;
+  const limit=opts.limit||60;
+  const qn=nz(q);
+  const qc=capsFor(qn);
+  const im=intentMap(dv);
+  let pool=Q("SELECT p.*,u.phone,u.id_verified AS owner_verified FROM profiles p JOIN users u ON u.id=p.user_id WHERE u.status='active' AND p.suspended=0").all()
+    .map(p=>({...p,ids:JSON.parse(p.caps),sv:JSON.parse(p.svc||'[]')}));
+  const ex=new Map(dv?Q('SELECT pid,seen FROM exposure WHERE device=?').all(dv).map(r=>[r.pid,r.seen]):[]);
+  const st=new Map(Q('SELECT pid,impressions i FROM stats').all().map(r=>[r.pid,r.i]));
+  for(const p of pool){
+    if(qn){
+      p.band=p.ids.some(i=>qc.includes(i))?2:(nameHit(qn,p.name)?1:0);
+      p.r=p.band===2?1:p.band===1?0.6:0;
+    }else{
+      p.band=2;
+      const interest=Math.max(0,
+        ...p.ids.map(i=>lvl(im.get('cap:'+i)||0)),
+        lvl(im.get('loc:'+p.district)||0)
+      );
+      p.r=0.4+0.6*interest;
+    }
+  }
+  if(qn)pool=pool.filter(p=>p.band>0);
+  const region=dist||prov;
+  const provs=p=>[p.district,...p.sv].map(provOf);
+  const tierOf=p=>dist
+    ?(p.district===dist||p.sv.includes(dist)?0:provs(p).includes(provOf(dist))?1:2)
+    :prov?(provs(p).includes(prov)?0:2):0;
+  pool.forEach(p=>{p.tier=tierOf(p)});
+  const MIN=6;
+  const cnt=t=>pool.filter(p=>p.tier===t).length;
+  const used=[0];
+  if(region){
+    if(cnt(0)<MIN&&dist)used.push(1);
+    if(cnt(0)+(used.includes(1)?cnt(1):0)<MIN)used.push(2);
+  }
+  const fallback=region?{
+    requested:region,
+    exact:cnt(0),
+    nearby:used.includes(1)?cnt(1):0,
+    wider:used.includes(2)?cnt(2):0,
+    used:used
+  }:null;
+  pool=pool.filter(p=>used.includes(p.tier));
+  const avg=pool.length?pool.reduce((s,p)=>s+(st.get(p.pid)||0),0)/pool.length:0;
+  for(const p of pool){
+    const imp=st.get(p.pid)||0;
+    const fairness=1/(1+imp/(avg+1));
+    const novelty=(ex.get(p.pid)||0)===0?1:0;
+    const exploration=unit((dv||'anon')+'|'+epoch+'|'+p.pid);
+    const fairBoost=W.fair*fairness;
+    p.pre=W.rel*p.r+fairBoost+W.nov*novelty+W.exp*exploration;
+  }
+  const out=[];
+  const groups=[...new Set(pool.map(p=>p.tier*10+(2-p.band)))].sort((a,b)=>a-b);
+  for(const g of groups){
+    let rest=pool.filter(p=>p.tier*10+(2-p.band)===g);
+    const seenCap=new Set();
+    const seenD=new Set();
+    while(rest.length&&out.length<limit){
+      let bi=0,bs=-1;
+      rest.forEach((p,i)=>{
+        const diverse=0.5*(seenCap.has(p.ids[0])?0:1)+0.5*(seenD.has(p.district)?0:1);
+        const s=p.pre+W.div*diverse;
+        if(s>bs){bs=s;bi=i}
+      });
+      const p=rest.splice(bi,1)[0];
+      if(p.ids[0])seenCap.add(p.ids[0]);
+      seenD.add(p.district);
+      out.push(p);
+    }
+  }
+  return {list:out,fallback:fallback,qc:qc};
+}
+
+function applySort(list,sort){
+  if(!sort||sort==='rel'||!list||!list.length)return list;
+  const arr=list.slice();
+  if(sort==='fresh'){
+    arr.sort((a,b)=>(b.updated_at||0)-(a.updated_at||0));
+  }else if(sort==='top'){
+    arr.sort((a,b)=>{
+      const ra=(a.rating_count>0)?(a.rating_sum/a.rating_count):0;
+      const rb=(b.rating_count>0)?(b.rating_sum/b.rating_count):0;
+      return rb-ra||(b.rating_count||0)-(a.rating_count||0);
+    });
+  }else if(sort==='new'){
+    arr.sort((a,b)=>(b.created_at||0)-(a.created_at||0));
+  }
+  return arr;
+}
+
+function discover(req,u,url){
+  const q=clean(url.searchParams.get('q'),100);
+  const prov=url.searchParams.get('prov')||'';
+  const dist=url.searchParams.get('dist')||'';
+  const sort=url.searchParams.get('sort')||'rel';
+  const limit=Math.min(+url.searchParams.get('limit')||20,60);
+  const offset=Math.max(0,Math.min(500,+(url.searchParams.get('offset')||0)||0));
+  const dv=deviceOf(req);
+  let d=dv?Q('SELECT * FROM devices WHERE id=?').get(dv):null;
+  const t=Date.now();
+  if(dv&&!d){
+    Q('INSERT INTO devices(id,seed,epoch,last_active) VALUES(?,?,0,?)').run(dv,crypto.randomBytes(8).toString('hex'),t);
+    d=Q('SELECT * FROM devices WHERE id=?').get(dv);
+  }
+  const sv=u?savedSet(u):null;
+  const fmt=l=>l.map(p=>pubProfile(p,u,{saved:sv}));
+  if(q||dist||prov||!dv){
+    const need=offset+limit;
+    const r=rank({q:q,prov:prov,dist:dist,dv:dv,epoch:d?d.epoch:0,limit:need+1});
+    if(q){
+      Q('INSERT INTO search_log(q,district,n,at) VALUES(?,?,?,?)').run(q.slice(0,100),dist,r.list.length,t);
+      if(dv){
+        r.qc.forEach(i=>bump(dv,'cap:'+i,(intentMap(dv).get('cap:'+i)||0)>0?4:1));
+        if(dist)bump(dv,'loc:'+dist,(intentMap(dv).get('loc:'+dist)||0)>0?3:1);
+      }
+    }
+    const sorted=applySort(r.list,sort);
+    const page=sorted.slice(offset,offset+limit);
+    const total=sorted.length>need?need+1:sorted.length;
+    return {profiles:fmt(page),meta:{mode:q?'search':'filter',total:total,fallback:r.fallback,understood:r.qc.map(capName)}};
+  }
+  const live=new Set(Q("SELECT p.pid FROM profiles p JOIN users u ON u.id=p.user_id WHERE u.status='active' AND p.suspended=0").all().map(r=>r.pid));
+  let epoch=d.epoch;
+  let cur=d.current?JSON.parse(d.current):null;
+  let snap=d.snapshot?JSON.parse(d.snapshot):null;
+  const refresh=url.searchParams.get('refresh')==='1'||t-d.last_active>IDLE_MS||t-(d.snapshot_at||0)>DAY;
+  const save=()=>Q('UPDATE devices SET epoch=?,current=?,last_active=? WHERE id=?').run(epoch,JSON.stringify(cur),t,dv);
+  if(!snap||(live.size&&!snap.some(x=>live.has(x)))){
+    epoch=0;
+    cur=snap=rank({dv:dv,epoch:0,limit:Math.max(100,live.size)}).list.map(p=>p.pid);
+    Q('UPDATE devices SET snapshot=?,snapshot_at=? WHERE id=?').run(JSON.stringify(snap),t,dv);
+    save();
+  }else if(url.searchParams.get('reset')==='1'){
+    cur=snap;
+    save();
+  }else if(refresh||!cur){
+    epoch++;
+    cur=rank({dv:dv,epoch:epoch,limit:Math.max(100,live.size)}).list.map(p=>p.pid);
+    snap=cur.slice();
+    Q('UPDATE devices SET snapshot=?,snapshot_at=? WHERE id=?').run(JSON.stringify(snap),t,dv);
+    save();
+  }else{
+    const miss=[...live].filter(x=>!cur.includes(x));
+    if(miss.length){
+      const add=rank({dv:dv,epoch:epoch,limit:Math.max(100,live.size)}).list.map(p=>p.pid).filter(x=>miss.includes(x));
+      cur=[...cur.slice(0,4),...add,...cur.slice(4)];
+    }
+    save();
+  }
+  let rows=cur.map(pid=>Q("SELECT p.*,u.phone,u.id_verified AS owner_verified FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.pid=? AND u.status='active' AND p.suspended=0").get(pid)).filter(Boolean);
+  rows=applySort(rows,sort);
+  const total=rows.length;
+  rows=rows.slice(offset,offset+limit);
+  return {profiles:fmt(rows),meta:{mode:'browse',total:total}};
+}
+
+function helpAsk(q,lang){
+  const qn=nz(q);
+  const toks=qn.split(' ').filter(x=>x.length>=3);
+  if(!toks.length)return null;
+  const L=normLang(lang||'rw');
+  const rows=Q('SELECT q,a,terms FROM help_faq WHERE active=1 AND (lang=? OR lang IS NULL OR lang=\'\')').all(L);
+  let best=null,bs=0;
+  for(const d of rows){
+    const hay=' '+nz(d.q+' '+(d.terms||'')+' '+d.a)+' ';
+    const words=hay.trim().split(' ');
+    let sc=0;
+    for(const tk of toks){
+      if(hay.includes(' '+tk+' '))sc+=2;
+      else if(tk.length>=5&&words.some(w=>w.length>=5&&lev1(tk,w)))sc+=1.5;
+      else if(tk.length>=5&&hay.includes(' '+tk.slice(0,tk.length-1)))sc+=1;
+    }
+    if(nz(d.q).includes(qn)&&qn.length>=5)sc+=3;
+    if(sc>bs){bs=sc;best=d}
+  }
+  return bs>=2?{question:best.q,answer:best.a}:null;
+}
+
+function purge(){
+  const cut=Date.now()-DEL_MS;
+  const rows=Q("SELECT u.id,p.pid FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.status='deleted' AND u.deleted_at<?").all(cut);
+  for(const r of rows){
+    try{deleteUserData(r.id)}catch(e){}
+  }
+  Q('DELETE FROM sessions WHERE expires<?').run(Date.now());
+  Q('DELETE FROM resets WHERE expires<?').run(Date.now());
+  Q('DELETE FROM email_verifications WHERE expires<?').run(Date.now());
+  Q('DELETE FROM phone_verifications WHERE expires<?').run(Date.now());
+  const t90=Date.now()-90*DAY;
+  try{Q('DELETE FROM search_log WHERE at<?').run(t90)}catch(e){}
+  try{Q('DELETE FROM exposure WHERE last_seen IS NOT NULL AND last_seen<?').run(t90)}catch(e){}
+  try{Q('DELETE FROM intent WHERE at<?').run(t90)}catch(e){}
+  try{Q('DELETE FROM devices WHERE last_active<?').run(Date.now()-180*DAY)}catch(e){}
+  try{Q('DELETE FROM audit WHERE at<?').run(Date.now()-365*DAY)}catch(e){}
+  try{Q('DELETE FROM admin_logs WHERE at<?').run(Date.now()-365*DAY)}catch(e){}
+  try{Q("DELETE FROM strip_ads WHERE active=0 AND end_at IS NOT NULL AND end_at<?").run(Date.now()-90*DAY)}catch(e){}
+  try{Q("DELETE FROM help_messages WHERE status IN ('done','archived') AND created_at<?").run(Date.now()-180*DAY)}catch(e){}
+  return rows.length;
+}
+
+function deleteUserData(id){
+  const p=Q('SELECT pid FROM profiles WHERE user_id=?').get(id);
+  Q('BEGIN').run();
+  try{
+    if(p){
+      Q('DELETE FROM saved WHERE pid=?').run(p.pid);
+      Q('DELETE FROM exposure WHERE pid=?').run(p.pid);
+      Q('DELETE FROM stats WHERE pid=?').run(p.pid);
+            Q('DELETE FROM reports WHERE pid=?').run(p.pid);
+      Q('DELETE FROM profiles WHERE user_id=?').run(id);
+    }
+    Q('DELETE FROM saved WHERE user_id=?').run(id);
+    Q('DELETE FROM sessions WHERE user_id=?').run(id);
+    Q('DELETE FROM resets WHERE user_id=?').run(id);
+    Q('UPDATE reports SET reporter=NULL WHERE reporter=?').run(id);
+    Q('DELETE FROM cap_requests WHERE user_id=?').run(id);
+    Q('DELETE FROM messages WHERE to_id=? OR from_id=?').run(id,id);
+    Q('DELETE FROM notifications WHERE user_id=?').run(id);
+                Q('DELETE FROM email_verifications WHERE user_id=?').run(id);
+    Q('DELETE FROM phone_verifications WHERE user_id=?').run(id);
+    Q('DELETE FROM verifications WHERE user_id=?').run(id);
+    Q('DELETE FROM users WHERE id=?').run(id);
+    Q('COMMIT').run();
+  }catch(e){
+    try{Q('ROLLBACK').run()}catch(e2){}
+    throw e;
+  }
+  if(p){try{if(typeof store!=='undefined'&&store&&store.remove)store.remove(p.pid)}catch(e){}}
+}
+
+/* ===== END OF IGICE 5/16 ===== */function makeSettings(db){
+  const getS=db.prepare('SELECT value FROM site_settings WHERE key=?');
+  const setS=db.prepare('INSERT INTO site_settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=?,updated_at=?');
+  function get(key,fallback){
+    const row=getS.get(key);
+    if(!row)return fallback===undefined?null:fallback;
+    try{return JSON.parse(row.value)}catch(e){return row.value}
+  }
+  function set(key,value){
+    const v=JSON.stringify(value);
+    const t=Date.now();
+    setS.run(key,v,t,v,t);
+  }
+  function featureFlags(){
+    const raw=get('features',{})||{};
+    const out={};
+    for(const k in FEATURE_DEFAULTS){
+      const base=FEATURE_DEFAULTS[k];
+      const cur=raw[k]||{};
+      out[k]={on:cur.on!==undefined?!!cur.on:!!base.on,needs:base.needs||null};
+    }
+    return out;
+  }
+  function setFeature(key,on){
+    if(!FEATURE_DEFAULTS[key])return false;
+    const raw=get('features',{})||{};
+    raw[key]={on:!!on};
+    set('features',raw);
+    return true;
+  }
+  function contact(){
+    return get('contact',{email:'',whatsapp:'',phone:'',facebook:''});
+  }
+  function setContact(obj){
+    set('contact',Object.assign(contact(),obj||{}));
+  }
+  function site(){
+    return get('site',{name:'AHABONA',tagline:'Menya abantu. Menya amahirwe.',owner:'Izere'});
+  }
+  function setSite(obj){
+    set('site',Object.assign(site(),obj||{}));
+  }
+  return {get,set,featureFlags,setFeature,contact,setContact,site,setSite};
+}
+
+function makeRateLimiter(){
+  const buckets=new Map();
+  const MAX_KEYS=20000;
+  function allow(key,max,windowMs){
+    const t=Date.now();
+    let arr=buckets.get(key);
+    if(!arr){
+      if(buckets.size>=MAX_KEYS){
+        /* Drop oldest ~10% to keep memory bounded */
+        const drop=Math.floor(MAX_KEYS/10);
+        const it=buckets.keys();
+        for(let i=0;i<drop;i++){const k=it.next().value;if(k===undefined)break;buckets.delete(k)}
+      }
+      arr=[];buckets.set(key,arr);
+    }
+    while(arr.length&&t-arr[0]>windowMs)arr.shift();
+    if(arr.length>=max)return false;
+    arr.push(t);
+    return true;
+  }
+  function cleanup(maxAgeMs){
+    const t=Date.now();
+    for(const [k,arr] of buckets){
+      while(arr.length&&t-arr[0]>maxAgeMs)arr.shift();
+      if(!arr.length)buckets.delete(k);
+    }
+  }
+  return {allow,cleanup};
+}
+
+function makeMailer(cfg){
+  cfg=cfg||{};
+  const dev=!!cfg.dev;
+  const apiUrl=cfg.apiUrl;
+  const apiKey=cfg.apiKey;
+  const from=cfg.from||'AHABONA <noreply@ahabona.local>';
+  const devMail=[];
+  async function send(to,subject,text){
+    if(dev){devMail.push({to:to,subject:subject,text:text,at:Date.now()});return {ok:true,dev:true}}
+    if(apiUrl&&apiKey){
+      try{
+        let lastErr=null;
+        for(let attempt=0;attempt<3;attempt++){
+          try{
+            const ac=new AbortController();
+            const timer=setTimeout(function(){ac.abort()},15000);
+            const r=await fetch(apiUrl,{
+              method:'POST',
+              headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
+              body:JSON.stringify({from:from,to:to,subject:subject,text:text}),
+              signal:ac.signal
+            });
+            clearTimeout(timer);
+            if(r.ok)return {ok:true,status:r.status};
+            lastErr='status '+r.status;
+            if(r.status>=400&&r.status<500)return {ok:false,status:r.status};
+          }catch(e){lastErr=e&&e.message||String(e)}
+          await new Promise(function(r){setTimeout(r,500*(attempt+1))});
+        }
+        return {ok:false,error:lastErr||'err.mail'};
+      }catch(e){return {ok:false,error:e.message}}
+    }
+    console.log('[mail-not-configured]',to,'|',subject);
+    return {ok:false,error:'err.mail'};
+  }
+  return {send,devMail,isDev:dev,isLive:!!(apiUrl&&apiKey)};
+}
+
+function makeCtx(opts){
+  const dataDir=opts.dataDir;
+  const pubDir=opts.pubDir;
+  const secure=!!opts.secure;
+  const proxy=!!opts.proxy;
+  const dev=!!opts.dev;
+  fs.mkdirSync(dataDir,{recursive:true});
+  fs.mkdirSync(path.join(dataDir,'photos'),{recursive:true});
+  const dbFile=path.join(dataDir,'ahabona.db');
+  const db=new DatabaseSync(dbFile);
+  db.exec('PRAGMA journal_mode=WAL;');
+  db.exec('PRAGMA foreign_keys=OFF;');
+  db.exec(SCHEMA);
+  migrate(db);
+  db.exec(SCHEMA_V2_TABLES);
+  migrate(db);
+  seedCapabilities(db);
+  const nowTs=Date.now();
+  seedStrip(db,nowTs);
+  seedHero(db,nowTs);
+  seedHelp(db,nowTs);
+  Q=s=>db.prepare(s);
+  caps=[];
+  const loadCaps=()=>{
+    caps=Q('SELECT * FROM capabilities WHERE active=1').all().map(c=>({
+      ...c,
+      name_en:c.name_en||CAP_EN[c.name]||c.name,
+      forms:[...new Set([nz(c.name),nz(c.name_en||CAP_EN[c.name]||''),...JSON.parse(c.aliases||'[]').map(nz)].filter(Boolean))]
+    }));
+  };
+  capName=id=>(caps.find(c=>c.id===id)||{}).name;
+  const settings=makeSettings(db);
+  try{
+    (settings.get('extra_cats',[])||[]).forEach(function(n){
+      if(typeof n==='string'&&n&&!Object.prototype.hasOwnProperty.call(TAX,n))TAX[n]=[];
+    });
+  }catch(e){}
+  const rate=makeRateLimiter();
+  loadCaps();
+  store=makePhotoStore(dataDir);
+  const mediaStore=makeMediaStore(dataDir);
+  const mailer=makeMailer({
+    dev:dev,
+    apiUrl:process.env.MAIL_API_URL,
+    apiKey:process.env.MAIL_API_KEY,
+    from:process.env.MAIL_FROM
+  });
+  const rlCleanup=setInterval(()=>rate.cleanup(HOUR),HOUR);
+  if(rlCleanup&&rlCleanup.unref)rlCleanup.unref();
+  const purgeTimer=setInterval(()=>{try{purge()}catch(e){}},HOUR);
+  if(purgeTimer&&purgeTimer.unref)purgeTimer.unref();
+  const ipOf=r=>{
+    if(proxy&&r.headers['x-forwarded-for']){
+      const parts=String(r.headers['x-forwarded-for']).split(',').map(s=>s.trim()).filter(Boolean);
+      /* The left-most entries can be forged by the client. Use the entry added by the last trusted proxy (AHABONA_PROXY_HOPS, default 1). */
+      const hops=Math.max(1,parseInt(process.env.AHABONA_PROXY_HOPS||'1',10)||1);
+      return parts.length?parts[Math.max(0,parts.length-hops)]:r.socket.remoteAddress;
+    }
+    return r.socket.remoteAddress;
+  };
+   deviceOf=r=>{const d=r.headers['x-device'];return /^[A-Za-z0-9-]{16,64}$/.test(d||'')?d:null};
+  const parseCookies=r=>{
+    const out={};
+    const s=r.headers.cookie;
+    if(!s)return out;
+    for(const part of String(s).split(';')){
+      const i=part.indexOf('=');
+      if(i<0)continue;
+      const k=part.slice(0,i).trim();
+      const v=part.slice(i+1).trim();
+      if(!k)continue;
+      try{out[k]=decodeURIComponent(v)}catch(e){out[k]=v}
+    }
+    return out;
+  };
+  const sessionUser=(r,allowDeleted)=>{
+    const c=parseCookies(r);
+    const tok=c.ahs;
+    if(!tok)return null;
+    const s=Q('SELECT * FROM sessions WHERE th=?').get(sha(tok));
+    if(!s||s.expires<Date.now())return null;
+    const u=Q('SELECT * FROM users WHERE id=?').get(s.user_id);
+    if(!u)return null;
+    if(u.status!=='active'&&!(allowDeleted&&u.status==='deleted'))return null;
+    return u;
+  };
+  const newSession=(res,uid,r)=>{
+    const tok=crypto.randomBytes(32).toString('base64url');
+    const t=Date.now();
+    Q('INSERT INTO sessions(th,user_id,expires,ua,ip,created_at) VALUES(?,?,?,?,?,?)')
+      .run(sha(tok),uid,t+30*DAY,String((r&&r.headers['user-agent'])||'').slice(0,200),r?ipOf(r):null,t);
+    const parts=['ahs='+tok,'HttpOnly','SameSite=Lax','Path=/','Max-Age='+(30*86400)];
+    if(secure)parts.push('Secure');
+    res.setHeader('Set-Cookie',parts.join('; '));
+  };
+  const destroySession=(req,res)=>{
+    const c=parseCookies(req);
+    const tok=c.ahs;
+    if(tok)try{Q('DELETE FROM sessions WHERE th=?').run(sha(tok))}catch(e){}
+    res.setHeader('Set-Cookie','ahs=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'+(secure?'; Secure':''));
+  };
+  const isAdmin=u=>!!staffLevel(u);
+  const isSuper=u=>staffLevel(u)==='super';
+  const can=(u,perm)=>permsOf(u).includes(perm);
+  const adminLog=(adminId,action,targetType,targetId,details,ip)=>{
+    try{
+      Q('INSERT INTO admin_logs(admin_id,action,target_type,target_id,details,ip,at) VALUES(?,?,?,?,?,?,?)')
+        .run(adminId||null,action||'',targetType||null,targetId||null,details||null,ip||null,Date.now());
+      Q('INSERT INTO audit(admin,action,target,at,details,ip) VALUES(?,?,?,?,?,?)')
+        .run(adminId||null,action||'',targetType?(targetType+':'+targetId):(targetId||null),Date.now(),details||null,ip||null);
+    }catch(e){}
+  };
+  const adminBoot=async()=>{
+    const A={
+      email:process.env.ADMIN_EMAIL,
+      phone:process.env.ADMIN_PHONE,
+      password:process.env.ADMIN_PASSWORD
+    };
+    if(!A.email||!A.phone||!A.password)return {ok:false,reason:'env-missing'};
+    const email=String(A.email).toLowerCase().trim();
+    const phone=np(A.phone);
+    if(!EM.test(email)||!MP.test(phone))return {ok:false,reason:'invalid'};
+    const byEmail=Q('SELECT * FROM users WHERE email=?').get(email);
+    const byPhone=Q('SELECT * FROM users WHERE phone=?').get(phone);
+    if(byEmail||byPhone){
+      if(!byEmail||!byPhone||Number(byEmail.id)!==Number(byPhone.id)){
+        console.error('[admin] bootstrap refused: ADMIN_EMAIL and ADMIN_PHONE do not identify the same account');
+        return {ok:false,reason:'identity-mismatch'};
+      }
+      if(byEmail.status&&byEmail.status!=='active'){
+        console.error('[admin] bootstrap refused: configured admin account is not active');
+        return {ok:false,reason:'account-inactive'};
+      }
+      Q("UPDATE users SET role='admin',role_level='super' WHERE id=?").run(byEmail.id);
+      return {ok:true,reason:'exists'};
+    }
+    const pw=await hashPw(String(A.password));
+    const t=Date.now();
+    const r=Q("INSERT INTO users(email,phone,pw,role,role_level,terms_at,created_at) VALUES(?,?,?,'admin','super',?,?)")
+      .run(email,phone,pw,t,t);
+    return {ok:true,reason:'created',id:Number(r.lastInsertRowid)};
+  };
+  const featureEnabled=key=>{
+    const f=settings.featureFlags();
+    return !!(f[key]&&f[key].on);
+  };
+  const stripActive=()=>{
+    const t=Date.now();
+    return Q("SELECT * FROM strip_ads WHERE active=1 AND (start_at IS NULL OR start_at<=?) AND (end_at IS NULL OR end_at>=?) ORDER BY priority DESC, id ASC").all(t,t);
+  };
+  return {
+    db,Q,store,settings,rate,mailer,caps,loadCaps,capName,
+    ipOf,deviceOf,parseCookies,sessionUser,newSession,destroySession,
+    isAdmin,isSuper,can,adminLog,adminBoot,featureEnabled,stripActive,mediaStore,
+    secure,dev,proxy,dataDir,pubDir,
+    purge:()=>purge()
+  };
+}
+
+/* ===== END OF IGICE 6/16 ===== */async function readBody(req,maxBytes){
+  return new Promise(resolve=>{
+    const limit=maxBytes||BODY_MAX;
+    let n=0,over=false,done=false;
+    const chunks=[];
+    const finish=r=>{if(!done){done=true;resolve(r)}};
+    req.on('data',c=>{
+      n+=c.length;
+      if(n>limit){over=true;chunks.length=0;return}
+      if(!over)chunks.push(c);
+    });
+    req.on('end',()=>{
+      if(done)return;
+      if(over)return finish({ok:false,code:413,error:'err.big'});
+      if(!chunks.length)return finish({ok:true,data:{}});
+      try{
+        const txt=Buffer.concat(chunks).toString('utf8');
+        finish({ok:true,data:txt?JSON.parse(txt):{}});
+      }catch(e){
+        console.error('[readBody] JSON parse failed:',e&&e.message||e);
+        finish({ok:false,code:400,error:'err.server'});
+      }
+    });
+    req.on('error',()=>finish({ok:false,code:400,error:'err.server'}));
+  });
+}
+
+function sendJson(req,res,code,obj,opts){
+  opts=opts||{};
+  const requestPath=String(req.url||'').split('?')[0];
+  const noStore=!!opts.noCache||requestPath.indexOf('/api/')===0;
+  const b=Buffer.from(JSON.stringify(obj),'utf8');
+  const tag=_etagOf(b);
+  if(!noStore&&req.headers['if-none-match']===tag){
+    res.writeHead(304,{'ETag':tag});
+    return res.end();
+  }
+  const enc=_pickEnc(req);
+  const out=_compressBody(b,enc);
+  const headers={
+    'Content-Type':'application/json; charset=utf-8',
+    'ETag':tag,
+    'Cache-Control':noStore?'no-store':(opts.cache||'private, max-age=0'),
+    'Vary':'Accept-Encoding',
+    'Content-Length':out.length
+  };
+  if(enc && out !== b)headers['Content-Encoding']=enc;
+  res.writeHead(code,headers);
+  if(req.method==='HEAD')return res.end();
+  res.end(out);
+}
+
+function sendText(req,res,code,body,type,opts){
+  opts=opts||{};
+  const b=Buffer.isBuffer(body)?body:Buffer.from(String(body),'utf8');
+  const tag=_etagOf(b);
+  const cc=opts.noCache?'no-store':(opts.cache||'public, max-age=60');
+  if(!opts.noCache&&req.headers['if-none-match']===tag){
+    res.writeHead(304,{'ETag':tag,'Cache-Control':cc,'Vary':'Accept-Encoding'});
+    return res.end();
+  }
+  const enc=_pickEnc(req);
+  const out=_compressBody(b,enc);
+  const headers={
+    'Content-Type':type||'text/plain; charset=utf-8',
+    'ETag':tag,
+    'Cache-Control':cc,
+    'Vary':'Accept-Encoding',
+    'Content-Length':out.length
+  };
+  if(enc && out !== b)headers['Content-Encoding']=enc;
+  res.writeHead(code,headers);
+  if(req.method==='HEAD')return res.end();
+  res.end(out);
+}
+
+function sendBinary(req,res,code,buf,type,cache){
+  const tag=_etagOf(buf);
+  const cc=cache||'public, max-age=86400, immutable';
+  if(req.headers['if-none-match']===tag){
+    res.writeHead(304,{'ETag':tag,'Cache-Control':cc,'Accept-Ranges':'bytes'});
+    return res.end();
+  }
+  const size=buf.length;
+  const rangeHdr=req.headers.range;
+  if(rangeHdr&&typeof rangeHdr==='string'){
+    const m=/bytes=(\d*)-(\d*)/.exec(rangeHdr);
+    if(m){
+      let start=m[1]?parseInt(m[1],10):0;
+      let end=m[2]?parseInt(m[2],10):size-1;
+      if(!m[1]&&m[2]){start=Math.max(0,size-parseInt(m[2],10));end=size-1}
+      if(Number.isNaN(start))start=0;
+      if(Number.isNaN(end)||end>=size)end=size-1;
+      if(start>=size||start>end){
+        res.writeHead(416,{'Content-Range':'bytes */'+size,'Accept-Ranges':'bytes'});
+        return res.end();
+      }
+      const chunk=buf.subarray(start,end+1);
+      res.writeHead(206,{
+        'Content-Type':type||'application/octet-stream',
+        'Content-Range':'bytes '+start+'-'+end+'/'+size,
+        'Accept-Ranges':'bytes',
+        'Content-Length':chunk.length,
+        'Cache-Control':cc,
+        'ETag':tag
+      });
+      if(req.method==='HEAD')return res.end();
+      return res.end(chunk);
+    }
+  }
+  res.writeHead(code,{
+    'Content-Type':type||'application/octet-stream',
+    'ETag':tag,
+    'Cache-Control':cc,
+    'Content-Length':size,
+    'Accept-Ranges':'bytes'
+  });
+  if(req.method==='HEAD')return res.end();
+  res.end(buf);
+}
+
+/* Serves a file from disk without loading it all in memory. Supports Range (needed by Safari/iOS video). */
+function sendMediaFile(req,res,fp,type,cache){
+  let st;
+  try{st=fs.statSync(fp)}catch(e){return sendError(req,res,404,'err.notfound')}
+  if(!st.isFile()||st.size<1)return sendError(req,res,404,'err.notfound');
+  const size=st.size;
+  const tag='"'+size.toString(16)+'-'+Math.floor(st.mtimeMs).toString(16)+'"';
+  const cc=cache||'public, max-age=3600';
+  if(req.headers['if-none-match']===tag){
+    res.writeHead(304,{'ETag':tag,'Cache-Control':cc,'Accept-Ranges':'bytes'});
+    return res.end();
+  }
+  let start=0,end=size-1,code=200;
+  const rh=req.headers.range;
+  const ir=req.headers['if-range'];
+  if(rh&&typeof rh==='string'&&(!ir||ir===tag)){
+    const m=/^bytes=(\d*)-(\d*)$/.exec(rh.trim());
+    if(m&&(m[1]!==''||m[2]!=='')){
+      if(m[1]===''){
+        const n=parseInt(m[2],10);
+        if(!(n>0)){
+          res.writeHead(416,{'Content-Range':'bytes */'+size,'Accept-Ranges':'bytes'});
+          return res.end();
+        }
+        start=Math.max(0,size-n);end=size-1;
+      }else{
+        start=parseInt(m[1],10);
+        end=(m[2]==='')?size-1:Math.min(parseInt(m[2],10),size-1);
+      }
+      if(Number.isNaN(start)||Number.isNaN(end)||start>=size||start>end){
+        res.writeHead(416,{'Content-Range':'bytes */'+size,'Accept-Ranges':'bytes'});
+        return res.end();
+      }
+      code=206;
+    }
+  }
+  const headers={
+    'Content-Type':type||'application/octet-stream',
+    'Content-Length':end-start+1,
+    'Accept-Ranges':'bytes',
+    'Cache-Control':cc,
+    'ETag':tag
+  };
+  if(code===206)headers['Content-Range']='bytes '+start+'-'+end+'/'+size;
+  res.writeHead(code,headers);
+  if(req.method==='HEAD')return res.end();
+  const stream=fs.createReadStream(fp,{start:start,end:end});
+  stream.on('error',function(){try{res.destroy()}catch(e){}});
+  res.on('close',function(){try{stream.destroy()}catch(e){}});
+  stream.pipe(res);
+}
+
+function pickLang(req,explicit){
+  if(explicit)return normLang(explicit);
+  try{
+    const h=String((req&&req.headers&&req.headers['accept-language'])||'');
+    const first=h.split(',')[0].split(';')[0].trim().toLowerCase();
+    if(first.indexOf('en')===0)return 'en';
+    if(first.indexOf('rw')===0||first.indexOf('kinya')!==-1)return 'rw';
+    if(first.indexOf('fr')===0||first.indexOf('sw')===0)return 'rw';
+  }catch(e){}
+  return 'rw';
+}
+function sendError(req,res,code,keyOrText,field,lang){
+  const L=pickLang(req,lang);
+  const s=typeof keyOrText==='string'?keyOrText:'';
+  const isKey=s.startsWith('err.')||s.startsWith('reg.')||s.startsWith('val.')||s.startsWith('login.')||s.startsWith('common.')||s.startsWith('restore.')||s.startsWith('account.')||s.startsWith('reset.')||s.startsWith('staff.')||s.startsWith('hero.')||s.startsWith('msg.');
+  const msg=isKey?t(L,s):s;
+  sendJson(req,res,code,{error:msg,field:field||null});
+}
+
+function securityHeaders(res,secure){
+  res.setHeader('X-Content-Type-Options','nosniff');
+  res.setHeader('Referrer-Policy','same-origin');
+  res.setHeader('X-Frame-Options','DENY');
+  res.setHeader('Cross-Origin-Opener-Policy','same-origin');
+  res.setHeader('Cross-Origin-Resource-Policy','same-origin');
+  res.setHeader('Permissions-Policy','geolocation=(self), camera=(self), microphone=()');
+  res.setHeader('Content-Security-Policy',"default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob: https: data:; frame-src 'self' https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://player.vimeo.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self' data:; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+  if(secure)res.setHeader('Strict-Transport-Security','max-age=31536000; includeSubDomains');
+}
+
+function apiHealth(req,res){
+  sendJson(req,res,200,{ok:true,v:'2.0.0',t:Date.now()},{noCache:true});
+}
+
+function apiConfig(ctx,req,res){
+  const f=ctx.settings.featureFlags();
+  const c=ctx.settings.contact();
+  const capsList=ctx.Q?ctx.Q('SELECT id,name,name_en,category FROM capabilities WHERE active=1 ORDER BY category,name').all():[];
+  const provEn={};
+  for(const k in PROV){provEn[PROV_EN[k]||k]=PROV[k]}
+  const catEn={};
+  for(const k in TAX){catEn[CAT_EN[k]||k]=TAX[k].map(n=>CAP_EN[n]||n)}
+  sendJson(req,res,200,{
+    provinces:PROV,
+    provinces_en:PROV_EN,
+    categories:TAX,
+    categories_en:CAT_EN,
+    capabilities:capsList,
+    education:EDU_LEVELS,
+    genders:GENDERS,
+    languages:LANGS,
+    maxCaps:MAXCAPS,
+    maxPhotos:MAXP,
+    maxPhones:MAXPH,
+    maxServiceAreas:MAXSVC,
+    minAge:MIN_AGE,
+    freshDays:14,
+    features:f,
+    contact:c,
+    defaultLang:'rw',
+    cap_en:CAP_EN,
+    cat_en:CAT_EN,
+    prov_en:PROV_EN
+  },{cache:'public, max-age=60'});
+}
+
+function stripShowable(a){
+  const mt=a.media_type||'text';
+  if(mt==='image'&&a.image_url)return true;
+  if(mt==='video'&&a.video_url)return true;
+  if(a.text)return true;
+  if(a.title&&!(mt==='video'&&a.title==='Video'))return true;
+  return false;
+}
+
+function apiStrip(ctx,req,res){
+  const ads=ctx.stripActive().filter(stripShowable);
+  sendJson(req,res,200,{
+    ads:ads.map(a=>({
+      title:a.title||'',
+      title_en:a.title_en||'',
+      text:a.text||'',
+      text_en:a.text_en||'',
+      cta:a.cta||'',
+      cta_en:a.cta_en||'',
+      theme:a.theme||'izuba',
+      action:a.action_type,
+      value:a.action_value||'',
+      kind:a.kind,
+      media_type:a.media_type||'text',
+      video_url:a.video_url||'',
+      image_url:a.image_url||''
+    }))
+  },{cache:'public, max-age=30'});
+}
+
+function apiProfiles(ctx,req,res,url){
+  const u=ctx.sessionUser(req);
+  const out=discover(req,u,url);
+  sendJson(req,res,200,out,{noCache:true});
+}
+
+function apiProfile(ctx,req,res,pid){
+  const u=ctx.sessionUser(req);
+  const r=ctx.Q("SELECT p.*,u.phone,u.email,u.status,u.id_verified AS owner_verified FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.pid=? AND u.status='active' AND p.suspended=0").get(pid);
+  if(!r)return sendError(req,res,404,'err.notfound');
+  const sv=u?savedSet(u):null;
+  sendJson(req,res,200,{profile:pubProfile(r,u,{saved:sv})},{noCache:true});
+}
+
+async function apiEvents(ctx,req,res){
+  try{
+    const dv=ctx.deviceOf(req);
+    if(!dv)return sendJson(req,res,200,{ok:true});
+    if(!ctx.rate.allow('e:'+dv,600,60000))return sendError(req,res,429,'err.rate');
+    const b=await readBody(req,16384);
+    if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+    const data=b.data||{};
+    const type=typeof data.type==='string'?data.type:String(data.type||'');
+    let rawPids=[];
+    if(Array.isArray(data.pids))rawPids=data.pids;
+    else if(data.pid!=null)rawPids=[data.pid];
+    const pids=rawPids.map(x=>typeof x==='string'?x:String(x||'')).filter(x=>PID_RE.test(x)).slice(0,60);
+    const t=Date.now();
+    if(pids.length){
+      const placeholders=pids.map(()=>'?').join(',');
+      const rows=ctx.Q('SELECT pid,caps FROM profiles WHERE pid IN ('+placeholders+')').all(...pids);
+      const byPid=new Map(rows.map(r=>[r.pid,r]));
+      for(const pid of pids){
+        const r=byPid.get(pid);
+        if(!r)continue;
+        ctx.Q('INSERT OR IGNORE INTO stats(pid) VALUES(?)').run(pid);
+        if(type==='impression'){
+          ctx.Q('INSERT INTO exposure VALUES(?,?,1,?) ON CONFLICT(device,pid) DO UPDATE SET seen=seen+1,last_seen=?').run(dv,pid,t,t);
+          ctx.Q('UPDATE stats SET impressions=impressions+1 WHERE pid=?').run(pid);
+        }else if(type==='open'){
+          ctx.Q('UPDATE stats SET opens=opens+1 WHERE pid=?').run(pid);
+          try{JSON.parse(r.caps||'[]').forEach(i=>bump(dv,'cap:'+i,1))}catch(e){}
+        }else if(type==='contact'){
+          ctx.Q('UPDATE stats SET contacts=contacts+1 WHERE pid=?').run(pid);
+          try{JSON.parse(r.caps||'[]').forEach(i=>bump(dv,'cap:'+i,5))}catch(e){}
+        }
+      }
+    }
+    sendJson(req,res,200,{ok:true});
+  }catch(e){
+    console.error('[apiEvents]',e&&e.message||e);
+    if(!res.headersSent)sendError(req,res,500,'err.server');
+  }
+}
+
+async function apiHelpAsk(ctx,req,res){
+  const b=await readBody(req,4096);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const data=b.data||{};
+  if(!ctx.rate.allow('h:'+(ctx.ipOf(req)||''),60,60000))return sendError(req,res,429,'err.rate');
+  const u=ctx.sessionUser(req);
+  const lang=normLang((data.lang)||(u&&u.lang)||'rw');
+  const r=helpAsk(clean(data.q,200),lang);
+  sendJson(req,res,200,r?{grounded:true,question:r.question,answer:r.answer}:{grounded:false,answer:null});
+}
+
+async function apiHelpContact(ctx,req,res){
+  const b=await readBody(req,8192);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const data=b.data||{};
+  if(!ctx.rate.allow('hc:'+(ctx.ipOf(req)||''),10,HOUR))return sendError(req,res,429,'err.rate');
+  const name=clean(data.name,80);
+  const email=clean(data.email,254).toLowerCase();
+  const body=clean(data.body,2000);
+  if(!body||body.length<3)return sendError(req,res,400,'common.required','body');
+  if(email&&!EM.test(email))return sendError(req,res,400,'reg.err.email','email');
+  if(containsBlocked(name+' '+body))return sendError(req,res,400,'err.blocklist');
+  ctx.Q('INSERT INTO help_messages(name,email,body,status,created_at) VALUES(?,?,?,?,?)').run(name||null,email||null,body,'new',Date.now());
+  sendJson(req,res,201,{ok:true});
+}
+
+async function apiReport(ctx,req,res){
+  try{
+    const b=await readBody(req,4096);
+    if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+    const data=b.data||{};
+    const u=ctx.sessionUser(req);
+    if(!ctx.rate.allow('rp:'+(ctx.ipOf(req)||''),10,HOUR))return sendError(req,res,429,'err.rate');
+    const pid=typeof data.pid==='string'?data.pid:Array.isArray(data.pid)?String(data.pid[0]||''):String(data.pid||'');
+    if(!PID_RE.test(pid))return sendError(req,res,404,'err.notfound');
+    if(!ctx.Q('SELECT 1 FROM profiles WHERE pid=?').get(pid))return sendError(req,res,404,'err.notfound');
+    let reason=clean(typeof data.reason==='string'?data.reason:String(data.reason||''),60);
+    const detail=clean(typeof data.detail==='string'?data.detail:String(data.detail||''),500);
+    const allowedReasons=['wrong_info','wrong_photo','bad_behavior','other','wrong','photo','behavior'];
+    const rmap={wrong:'wrong_info',photo:'wrong_photo',behavior:'bad_behavior'};
+    if(rmap[reason])reason=rmap[reason];
+    if(!allowedReasons.includes(reason))reason='other';
+    if(!reason)return sendError(req,res,400,'common.required','reason');
+    ctx.Q('INSERT INTO reports(pid,reporter,reason,detail,created_at) VALUES(?,?,?,?,?)').run(pid,u?u.id:null,reason,detail,Date.now());
+    sendJson(req,res,201,{ok:true});
+  }catch(e){
+    console.error('[apiReport]',e&&e.message||e);
+    if(!res.headersSent)sendError(req,res,500,'err.server');
+  }
+}
+
+/* ===== END OF IGICE 7/16 ===== */async function apiRegister(ctx,req,res){
+  const ip=ctx.ipOf(req)||'';
+  if(!ctx.rate.allow('r:'+ip,8,HOUR))return sendError(req,res,429,'err.rate');
+  const b=await readBody(req,BODY_MAX);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const data=b.data||{};
+  const v=validateProfile(data,{creating:true});
+  if(v.err)return sendError(req,res,400,v.err.msg,v.err.field);
+  const f=v.f;
+  const existEmail=ctx.Q('SELECT * FROM users WHERE email=?').get(f.email);
+  if(existEmail){
+    if(existEmail.status==='deleted')return sendError(req,res,409,'restore.body','email');
+    return sendError(req,res,409,'reg.err.email','email');
+  }
+  const existPhone=ctx.Q('SELECT * FROM users WHERE phone=?').get(f.phone);
+  if(existPhone){
+    if(existPhone.status==='deleted')return sendError(req,res,409,'restore.body','phone');
+    return sendError(req,res,409,'reg.err.phone','phone');
+  }
+  const pid=crypto.randomBytes(8).toString('hex').replace(/[^a-z0-9]/g,'').slice(0,10);
+  const saved=ctx.store.save(pid,data.photos,data.thumbs&&data.thumbs[0]);
+  if(!saved.ok){return sendError(req,res,400,saved.error||'reg.err.photo','photos')}
+  const pw=await hashPw(data.password);
+  const t=Date.now();
+  let uid;
+  try{
+    ctx.db.exec('BEGIN');
+    uid=Number(ctx.Q("INSERT INTO users(email,phone,pw,terms_at,created_at) VALUES(?,?,?,?,?)").run(f.email,f.phone,pw,t,t).lastInsertRowid);
+    const pv=f.phone_visible===null?1:f.phone_visible;
+    ctx.Q('INSERT INTO profiles(user_id,pid,name,district,caps,other_text,intro,edu,edu_level,soc,wa,phones,svc,nphotos,experience,languages,availability,birthdate,gender,email_public,facebook,instagram,tiktok,linkedin,telegram,twitter,phone_visible,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run(uid,pid,f.name,f.district,JSON.stringify(f.caps),f.other||null,f.intro,f.edu,f.edu,f.soc||'',f.wa,JSON.stringify(f.phones),JSON.stringify(f.svc),saved.count,JSON.stringify(f.experience?[f.experience]:[]),JSON.stringify(f.languages),JSON.stringify(f.availability),f.birthdate,f.gender,f.email_public||null,f.facebook||null,f.instagram||null,f.tiktok||null,f.linkedin||null,f.telegram||null,f.twitter||null,pv,t,t);
+    if(f.other)ctx.Q('INSERT INTO cap_requests(user_id,text,created_at) VALUES(?,?,?)').run(uid,f.other,t);
+    ctx.db.exec('COMMIT');
+  }catch(x){
+    try{ctx.db.exec('ROLLBACK')}catch(e){}
+    ctx.store.remove(pid);
+    console.error('[apiRegister]',x&&x.message||x);
+    const msg=String(x&&x.message||'');
+    if(/email/i.test(msg))return sendError(req,res,409,'reg.err.email','email');
+    if(/phone/i.test(msg))return sendError(req,res,409,'reg.err.phone','phone');
+    return sendError(req,res,500,'err.server');
+  }
+  ctx.newSession(res,uid,req);
+  try{
+    await ctx.mailer.send(f.email,'AHABONA: Murakaza neza / Welcome',
+      'Murakaza neza kuri AHABONA!\n\nUmwirondoro wawe wabitswe. Abakeneye ubushobozi bwawe bazakubona.\n\nWelcome to AHABONA! Your profile is live. People who need your skills can now find you.\n\n— AHABONA');
+  }catch(e){}
+  const r=ctx.Q('SELECT p.*,u.phone,u.email,u.status,u.id_verified AS owner_verified FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=?').get(uid);
+  sendJson(req,res,201,{profile:pubProfile(r,null,{own:true,email:f.email,status:'active'})});
+}
+
+async function apiLogin(ctx,req,res){
+  const ip=ctx.ipOf(req)||'';
+  const b=await readBody(req,4096);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const data=b.data||{};
+  const id=clean(data.id,254);
+  const k=id.includes('@')?id.toLowerCase():np(id);
+  if(!ctx.rate.allow('l:'+ip+':'+k,10,15*60*1000))return sendError(req,res,429,'err.rate');
+  const us=ctx.Q('SELECT * FROM users WHERE email=? OR phone=?').get(k,k);
+  const ok=await checkPw(String(data.password||''),us?us.pw:'scrypt$00$00');
+  if(!us||!ok)return sendError(req,res,401,'login.err');
+  if(us.status==='deleted'&&us.deleted_at<Date.now()-DEL_MS)return sendError(req,res,401,'login.err');
+  ctx.newSession(res,us.id,req);
+  const r=ctx.Q('SELECT p.*,u.phone,u.email,u.status,u.id_verified AS owner_verified FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=?').get(us.id);
+  sendJson(req,res,200,{
+    status:us.status,
+    role:us.role,
+    role_level:us.role_level||'user',
+    staff:ctx.isAdmin(us),
+    level:staffLevel(us),
+    perms:permsOf(us),
+    profile:r?pubProfile(r,null,{own:true,email:us.email,status:us.status}):null
+  });
+}
+
+function apiLogout(ctx,req,res){
+  ctx.destroySession(req,res);
+  sendJson(req,res,200,{ok:true});
+}
+
+function apiLogoutAll(ctx,req,res){
+  const u=ctx.sessionUser(req);
+  if(!u)return sendError(req,res,401,'err.auth');
+  ctx.Q('DELETE FROM sessions WHERE user_id=?').run(u.id);
+  ctx.destroySession(req,res);
+  sendJson(req,res,200,{ok:true});
+}
+
+function apiMeGet(ctx,req,res){
+  const u=ctx.sessionUser(req);
+  if(!u)return sendJson(req,res,200,{user:null});
+  const r=ctx.Q('SELECT p.*,u.phone,u.email,u.status,u.id_verified AS owner_verified FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=?').get(u.id);
+  sendJson(req,res,200,{
+    user:{role:u.role,role_level:u.role_level||'user',status:u.status,email:u.email,phone:u.phone,email_verified:!!u.email_verified,phone_verified:!!u.phone_verified,lang:u.lang||'rw',staff:ctx.isAdmin(u),level:staffLevel(u),perms:permsOf(u),name:u.display_name||''},
+    profile:r?pubProfile(r,null,{own:true,email:u.email,status:u.status}):null
+  });
+}
+
+async function apiMePut(ctx,req,res){
+  const u=ctx.sessionUser(req);
+  if(!u)return sendError(req,res,401,'err.auth');
+  if(u.status!=='active')return sendError(req,res,403,'err.forbidden');
+  const b=await readBody(req,BODY_MAX);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const data=b.data||{};
+  const r=ctx.Q('SELECT * FROM profiles WHERE user_id=?').get(u.id);
+  if(!r)return sendError(req,res,404,'err.notfound');
+  const v=validateProfile(data,{creating:false,primary:u.phone});
+  if(v.err)return sendError(req,res,400,v.err.msg,v.err.field);
+  const f=v.f;
+  let nphotos=r.nphotos;
+  if(Array.isArray(data.photos)&&data.photos.length){
+    const s=ctx.store.save(r.pid,data.photos,data.thumbs&&data.thumbs[0]);
+    if(!s.ok)return sendError(req,res,400,s.error||'reg.err.photo','photos');
+    nphotos=s.count;
+  }
+  const had=r.other_text;
+  const newPhoneVisible=f.phone_visible===null?(r.phone_visible?1:0):f.phone_visible;
+  ctx.Q('UPDATE profiles SET name=?,district=?,caps=?,other_text=?,intro=?,edu=?,edu_level=?,soc=?,wa=?,phones=?,svc=?,nphotos=?,experience=?,languages=?,availability=?,birthdate=?,gender=?,email_public=?,facebook=?,instagram=?,tiktok=?,linkedin=?,telegram=?,twitter=?,phone_visible=?,updated_at=? WHERE user_id=?')
+    .run(f.name,f.district,JSON.stringify(f.caps),f.other||null,f.intro,f.edu,f.edu,f.soc||'',f.wa,JSON.stringify(f.phones),JSON.stringify(f.svc),nphotos,JSON.stringify(f.experience?[f.experience]:(r.experience?JSON.parse(r.experience):[])),JSON.stringify(f.languages),JSON.stringify(f.availability),f.birthdate||r.birthdate||null,f.gender||r.gender||null,f.email_public||null,f.facebook||null,f.instagram||null,f.tiktok||null,f.linkedin||null,f.telegram||null,f.twitter||null,newPhoneVisible,Date.now(),u.id);
+  if(f.other&&f.other!==had){
+    ctx.Q("DELETE FROM cap_requests WHERE user_id=? AND text=? AND status='pending'").run(u.id,f.other);
+    ctx.Q('INSERT INTO cap_requests(user_id,text,created_at) VALUES(?,?,?)').run(u.id,f.other,Date.now());
+  }
+  const nr=ctx.Q('SELECT p.*,u.phone,u.email,u.status,u.id_verified AS owner_verified FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=?').get(u.id);
+  sendJson(req,res,200,{profile:pubProfile(nr,null,{own:true,email:u.email,status:u.status})});
+}
+
+async function apiMePassword(ctx,req,res){
+  const u=ctx.sessionUser(req);
+  if(!u)return sendError(req,res,401,'err.auth');
+  if(!ctx.rate.allow('pw:'+u.id,8,15*60*1000))return sendError(req,res,429,'err.rate');
+  const b=await readBody(req,4096);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const data=b.data||{};
+  if(typeof data.next!=='string'||data.next.length<8)return sendError(req,res,400,'reg.err.password','password');
+  if(!await checkPw(String(data.current||''),u.pw))return sendError(req,res,401,'login.err','current');
+  ctx.Q('UPDATE users SET pw=? WHERE id=?').run(await hashPw(data.next),u.id);
+  const cur=(ctx.parseCookies(req).ahs)||'';
+  ctx.Q('DELETE FROM sessions WHERE user_id=? AND th<>?').run(u.id,sha(cur));
+  sendJson(req,res,200,{ok:true});
+}
+
+async function apiMeDelete(ctx,req,res){
+  const u=ctx.sessionUser(req);
+  if(!u)return sendError(req,res,401,'err.auth');
+  if(!ctx.rate.allow('del:'+u.id,8,15*60*1000))return sendError(req,res,429,'err.rate');
+  const b=await readBody(req,4096);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const data=b.data||{};
+  if(!await checkPw(String(data.password||''),u.pw))return sendError(req,res,401,'login.err');
+  ctx.Q("UPDATE users SET status='deleted',deleted_at=?,admin_deleted=0 WHERE id=?").run(Date.now(),u.id);
+  sendJson(req,res,200,{ok:true,restorable_until:Date.now()+DEL_MS});
+}
+
+function apiMeRestore(ctx,req,res){
+  const u=ctx.sessionUser(req,true);
+  if(!u)return sendError(req,res,401,'err.auth');
+  if(u.status!=='deleted'||u.deleted_at<Date.now()-DEL_MS)return sendError(req,res,400,'err.forbidden');
+  if(u.admin_deleted)return sendError(req,res,403,'err.forbidden');
+  ctx.Q("UPDATE users SET status='active',deleted_at=NULL WHERE id=?").run(u.id);
+  sendJson(req,res,200,{ok:true});
+}
+
+async function apiPasswordForgot(ctx,req,res){
+  const ip=ctx.ipOf(req)||'';
+  if(!ctx.rate.allow('f:'+ip,5,HOUR))return sendError(req,res,429,'err.rate');
+  const b=await readBody(req,4096);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const data=b.data||{};
+  const em=clean(data.email,254).toLowerCase();
+  if(EM.test(em)){
+    const us=ctx.Q('SELECT * FROM users WHERE email=?').get(em);
+    if(us&&us.status==='active'){
+      const base=trustedBaseUrl();
+      if(!base){
+        console.error('[password-reset] AHABONA_URL is missing or invalid; reset email was not issued');
+      }else{
+        const tok=crypto.randomBytes(32).toString('base64url');
+        ctx.Q('DELETE FROM resets WHERE user_id=?').run(us.id);
+        ctx.Q('INSERT INTO resets(th,user_id,expires) VALUES(?,?,?)').run(sha(tok),us.id,Date.now()+HOUR);
+        try{await ctx.mailer.send(em,'AHABONA: kugarura ijambobanga','Kanda hano ushyireho ijambobanga rishya (rimara isaha imwe): '+base+'/reset/'+tok)}
+        catch(e){console.error('[password-reset] mail send failed:',e&&e.message||e)}
+      }
+    }
+  }
+  sendJson(req,res,200,{ok:true});
+}
+
+async function apiPasswordReset(ctx,req,res){
+  const ip=ctx.ipOf(req)||'';
+  if(!ctx.rate.allow('rs:'+ip,10,HOUR))return sendError(req,res,429,'err.rate');
+  const b=await readBody(req,4096);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const data=b.data||{};
+  if(typeof data.password!=='string'||data.password.length<8)return sendError(req,res,400,'reg.err.password','password');
+  const r=ctx.Q('SELECT * FROM resets WHERE th=?').get(sha(String(data.token||'')));
+  if(!r||r.expires<Date.now())return sendError(req,res,400,'reset.err');
+  ctx.Q('UPDATE users SET pw=? WHERE id=?').run(await hashPw(data.password),r.user_id);
+  ctx.Q('DELETE FROM resets WHERE user_id=?').run(r.user_id);
+  ctx.Q('DELETE FROM sessions WHERE user_id=?').run(r.user_id);
+  sendJson(req,res,200,{ok:true});
+}
+
+/* ===== END OF IGICE 8/16 ===== */function apiSavedList(ctx,req,res){
+  const u=ctx.sessionUser(req);
+  if(!u)return sendError(req,res,401,'err.auth');
+  const rows=ctx.Q("SELECT p.*,u.phone,u.id_verified AS owner_verified FROM saved s JOIN profiles p ON p.pid=s.pid JOIN users u ON u.id=p.user_id WHERE s.user_id=? AND u.status='active' AND p.suspended=0 ORDER BY s.at DESC").all(u.id);
+  const sv=new Set(rows.map(x=>x.pid));
+  sendJson(req,res,200,{profiles:rows.map(r=>pubProfile(r,u,{saved:sv}))});
+}
+
+async function apiUserMessage(ctx,req,res){
+  try{
+    if(!ctx.featureEnabled('messaging'))return sendError(req,res,403,'err.forbidden');
+    const u=ctx.sessionUser(req);
+    if(!u)return sendError(req,res,401,'err.auth');
+    if(u.status!=='active')return sendError(req,res,403,'err.forbidden');
+    if(!ctx.rate.allow('msg:'+u.id,30,HOUR))return sendError(req,res,429,'err.rate');
+    const b=await readBody(req,8192);
+    if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+    const data=b.data||{};
+    const body=clean(typeof data.body==='string'?data.body:String(data.body||''),2000);
+    if(!body||body.length<1)return sendError(req,res,400,'common.required','body');
+    if(containsBlocked(body))return sendError(req,res,400,'err.blocklist');
+    let toId=null;
+    const toPid=typeof data.to_pid==='string'?data.to_pid:String(data.to_pid||'');
+    if(toPid&&PID_RE.test(toPid)){
+      const pr=ctx.Q("SELECT user_id FROM profiles WHERE pid=?").get(toPid);
+      if(!pr)return sendError(req,res,404,'err.notfound');
+      toId=pr.user_id;
+    }else if(data.to_id!=null){
+      toId=Number(data.to_id)||null;
+    }
+    if(!toId||toId===u.id)return sendError(req,res,400,'common.required','to');
+    const subject=clean(typeof data.subject==='string'?data.subject:String(data.subject||''),120)||null;
+    ctx.Q('INSERT INTO messages(from_id,to_id,subject,body,created_at) VALUES(?,?,?,?,?)')
+      .run(u.id,toId,subject,body,Date.now());
+    try{
+      ctx.Q('INSERT INTO notifications(user_id,kind,title,body,link,created_at) VALUES(?,?,?,?,?,?)')
+        .run(toId,'message',subject||'Ubutumwa bushya',body.slice(0,120),null,Date.now());
+    }catch(e){}
+    sendJson(req,res,201,{ok:true});
+  }catch(e){
+    console.error('[apiUserMessage]',e&&e.message||e);
+    if(!res.headersSent)sendError(req,res,500,'err.server');
+  }
+}
+function apiMessagesList(ctx,req,res){
+  try{
+    if(!ctx.featureEnabled('messaging'))return sendError(req,res,403,'err.forbidden');
+    const u=ctx.sessionUser(req);
+    if(!u)return sendError(req,res,401,'err.auth');
+    if(u.status!=='active')return sendError(req,res,403,'err.forbidden');
+    const rows=ctx.Q('SELECT m.id,m.from_id,m.to_id,m.subject,m.body,m.read_at,m.created_at,COALESCE(p.name,u2.display_name,u2.email) AS from_name FROM messages m LEFT JOIN users u2 ON u2.id=m.from_id LEFT JOIN profiles p ON p.user_id=m.from_id WHERE m.to_id=? ORDER BY m.id DESC LIMIT 100').all(u.id);
+    const now=Date.now();
+    ctx.Q('UPDATE messages SET read_at=? WHERE to_id=? AND read_at IS NULL').run(now,u.id);
+    sendJson(req,res,200,{messages:rows});
+  }catch(e){
+    console.error('[apiMessagesList]',e&&e.message||e);
+    if(!res.headersSent)sendError(req,res,500,'err.server');
+  }
+}
+
+async function apiSavedToggle(ctx,req,res,pid,method){
+  const u=ctx.sessionUser(req);
+  if(!u)return sendError(req,res,401,'err.auth');
+  if(method==='PUT'){
+    const r=ctx.Q("SELECT p.caps FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.pid=? AND p.suspended=0 AND u.status='active'").get(pid);
+    if(!r)return sendError(req,res,404,'err.notfound');
+    ctx.Q('INSERT OR IGNORE INTO saved VALUES(?,?,?)').run(u.id,pid,Date.now());
+    const dv=ctx.deviceOf(req);
+    if(dv)JSON.parse(r.caps||'[]').forEach(i=>bump(dv,'cap:'+i,6));
+  }else{
+    ctx.Q('DELETE FROM saved WHERE user_id=? AND pid=?').run(u.id,pid);
+  }
+  sendJson(req,res,200,{ok:true});
+}
+
+function apiNotificationsList(ctx,req,res){
+  const u=ctx.sessionUser(req);
+  if(!u)return sendError(req,res,401,'err.auth');
+  const rows=ctx.Q('SELECT id,kind,title,body,link,read_at,created_at FROM notifications WHERE user_id=? ORDER BY (read_at IS NULL) DESC, created_at DESC LIMIT 50').all(u.id);
+  const unread=ctx.Q('SELECT COUNT(*) n FROM notifications WHERE user_id=? AND read_at IS NULL').get(u.id).n;
+  sendJson(req,res,200,{notifications:rows,unread:unread});
+}
+function apiNotificationsReadAll(ctx,req,res){
+  const u=ctx.sessionUser(req);
+  if(!u)return sendError(req,res,401,'err.auth');
+  ctx.Q('UPDATE notifications SET read_at=? WHERE user_id=? AND read_at IS NULL').run(Date.now(),u.id);
+  sendJson(req,res,200,{ok:true});
+}
+async function apiMeLang(ctx,req,res){
+  const u=ctx.sessionUser(req);
+  if(!u)return sendError(req,res,401,'err.auth');
+  const b=await readBody(req,1024);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const lang=normLang((b.data||{}).lang);
+  ctx.Q('UPDATE users SET lang=? WHERE id=?').run(lang,u.id);
+  sendJson(req,res,200,{ok:true,lang:lang});
+}
+async function apiVerifyEmailRequest(ctx,req,res){
+  const u=ctx.sessionUser(req);
+  if(!u)return sendError(req,res,401,'err.auth');
+  if(!ctx.featureEnabled('email_verification'))return sendError(req,res,403,'err.forbidden');
+  if(u.email_verified)return sendJson(req,res,200,{ok:true,already:true});
+  if(!ctx.rate.allow('ve:'+u.id,5,HOUR))return sendError(req,res,429,'err.rate');
+  const tok=crypto.randomBytes(24).toString('base64url');
+  const t=Date.now();
+  ctx.Q('DELETE FROM email_verifications WHERE user_id=?').run(u.id);
+  ctx.Q('INSERT INTO email_verifications(th,user_id,email,expires,created_at) VALUES(?,?,?,?,?)').run(sha(tok),u.id,u.email,t+24*HOUR,t);
+  const base=trustedBaseUrl();
+  if(!base){
+    ctx.Q('DELETE FROM email_verifications WHERE user_id=?').run(u.id);
+    console.error('[email-verification] AHABONA_URL is missing or invalid; verification email was not issued');
+    return sendError(req,res,503,'err.server');
+  }
+  try{await ctx.mailer.send(u.email,'AHABONA: verify email','Kanda hano / Click here: '+base+'/api/verify-email/'+tok)}
+  catch(e){return sendError(req,res,503,'err.server')}
+  sendJson(req,res,200,{ok:true});
+}
+function apiVerifyEmailToken(ctx,req,res,token){
+  const r=ctx.Q('SELECT * FROM email_verifications WHERE th=?').get(sha(token));
+  const ok=!!(r&&r.expires>=Date.now());
+  if(ok){
+    ctx.Q('UPDATE users SET email_verified=1 WHERE id=?').run(r.user_id);
+    ctx.Q('DELETE FROM email_verifications WHERE user_id=?').run(r.user_id);
+  }
+  /* Redirect to homepage so the emailed link works in a browser, not raw JSON */
+  const dest='/?verified='+(ok?'1':'0');
+  res.writeHead(303,{'Location':dest,'Cache-Control':'no-store'});
+  return res.end();
+}
+async function apiVerifyPhoneRequest(ctx,req,res){
+  const u=ctx.sessionUser(req);
+  if(!u)return sendError(req,res,401,'err.auth');
+  if(!ctx.featureEnabled('sms_verification'))return sendError(req,res,403,'err.forbidden');
+  if(u.phone_verified)return sendJson(req,res,200,{ok:true,already:true});
+  if(!ctx.rate.allow('vp:'+u.id,5,HOUR))return sendError(req,res,429,'err.rate');
+  const code=String(crypto.randomInt(100000,1000000));
+  const t=Date.now();
+  const tok=crypto.randomBytes(16).toString('hex');
+  ctx.Q('DELETE FROM phone_verifications WHERE user_id=?').run(u.id);
+  ctx.Q('INSERT INTO phone_verifications(th,user_id,phone,code,expires,created_at) VALUES(?,?,?,?,?,?)').run(tok,u.id,u.phone,code,t+15*60*1000,t);
+  /* SMS stub: log code; integrate Africa's Talking / Twilio later */
+  console.log('[sms-stub] phone verify code for',u.phone,code);
+  sendJson(req,res,200,{ok:true,stub:true,hint:'Code logged server-side (SMS gateway not configured)'});
+}
+function safeEqStr(a,b){a=Buffer.from(String(a));b=Buffer.from(String(b));return a.length===b.length&&crypto.timingSafeEqual(a,b)}
+async function apiVerifyPhoneConfirm(ctx,req,res){
+  const u=ctx.sessionUser(req);
+  if(!u)return sendError(req,res,401,'err.auth');
+  if(!ctx.rate.allow('vc:'+u.id,8,15*60*1000))return sendError(req,res,429,'err.rate');
+  const b=await readBody(req,1024);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const code=String((b.data||{}).code||'').trim();
+  const r=ctx.Q('SELECT * FROM phone_verifications WHERE user_id=? ORDER BY created_at DESC LIMIT 1').get(u.id);
+  if(!r||r.expires<Date.now()||!safeEqStr(r.code,code))return sendError(req,res,400,'reset.err');
+  ctx.Q('UPDATE users SET phone_verified=1 WHERE id=?').run(u.id);
+  ctx.Q('DELETE FROM phone_verifications WHERE user_id=?').run(u.id);
+  sendJson(req,res,200,{ok:true});
+}
+
+function adminSummary(ctx,req,res){
+  const c=s=>ctx.Q(s).get().n;
+  const t=Date.now();
+  sendJson(req,res,200,{
+    users:c("SELECT COUNT(*) n FROM users WHERE role='user'"),
+    profiles_public:c("SELECT COUNT(*) n FROM profiles p JOIN users u ON u.id=p.user_id WHERE u.status='active' AND p.suspended=0"),
+    suspended:c('SELECT COUNT(*) n FROM profiles WHERE suspended=1'),
+    deletion_pending:c("SELECT COUNT(*) n FROM users WHERE status='deleted'"),
+    reports_new:c("SELECT COUNT(*) n FROM reports WHERE status='new'"),
+    reports_total:c('SELECT COUNT(*) n FROM reports'),
+    cap_requests_pending:c("SELECT COUNT(*) n FROM cap_requests WHERE status='pending'"),
+    searches_7d:ctx.Q('SELECT COUNT(*) n FROM search_log WHERE at>?').get(t-7*DAY).n,
+    searches_empty_7d:ctx.Q('SELECT COUNT(*) n FROM search_log WHERE at>? AND n=0').get(t-7*DAY).n,
+    impressions:c('SELECT COALESCE(SUM(impressions),0) n FROM stats'),
+    opens:c('SELECT COALESCE(SUM(opens),0) n FROM stats'),
+    contacts:c('SELECT COALESCE(SUM(contacts),0) n FROM stats'),
+    new_users_7d:ctx.Q('SELECT COUNT(*) n FROM users WHERE role=\'user\' AND created_at>?').get(t-7*DAY).n,
+    new_users_30d:ctx.Q('SELECT COUNT(*) n FROM users WHERE role=\'user\' AND created_at>?').get(t-30*DAY).n
+  });
+}
+
+function adminUsers(ctx,req,res,actor){
+  const rows=ctx.Q("SELECT u.id,u.email,u.phone,u.status,u.role,u.role_level,u.created_at,u.email_verified,u.phone_verified,u.id_verified,p.pid,p.name,p.district,p.suspended,p.rating_sum,p.rating_count FROM users u LEFT JOIN profiles p ON p.user_id=u.id ORDER BY u.id DESC LIMIT 500").all();
+  const out=rows.filter(r=>!staffLevelRaw(r));
+  sendJson(req,res,200,{users:out});
+}
+
+function adminUserGet(ctx,req,res,id,actor){
+  const u=ctx.Q('SELECT * FROM users WHERE id=?').get(id);
+  if(!u)return sendError(req,res,404,'err.notfound');
+  if(staffLevelRaw(u)&&!ctx.can(actor,'staff.manage'))return sendError(req,res,403,'err.forbidden');
+  delete u.pw;
+  delete u.national_id; // National ID collection/verification is out of scope for this MVP.
+  const p=ctx.Q('SELECT * FROM profiles WHERE user_id=?').get(id);
+  sendJson(req,res,200,{user:u,profile:p||null});
+}
+
+async function adminUserPut(ctx,req,res,id,admin){
+  const b=await readBody(req,8192);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const data=b.data||{};
+  const u=ctx.Q('SELECT * FROM users WHERE id=?').get(id);
+  if(!u)return sendError(req,res,404,'err.notfound');
+  if(staffLevelRaw(u))return sendError(req,res,403,'err.forbidden');
+  const changed=[];
+  const mayContact=ctx.can(admin,'users.contact');
+  let email=u.email,phone=u.phone;
+  if(data.email!==undefined&&clean(data.email,254).toLowerCase()!==u.email){
+    if(!mayContact)return sendError(req,res,403,'err.forbidden');
+    email=clean(data.email,254).toLowerCase();
+    if(!EM.test(email))return sendError(req,res,400,'reg.err.email','email');
+    if(ctx.Q('SELECT 1 FROM users WHERE email=? AND id<>?').get(email,id))return sendError(req,res,409,'reg.err.email','email');
+    changed.push('email');
+  }
+  if(data.phone!==undefined&&np(String(data.phone||''))!==u.phone){
+    if(!mayContact)return sendError(req,res,403,'err.forbidden');
+    phone=np(String(data.phone||''));
+    if(!MP.test(phone))return sendError(req,res,400,'reg.err.phone','phone');
+    if(ctx.Q('SELECT 1 FROM users WHERE phone=? AND id<>?').get(phone,id))return sendError(req,res,409,'reg.err.phone','phone');
+    changed.push('phone');
+  }
+  // Ignore legacy national_id input: collecting or verifying it is not enabled in this MVP.
+  let status=u.status;
+  if(data.status!==undefined&&data.status!==u.status){
+    if(!['active','suspended','deleted'].includes(data.status))return sendError(req,res,400,'common.required','status');
+    if(data.status==='deleted'&&!ctx.can(admin,'users.delete'))return sendError(req,res,403,'err.forbidden');
+    status=data.status;
+    changed.push('status');
+  }
+  /* Validate profile fields BEFORE any write so we never half-update */
+  let newName=null,newDistrict=null;
+  if(data.name!==undefined||data.district!==undefined){
+    const p0=ctx.Q('SELECT name,district FROM profiles WHERE user_id=?').get(id);
+    if(p0){
+      newName=p0.name;newDistrict=p0.district;
+      if(data.name!==undefined){
+        const nn=clean(data.name,60);
+        if(nn.length<3)return sendError(req,res,400,'reg.err.name','name');
+        if(containsBlocked(nn))return sendError(req,res,400,'err.blocklist','name');
+        newName=nn;
+      }
+      if(data.district!==undefined){
+        const dd=clean(data.district,40);
+        if(dd&&!DIST.includes(dd))return sendError(req,res,400,'reg.err.district','district');
+        if(dd)newDistrict=dd;
+      }
+    }
+  }
+  const delAt=status==='deleted'?(u.status==='deleted'&&u.deleted_at?u.deleted_at:Date.now()):null;
+  ctx.Q('UPDATE users SET email=?,phone=?,status=?,deleted_at=? WHERE id=?').run(email,phone,status,delAt,id);
+  if(changed.includes('email'))ctx.Q('UPDATE users SET email_verified=0 WHERE id=?').run(id);
+  if(changed.includes('phone'))ctx.Q('UPDATE users SET phone_verified=0 WHERE id=?').run(id);
+  if(status!==u.status)ctx.Q('UPDATE users SET admin_deleted=? WHERE id=?').run(status==='deleted'?1:0,id);
+  if(status!=='active'&&status!==u.status){
+    ctx.Q('DELETE FROM sessions WHERE user_id=?').run(id);
+  }
+  if(newName!==null&&newDistrict!==null){
+    const p=ctx.Q('SELECT name,district FROM profiles WHERE user_id=?').get(id);
+    if(p&&(newName!==p.name||newDistrict!==p.district)){
+      ctx.Q('UPDATE profiles SET name=?,district=?,updated_at=? WHERE user_id=?').run(newName,newDistrict,Date.now(),id);
+      changed.push('profile');
+    }
+  }
+  ctx.adminLog(admin.id,'user.update','user',String(id),JSON.stringify({fields:changed}),ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true});
+}
+
+function adminUserDelete(ctx,req,res,id,admin){
+  if(Number(id)===admin.id)return sendError(req,res,400,'err.forbidden');
+  const u=ctx.Q('SELECT * FROM users WHERE id=?').get(id);
+  if(!u)return sendError(req,res,404,'err.notfound');
+  if(staffLevelRaw(u))return sendError(req,res,403,'err.forbidden');
+  try{deleteUserData(id)}catch(e){return sendError(req,res,500,'err.server')}
+  ctx.adminLog(admin.id,'user.delete','user',String(id),null,ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true});
+}
+
+async function adminUserMessage(ctx,req,res,id,admin){
+  const b=await readBody(req,8192);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const data=b.data||{};
+  const subj=clean(data.subject,120);
+  const body=clean(data.body,2000);
+  if(!body)return sendError(req,res,400,'common.required','body');
+  const target=ctx.Q('SELECT id,email FROM users WHERE id=?').get(id);
+  if(!target)return sendError(req,res,404,'err.notfound');
+  ctx.Q('INSERT INTO messages(from_id,to_id,subject,body,created_at) VALUES(?,?,?,?,?)').run(admin.id,id,subj||null,body,Date.now());
+  ctx.Q('INSERT INTO notifications(user_id,kind,title,body,created_at) VALUES(?,?,?,?,?)').run(id,'message',subj||'Ubutumwa',body.slice(0,200),Date.now());
+  if(target.email)await ctx.mailer.send(target.email,subj||'AHABONA',body);
+  ctx.adminLog(admin.id,'user.message','user',String(id),null,ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true});
+}
+
+async function adminBroadcast(ctx,req,res,admin){
+  const b=await readBody(req,8192);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const data=b.data||{};
+  const subj=clean(data.subject,120);
+  const body=clean(data.body,2000);
+  if(!body)return sendError(req,res,400,'common.required','body');
+  const users=ctx.Q("SELECT id,email,role,role_level FROM users WHERE status='active'").all().filter(x=>!staffLevelRaw(x));
+  const now=Date.now();
+  ctx.db.exec('BEGIN');
+  try{
+    for(const usr of users){
+      ctx.Q('INSERT INTO messages(from_id,to_id,subject,body,created_at) VALUES(?,?,?,?,?)').run(admin.id,usr.id,subj||null,body,now);
+      ctx.Q('INSERT INTO notifications(user_id,kind,title,body,created_at) VALUES(?,?,?,?,?)').run(usr.id,'broadcast',subj||'AHABONA',body.slice(0,200),now);
+    }
+    ctx.db.exec('COMMIT');
+  }catch(e){
+    try{ctx.db.exec('ROLLBACK')}catch(e2){}
+    return sendError(req,res,500,'err.server');
+  }
+  ctx.adminLog(admin.id,'broadcast',null,null,JSON.stringify({count:users.length}),ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true,count:users.length});
+  if(ctx.mailer.isLive){
+    setImmediate(async function(){
+      for(const usr of users){
+        if(!usr.email)continue;
+        try{await ctx.mailer.send(usr.email,subj||'AHABONA',body)}catch(e){}
+      }
+    });
+  }
+}
+
+function adminReports(ctx,req,res){
+  const rows=ctx.Q('SELECT r.*,p.name FROM reports r LEFT JOIN profiles p ON p.pid=r.pid ORDER BY r.id DESC LIMIT 500').all();
+  sendJson(req,res,200,{reports:rows});
+}
+
+function adminReportUpdate(ctx,req,res,id,admin){
+  return readBody(req,4096).then(b=>{
+    if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+    const data=b.data||{};
+    if(!['new','reviewed','actioned','dismissed'].includes(data.status))return sendError(req,res,400,'common.required');
+    ctx.Q('UPDATE reports SET status=?,decided_at=?,decided_by=? WHERE id=?').run(data.status,Date.now(),admin.id,id);
+    ctx.adminLog(admin.id,'report:'+data.status,'report',String(id),null,ctx.ipOf(req));
+    sendJson(req,res,200,{ok:true});
+  });
+}
+
+function adminRequests(ctx,req,res){
+  const rows=ctx.Q("SELECT c.*,p.name,p.pid FROM cap_requests c LEFT JOIN profiles p ON p.user_id=c.user_id WHERE c.status='pending' ORDER BY c.id").all();
+  sendJson(req,res,200,{requests:rows,categories:Object.keys(TAX)});
+}
+
+function adminRequestDecide(ctx,req,res,id,admin){
+  return readBody(req,4096).then(b=>{
+    if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+    const data=b.data||{};
+    const r=ctx.Q('SELECT * FROM cap_requests WHERE id=?').get(id);
+    if(!r||r.status!=='pending')return sendError(req,res,404,'err.notfound');
+    if(data.action==='approve'){
+      const cat=clean(data.category,80);
+      const name=clean(data.name||r.text,60);
+      if(!TAX[cat]||name.length<3)return sendError(req,res,400,'common.required');
+      let c=ctx.Q('SELECT id FROM capabilities WHERE name=?').get(name);
+      if(!c){
+        c={id:Number(ctx.Q('INSERT INTO capabilities(name,category) VALUES(?,?)').run(name,cat).lastInsertRowid)};
+        ctx.loadCaps();
+      }
+      for(const pr of ctx.Q('SELECT user_id,caps FROM profiles WHERE other_text=?').all(r.text)){
+        const a=JSON.parse(pr.caps);
+        if(!a.includes(c.id))a.push(c.id);
+        ctx.Q('UPDATE profiles SET caps=?,other_text=NULL WHERE user_id=?').run(JSON.stringify(a),pr.user_id);
+      }
+      ctx.Q("UPDATE cap_requests SET status='approved',decided_at=?,decided_by=? WHERE text=? AND status='pending'").run(Date.now(),admin.id,r.text);
+    }else if(data.action==='reject'){
+      ctx.Q("UPDATE cap_requests SET status='rejected',decided_at=?,decided_by=? WHERE id=?").run(Date.now(),admin.id,r.id);
+      /* keep other_text so user can edit; status rejected is tracked on cap_requests */
+    }else{
+      return sendError(req,res,400,'common.required');
+    }
+    ctx.adminLog(admin.id,'capability:'+data.action,'cap_request',String(id),r.text,ctx.ipOf(req));
+    sendJson(req,res,200,{ok:true});
+  });
+}
+
+function adminProfileSuspend(ctx,req,res,pid,admin){
+  return readBody(req,4096).then(b=>{
+    if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+    const data=b.data||{};
+    if(!['suspend','restore'].includes(data.action))return sendError(req,res,400,'common.required');
+    ctx.Q('UPDATE profiles SET suspended=? WHERE pid=?').run(data.action==='suspend'?1:0,pid);
+    if(data.action==='suspend'){
+      const pr=ctx.Q('SELECT user_id FROM profiles WHERE pid=?').get(pid);
+      if(pr)ctx.Q('DELETE FROM sessions WHERE user_id=?').run(pr.user_id);
+    }
+    ctx.adminLog(admin.id,data.action,'profile',pid,null,ctx.ipOf(req));
+    sendJson(req,res,200,{ok:true});
+  }).catch(e=>{
+    console.error('[adminProfileSuspend]',e&&e.message||e);
+    if(!res.headersSent)sendError(req,res,500,'err.server');
+  });
+}
+
+function adminAudit(ctx,req,res){
+  const rows=ctx.Q('SELECT * FROM audit ORDER BY id DESC LIMIT 200').all();
+  sendJson(req,res,200,{audit:rows});
+}
+
+function adminLogs(ctx,req,res){
+  const rows=ctx.Q('SELECT * FROM admin_logs ORDER BY id DESC LIMIT 500').all();
+  sendJson(req,res,200,{logs:rows});
+}
+
+function adminMessages(ctx,req,res){
+  const rows=ctx.Q('SELECT * FROM help_messages ORDER BY id DESC LIMIT 500').all();
+  sendJson(req,res,200,{messages:rows});
+}
+
+function adminMessageUpdate(ctx,req,res,id,admin){
+  return readBody(req,4096).then(b=>{
+    if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+    const data=b.data||{};
+    if(!['new','read','archived','done'].includes(data.status))return sendError(req,res,400,'common.required');
+    ctx.Q('UPDATE help_messages SET status=? WHERE id=?').run(data.status,id);
+    ctx.adminLog(admin.id,'help_message:'+data.status,'help_message',String(id),null,ctx.ipOf(req));
+    sendJson(req,res,200,{ok:true});
+  });
+}
+
+/* ===== END OF IGICE 9/16 ===== */function adminSettings(ctx,req,res){
+  const f=ctx.settings.featureFlags();
+  const c=ctx.settings.contact();
+  const s=ctx.settings.site();
+  sendJson(req,res,200,{features:f,contact:c,site:s});
+}
+
+async function adminSettingsUpdate(ctx,req,res,admin){
+  const b=await readBody(req,8192);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const data=b.data||{};
+  const upd={};
+  if(data.contact&&typeof data.contact==='object'){
+    const c0={};
+    ['email','whatsapp','phone','facebook'].forEach(k=>{if(data.contact[k]!==undefined)c0[k]=clean(data.contact[k],200)});
+    if(c0.email&&!EM.test(c0.email.toLowerCase()))return sendError(req,res,400,'reg.err.email','email');
+    if(c0.email)c0.email=c0.email.toLowerCase();
+    if(c0.whatsapp){c0.whatsapp=np(c0.whatsapp);if(!MP.test(c0.whatsapp))return sendError(req,res,400,'reg.err.wa','whatsapp')}
+    if(c0.phone){c0.phone=np(c0.phone);if(!MP.test(c0.phone))return sendError(req,res,400,'reg.err.phone','phone')}
+    if(c0.facebook&&!URL_RE.test(c0.facebook))return sendError(req,res,400,'val.soc','facebook');
+    ctx.settings.setContact(c0);upd.contact=c0;
+  }
+  if(data.site&&typeof data.site==='object'){
+    const s0={};
+    ['name','tagline','owner'].forEach(k=>{if(data.site[k]!==undefined)s0[k]=clean(data.site[k],120)});
+    ctx.settings.setSite(s0);upd.site=s0;
+  }
+  ctx.adminLog(admin.id,'settings.update',null,null,JSON.stringify(upd),ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true});
+}
+
+async function adminFeatureToggle(ctx,req,res,admin){
+  const b=await readBody(req,4096);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const data=b.data||{};
+  const key=clean(data.key,60);
+  const on=!!data.on;
+  if(!['messaging','pwa'].includes(key))return sendError(req,res,400,'common.required');
+  const r=ctx.settings.setFeature(key,on);
+  if(!r)return sendError(req,res,400,'common.required');
+  ctx.adminLog(admin.id,'feature:'+key+':'+(on?'on':'off'),null,null,null,ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true});
+}
+
+function stripMediaBytes(ctx,url){
+  const m=/^\/media\/(strip-\d+\.(?:mp4|webm|avi|jpg|png|webp))/.exec(String(url||''));
+  if(!m||!ctx.mediaStore)return null;
+  try{return fs.statSync(ctx.mediaStore.pathOf(m[1])).size}catch(e){return -1}
+}
+function adminStripList(ctx,req,res){
+  const rows=ctx.Q('SELECT * FROM strip_ads ORDER BY priority DESC, id ASC').all();
+  const out=rows.map(function(r){
+    const o=Object.assign({},r);
+    const vb=stripMediaBytes(ctx,r.video_url);
+    const ib=stripMediaBytes(ctx,r.image_url);
+    if(vb!==null)o.video_bytes=vb;
+    if(ib!==null)o.image_bytes=ib;
+    return o;
+  });
+  sendJson(req,res,200,{ads:out});
+}
+
+const HERO_THEMES=['ijoro','izuba','kigali','musanze','rubavu','huye','nyungwe','ibendera'];
+const HERO_KINDS=['info','tip','announcement','city','promo','sponsor'];
+const HERO_ACTIONS=['none','search','focus','register','help','about','link','phone'];
+function heroClean(data,cur){
+  const c=cur||{};
+  const pick=(k,max)=>data[k]!==undefined?clean(data[k],max):(c[k]||'');
+  const o={};
+  o.title=pick('title',80);o.title_en=pick('title_en',80);
+  o.text=pick('text',220);o.text_en=pick('text_en',220);
+  o.cta=pick('cta',28);o.cta_en=pick('cta_en',28);
+  const mediaType=data.media_type!==undefined?String(data.media_type):(c.media_type||'text');
+  o.media_type=(mediaType==='video')?'video':((mediaType==='image')?'image':'text');
+  o.video_url=data.video_url!==undefined?clean(data.video_url,500):(c.video_url||'');
+  if(o.media_type==='video'){
+    /* video file may upload after create; URL optional at this step */
+    if(!o.title&&!o.text)o.title=o.title||'Video';
+  }else if(o.media_type==='image'){
+    /* photo uploads after create; title and text are optional for a photo slide */
+  }else if(!o.title&&!o.text)return{err:'common.required',field:'title'};
+  const theme=data.theme!==undefined?String(data.theme):(c.theme||'izuba');
+  o.theme=HERO_THEMES.includes(theme)?theme:'izuba';
+  const kind=data.kind!==undefined?String(data.kind):(c.kind||'tip');
+  o.kind=HERO_KINDS.includes(kind)?kind:'tip';
+  const action=data.action!==undefined?String(data.action):(c.action_type||'none');
+  o.action=HERO_ACTIONS.includes(action)?action:'none';
+  let value=data.value!==undefined?clean(data.value,500):(c.action_value||'');
+  if(o.action==='link'){
+    if(!/^https?:\/\/[^\s"'<>]+$/i.test(value))return{err:'hero.err.link',field:'value'};
+  }else if(o.action==='phone'){
+    value=np(String(value||''));
+    if(!MP.test(value))return{err:'hero.err.phone',field:'value'};
+  }else if(o.action==='search'){
+    value=value.slice(0,80);
+  }else{
+    value='';
+  }
+  o.value=value;
+  const num=v=>{if(v===null||v===''||v===undefined)return null;const n=Number(v);return Number.isFinite(n)?Math.floor(n):null};
+  o.start_at=data.start_at!==undefined?num(data.start_at):(c.start_at||null);
+  o.end_at=data.end_at!==undefined?num(data.end_at):(c.end_at||null);
+  if(o.start_at&&o.end_at&&o.end_at<o.start_at)return{err:'common.required',field:'end_at'};
+  const pr=data.priority!==undefined?Math.round(Number(data.priority)):(c.priority||0);
+  o.priority=Number.isFinite(pr)?Math.max(-100,Math.min(100,pr)):0;
+  o.active=data.active!==undefined?(data.active?1:0):(c.active===undefined?1:c.active);
+  return{v:o};
+}
+
+async function adminStripAdd(ctx,req,res,admin){
+  const b=await readBody(req,20*1024*1024);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const h=heroClean(b.data||{},null);
+  if(h.err)return sendError(req,res,400,h.err,h.field);
+  const o=h.v;
+  const r=ctx.Q('INSERT INTO strip_ads(text,title,text_en,title_en,cta,cta_en,theme,action_type,action_value,kind,active,start_at,end_at,priority,created_at,media_type,video_url) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(o.text||'',o.title||null,o.text_en||null,o.title_en||null,o.cta||null,o.cta_en||null,o.theme,o.action,o.value||null,o.kind,o.active,o.start_at,o.end_at,o.priority,Date.now(),o.media_type||'text',o.video_url||null);
+  const id=Number(r.lastInsertRowid);
+  if(o.media_type==='video'&&b.data&&b.data.video_b64){
+    const buf=parseVideoB64(b.data.video_b64);
+    if(!buf)return sendError(req,res,400,'common.required','video');
+    if(!looksLikeVideo(buf))return sendError(req,res,400,'Fayile ntabwo ari video (koresha mp4)');
+    const ms=ctx.mediaStore;
+    if(ms){
+      const sv=await ms.saveStripVideo(id,buf);
+      if(!sv.ok)return sendError(req,res,500,'err.server');
+      const url='/media/'+sv.path+'?v='+Date.now();
+      const codec=sv.processed?'h264':(sv.codec||sniffCodec(buf));
+      ctx.Q('UPDATE strip_ads SET video_url=?,video_proc=?,video_codec=? WHERE id=?')
+        .run(url,sv.processed?1:0,codec||null,id);
+      o.video_url=url;
+    }
+  }
+  ctx.adminLog(admin.id,'strip.add','strip',String(id),o.title||o.text||'video',ctx.ipOf(req));
+  sendJson(req,res,201,{ok:true,id:id});
+}
+
+async function adminStripUpdate(ctx,req,res,id,admin){
+  const b=await readBody(req,20*1024*1024);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const cur=ctx.Q('SELECT * FROM strip_ads WHERE id=?').get(id);
+  if(!cur)return sendError(req,res,404,'err.notfound');
+  const h=heroClean(b.data||{},cur);
+  if(h.err)return sendError(req,res,400,h.err,h.field);
+  const o=h.v;
+  if(o.media_type==='video'&&b.data&&b.data.video_b64){
+    const buf=parseVideoB64(b.data.video_b64);
+    if(!buf)return sendError(req,res,400,'common.required','video');
+    if(!looksLikeVideo(buf))return sendError(req,res,400,'Fayile ntabwo ari video (koresha mp4)');
+    const ms=ctx.mediaStore;
+    if(ms){
+      const sv=await ms.saveStripVideo(id,buf);
+      if(!sv.ok)return sendError(req,res,500,'err.server');
+      o.video_url='/media/'+sv.path+'?v='+Date.now();
+      o.video_proc=sv.processed?1:0;
+      o.video_codec=sv.processed?'h264':(sv.codec||sniffCodec(buf));
+    }
+  }
+  if(o.media_type!=='video')o.video_url=o.video_url||null;
+  ctx.Q('UPDATE strip_ads SET text=?,title=?,text_en=?,title_en=?,cta=?,cta_en=?,theme=?,action_type=?,action_value=?,kind=?,active=?,start_at=?,end_at=?,priority=?,media_type=?,video_url=?,video_proc=?,video_codec=? WHERE id=?')
+    .run(o.text||'',o.title||null,o.text_en||null,o.title_en||null,o.cta||null,o.cta_en||null,o.theme,o.action,o.value||null,o.kind,o.active,o.start_at,o.end_at,o.priority,o.media_type||'text',o.video_url||null,(o.video_proc!==undefined?o.video_proc:cur.video_proc),(o.video_codec!==undefined?o.video_codec:cur.video_codec),id);
+  ctx.adminLog(admin.id,'strip.update','strip',String(id),null,ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true});
+}
+
+function adminStripDelete(ctx,req,res,id,admin){
+  ctx.Q('DELETE FROM strip_ads WHERE id=?').run(id);
+  try{
+    if(ctx.mediaStore){
+      ctx.mediaStore.remove('strip-'+id+'.mp4');
+      ctx.mediaStore.remove('strip-'+id+'.mp4.tmp.mp4');
+      ctx.mediaStore.remove('strip-'+id+'.webm');
+      ctx.mediaStore.remove('strip-'+id+'.avi');
+      ctx.mediaStore.remove('strip-'+id+'-raw.bin');
+      ctx.mediaStore.remove('strip-'+id+'.jpg');
+      ctx.mediaStore.remove('strip-'+id+'.png');
+      ctx.mediaStore.remove('strip-'+id+'.webp');
+    }
+  }catch(e){}
+  ctx.adminLog(admin.id,'strip.delete','strip',String(id),null,ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true});
+}
+
+function looksLikeVideo(buf){
+  if(!buf||buf.length<12)return false;
+  /* ISO BMFF / MP4 / MOV: ....ftyp (reject image/audio brands such as HEIC, AVIF, M4A) */
+  if(buf[4]===0x66&&buf[5]===0x74&&buf[6]===0x79&&buf[7]===0x70){
+    const brand=buf.toString('latin1',8,12);
+    const bad=['heic','heix','heim','heis','hevm','hevs','mif1','msf1','avif','avis','M4A ','M4B ','M4P ','crx '];
+    return bad.indexOf(brand)===-1;
+  }
+  /* WebM / Matroska: 1A 45 DF A3 */
+  if(buf[0]===0x1A&&buf[1]===0x45&&buf[2]===0xDF&&buf[3]===0xA3)return true;
+  /* RIFF....AVI  (only AVI, not WAV/WebP) */
+  if(buf[0]===0x52&&buf[1]===0x49&&buf[2]===0x46&&buf[3]===0x46&&buf.toString('latin1',8,12)==='AVI ')return true;
+  return false;
+}
+function sniffImage(buf){
+  if(!buf||buf.length<12)return null;
+  if(buf[0]===0xFF&&buf[1]===0xD8&&buf[2]===0xFF)return 'jpg';
+  if(buf[0]===0x89&&buf[1]===0x50&&buf[2]===0x4E&&buf[3]===0x47)return 'png';
+  if(buf.toString('latin1',0,4)==='RIFF'&&buf.toString('latin1',8,12)==='WEBP')return 'webp';
+  return null;
+}
+function sniffCodec(buf){
+  try{
+    const n=buf.length,W=2*1024*1024;
+    const parts=n>W*2?[buf.subarray(0,W),buf.subarray(n-W)]:[buf];
+    const has=function(tag){return parts.some(function(b){return b.indexOf(tag,0,'latin1')>=0})};
+    if(has('hvc1')||has('hev1'))return 'hevc';
+    if(has('avc1'))return 'h264';
+    if(has('av01'))return 'av1';
+    if(has('vp09'))return 'vp9';
+    if(buf[0]===0x1A&&buf[1]===0x45&&buf[2]===0xDF&&buf[3]===0xA3)return 'webm';
+  }catch(e){}
+  return '';
+}
+async function readRawBody(req,max){
+  const chunks=[];
+  let total=0;
+  try{
+    for await (const chunk of req){
+      total+=chunk.length;
+      if(total>max)return {over:true};
+      chunks.push(chunk);
+    }
+  }catch(e){return {fail:true}}
+  return {buf:Buffer.concat(chunks)};
+}
+async function adminStripImageUpload(ctx,req,res,id,admin){
+  const cur=ctx.Q('SELECT * FROM strip_ads WHERE id=?').get(id);
+  if(!cur)return sendError(req,res,404,'err.notfound');
+  const rb=await readRawBody(req,8*1024*1024);
+  if(rb.over)return sendError(req,res,400,'Ifoto nini cyane (max 8MB)');
+  if(rb.fail)return sendError(req,res,400,'err.server');
+  const buf=rb.buf;
+  if(!buf||buf.length<100)return sendError(req,res,400,'common.required','image');
+  const kind=sniffImage(buf);
+  if(!kind)return sendError(req,res,400,'Iyi fayile ntabwo ari ifoto (koresha JPG, PNG cyangwa WebP)');
+  const ms=ctx.mediaStore;
+  if(!ms)return sendError(req,res,500,'err.server');
+  const sv=ms.saveStripImage(id,buf,kind);
+  if(!sv.ok)return sendError(req,res,500,'err.server');
+  const url='/media/'+sv.path+'?v='+Date.now();
+  ctx.Q('UPDATE strip_ads SET media_type=?,image_url=? WHERE id=?').run('image',url,id);
+  ctx.adminLog(admin.id,'strip.image','strip',String(id),url,ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true,image_url:url});
+}
+async function adminStripVideoUpload(ctx,req,res,id,admin){
+  const cur=ctx.Q('SELECT * FROM strip_ads WHERE id=?').get(id);
+  if(!cur)return sendError(req,res,404,'err.notfound');
+  const rb=await readRawBody(req,64*1024*1024);
+  if(rb.over)return sendError(req,res,400,'Video nini cyane (max 64MB)');
+  if(rb.fail)return sendError(req,res,400,'err.server');
+  const buf=rb.buf;
+  if(!buf||buf.length<100)return sendError(req,res,400,'common.required','video');
+  if(!looksLikeVideo(buf))return sendError(req,res,400,'Fayile ntabwo ari video (koresha mp4)');
+  const ms=ctx.mediaStore;
+  if(!ms)return sendError(req,res,500,'err.server');
+  const sv=await ms.saveStripVideo(id,buf);
+  if(!sv.ok)return sendError(req,res,500,'err.server');
+  const url='/media/'+sv.path+'?v='+Date.now();
+  const codec=sv.processed?'h264':(sv.codec||sniffCodec(buf));
+  ctx.Q('UPDATE strip_ads SET media_type=?,video_url=?,video_proc=?,video_codec=? WHERE id=?').run('video',url,sv.processed?1:0,codec||null,id);
+  ctx.adminLog(admin.id,'strip.video','strip',String(id),url,ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true,video_url:url,processed:!!sv.processed,codec:codec,size:buf.length});
+}
+
+function adminCapsList(ctx,req,res){
+  const rows=ctx.Q('SELECT * FROM capabilities ORDER BY category,name').all();
+  sendJson(req,res,200,{capabilities:rows});
+}
+
+async function adminCapsAdd(ctx,req,res,admin){
+  const b=await readBody(req,4096);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const data=b.data||{};
+  const name=clean(data.name,80);
+  const cat=clean(data.category,80);
+  const nameEn=clean(data.name_en||'',80);
+  if(!name||!cat||!TAX[cat])return sendError(req,res,400,'common.required');
+  try{
+    const r=ctx.Q('INSERT INTO capabilities(name,category,name_en,active) VALUES(?,?,?,1)').run(name,cat,nameEn||null);
+    ctx.loadCaps();
+    ctx.adminLog(admin.id,'cap.add','cap',String(r.lastInsertRowid),name,ctx.ipOf(req));
+    sendJson(req,res,201,{ok:true,id:Number(r.lastInsertRowid)});
+  }catch(e){return sendError(req,res,409,'common.error')}
+}
+
+async function adminCapsUpdate(ctx,req,res,id,admin){
+  const b=await readBody(req,4096);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const data=b.data||{};
+  const c=ctx.Q('SELECT * FROM capabilities WHERE id=?').get(id);
+  if(!c)return sendError(req,res,404,'err.notfound');
+  const name=data.name!==undefined?clean(data.name,80):c.name;
+  const cat=data.category?clean(data.category,80):c.category;
+  const active=data.active!==undefined?(data.active?1:0):c.active;
+  if(!name||name.length<2)return sendError(req,res,400,'common.required','name');
+  if(cat&&!TAX[cat])return sendError(req,res,400,'common.required','category');
+  try{
+    ctx.Q('UPDATE capabilities SET name=?,category=?,active=? WHERE id=?').run(name,cat,active,id);
+  }catch(e){
+    if(/UNIQUE/i.test(String(e&&e.message||'')))return sendError(req,res,409,'common.error','name');
+    return sendError(req,res,500,'err.server');
+  }
+  ctx.loadCaps();
+  ctx.adminLog(admin.id,'cap.update','cap',String(id),null,ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true});
+}
+
+function adminCapsDelete(ctx,req,res,id,admin){
+  let inUse=false;
+  try{inUse=ctx.Q('SELECT caps FROM profiles').all().some(r=>{try{return JSON.parse(r.caps||'[]').includes(id)}catch(e){return false}})}catch(e){}
+  if(inUse)ctx.Q('UPDATE capabilities SET active=0 WHERE id=?').run(id);
+  else ctx.Q('DELETE FROM capabilities WHERE id=?').run(id);
+  ctx.loadCaps();
+  ctx.adminLog(admin.id,inUse?'cap.deactivate':'cap.delete','cap',String(id),null,ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true,deactivated:inUse});
+}
+
+function adminCategoriesList(ctx,req,res){
+  sendJson(req,res,200,{categories:Object.keys(TAX)});
+}
+
+async function adminCategoriesAdd(ctx,req,res,admin){
+  const b=await readBody(req,4096);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const data=b.data||{};
+  const name=clean(data.name,80);
+  if(!name||name.length<2)return sendError(req,res,400,'common.required');
+  if(['__proto__','constructor','prototype'].includes(name))return sendError(req,res,400,'common.required');
+  if(Object.prototype.hasOwnProperty.call(TAX,name))return sendError(req,res,409,'common.error');
+  TAX[name]=[];
+  try{
+    const ex=ctx.settings.get('extra_cats',[])||[];
+    if(!ex.includes(name)){ex.push(name);ctx.settings.set('extra_cats',ex)}
+  }catch(e){}
+  ctx.adminLog(admin.id,'cat.add',null,null,name,ctx.ipOf(req));
+  sendJson(req,res,201,{ok:true});
+}
+
+function adminCapRequests(ctx,req,res){
+  const rows=ctx.Q("SELECT c.*,p.name,p.pid FROM cap_requests c LEFT JOIN profiles p ON p.user_id=c.user_id WHERE c.status='pending' ORDER BY c.id").all();
+  sendJson(req,res,200,{requests:rows,categories:Object.keys(TAX)});
+}
+
+function adminFaqList(ctx,req,res){
+  const rows=ctx.Q('SELECT * FROM help_faq ORDER BY category,sort_order').all();
+  sendJson(req,res,200,{faq:rows});
+}
+
+async function adminFaqAdd(ctx,req,res,admin){
+  const b=await readBody(req,8192);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const data=b.data||{};
+  const q=clean(data.q,200);
+  const a=clean(data.a,2000);
+  const cat=clean(data.category,40)||'general';
+  const terms=clean(data.terms,500);
+  if(!q||!a||q.length<3||a.length<3)return sendError(req,res,400,'common.required');
+  const r=ctx.Q('INSERT INTO help_faq(q,a,terms,category,sort_order,active,created_at) VALUES(?,?,?,?,?,1,?)').run(q,a,terms||null,cat,Number(data.sort_order)||0,Date.now());
+  ctx.adminLog(admin.id,'faq.add','faq',String(r.lastInsertRowid),q,ctx.ipOf(req));
+  sendJson(req,res,201,{ok:true,id:Number(r.lastInsertRowid)});
+}
+
+async function adminFaqUpdate(ctx,req,res,id,admin){
+  const b=await readBody(req,8192);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const data=b.data||{};
+  const cur=ctx.Q('SELECT * FROM help_faq WHERE id=?').get(id);
+  if(!cur)return sendError(req,res,404,'err.notfound');
+  const q=data.q!==undefined?clean(data.q,200):cur.q;
+  const a=data.a!==undefined?clean(data.a,2000):cur.a;
+  const cat=data.category?clean(data.category,40):cur.category;
+  const terms=data.terms!==undefined?clean(data.terms,500):cur.terms;
+  const active=data.active!==undefined?(data.active?1:0):cur.active;
+  ctx.Q('UPDATE help_faq SET q=?,a=?,category=?,terms=?,active=? WHERE id=?').run(q,a,cat,terms,active,id);
+  ctx.adminLog(admin.id,'faq.update','faq',String(id),null,ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true});
+}
+
+function adminFaqDelete(ctx,req,res,id,admin){
+  ctx.Q('DELETE FROM help_faq WHERE id=?').run(id);
+  ctx.adminLog(admin.id,'faq.delete','faq',String(id),null,ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true});
+}
+
+function adminStats(ctx,req,res){
+  const t=Date.now();
+  const top=ctx.Q('SELECT q,COUNT(*) n FROM search_log WHERE at>? GROUP BY q ORDER BY n DESC LIMIT 20').all(t-7*DAY);
+  const byDistrict=ctx.Q("SELECT district,COUNT(*) n FROM profiles p JOIN users u ON u.id=p.user_id WHERE u.status='active' GROUP BY district ORDER BY n DESC LIMIT 30").all();
+  sendJson(req,res,200,{top_searches:top,by_district:byDistrict});
+}
+
+
+/* Request dispatch and staff routes restored from the active server copy; kept in this entry file. */
+var Q, caps, capName, store, deviceOf;
+
+function handleRequest(ctx,req,res){
+  securityHeaders(res,ctx.secure);
+  var url;
+  try{url=new URL(req.url,'http://localhost')}
+  catch(e){return sendError(req,res,400,'err.server')}
+  var p;
+  try{p=decodeURIComponent(url.pathname)}
+  catch(e){return sendError(req,res,400,'err.server')}
+  var ip=ctx.ipOf(req)||'unknown';
+  if(!ctx.rate.allow('g:'+ip,600,60000))return sendError(req,res,429,'err.rate');
+  if(p==='/icon.svg'){
+    var svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="34" fill="#1a9b6c"/><g stroke="#d4a838" stroke-width="6" stroke-linecap="round"><line x1="96" y1="42" x2="96" y2="20"/><line x1="120" y1="48" x2="135" y2="30"/><line x1="138" y1="72" x2="158" y2="62"/><line x1="142" y1="96" x2="164" y2="96"/><line x1="138" y1="120" x2="158" y2="130"/><line x1="120" y1="144" x2="135" y2="162"/><line x1="72" y1="144" x2="57" y2="162"/><line x1="54" y1="120" x2="34" y2="130"/><line x1="50" y1="96" x2="28" y2="96"/><line x1="54" y1="72" x2="34" y2="62"/><line x1="72" y1="48" x2="57" y2="30"/></g><circle cx="96" cy="96" r="40" fill="#d4a838"/><text x="96" y="164" text-anchor="middle" fill="#fff" font-family="system-ui,sans-serif" font-size="22" font-weight="800">AHABONA</text></svg>';
+    var buf=Buffer.from(svg,'utf8');
+    res.writeHead(200,{'Content-Type':'image/svg+xml','Cache-Control':'public, max-age=86400','Content-Length':buf.length});
+    return res.end(buf);
+  }
+  if(p==='/sw.js'){
+    var sw=EMBED['sw.js']||'';
+    var swb=Buffer.from(sw,'utf8');
+    res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-cache','Service-Worker-Allowed':'/','Content-Length':swb.length});
+    return res.end(swb);
+  }
+  if(p==='/manifest.webmanifest'){
+    var manifest={
+      name:'AHABONA',
+      short_name:'AHABONA',
+      description:'Menya abantu. Menya amahirwe.',
+      start_url:'/',
+      scope:'/',
+      display:'standalone',
+      orientation:'portrait',
+      theme_color:'#1a9b6c',
+      background_color:'#faf7ef',
+      lang:'rw',
+      icons:[
+        {src:'/icon.svg',sizes:'any',type:'image/svg+xml',purpose:'any'},
+        {src:'/icon.svg',sizes:'any',type:'image/svg+xml',purpose:'maskable'}
+      ]
+    };
+    var mb=Buffer.from(JSON.stringify(manifest),'utf8');
+    res.writeHead(200,{'Content-Type':'application/manifest+json; charset=utf-8','Cache-Control':'public, max-age=3600','Content-Length':mb.length});
+    return res.end(mb);
+  }
+  if(p.startsWith('/photos/')){
+    var f=p.slice(8);
+    if(!/^[a-z0-9]+-(?:[0-5]|t)\.jpg$/.test(f))return sendError(req,res,404,'err.notfound');
+    var b=ctx.store.read(f);
+    if(!b)return sendError(req,res,404,'err.notfound');
+    return sendBinary(req,res,200,b,'image/jpeg','public, max-age=86400, immutable');
+  }
+  if(p.startsWith('/media/')){
+    var mf=p.slice(7);
+    var mm=/^strip-(\d+)\.(mp4|webm|avi|jpg|png|webp)$/.exec(mf);
+    if(!mm||!ctx.mediaStore)return sendError(req,res,404,'err.notfound');
+    var mtype=mm[2]==='mp4'?'video/mp4':(mm[2]==='webm'?'video/webm':(mm[2]==='avi'?'video/x-msvideo':(mm[2]==='jpg'?'image/jpeg':(mm[2]==='png'?'image/png':'image/webp'))));
+    var mcache=url.searchParams.has('v')?'public, max-age=604800':'public, max-age=3600';
+    return sendMediaFile(req,res,ctx.mediaStore.pathOf(mf),mtype,mcache);
+  }
+  if(p.startsWith('/api/'))return handleApi(ctx,req,res,url,p);
+  var key='';
+  // Normalize: strip a single trailing slash (but keep "/" itself)
+  if(p.length>1&&p.endsWith('/'))p=p.slice(0,-1);
+  if(p==='/')key='index.html';
+  else if(p==='/admin')key='admin.html';
+  else if(p==='/terms')key='terms.html';
+  else if(p==='/privacy')key='privacy.html';
+  else if(p==='/help')key='index.html';
+  else if(/^\/u\/[a-z0-9-]+$/.test(p))key='index.html';
+  else if(/^\/reset\/[A-Za-z0-9_-]+$/.test(p))key='index.html';
+  else if(p==='/saved')key='index.html';
+  else if(p==='/about')key='index.html';
+  else if(Object.prototype.hasOwnProperty.call(EMBED,p.slice(1)))key=p.slice(1);
+  else{
+    var name=p.slice(1);
+    if(!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)||name.indexOf('..')!==-1)return sendError(req,res,404,'err.notfound');
+    var fp=path.join(ctx.pubDir,name);
+    try{
+      var b2=fs.readFileSync(fp);
+      var ext2=path.extname(name).toLowerCase();
+      var mime2=({
+        '.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8',
+        '.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8',
+        '.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg',
+        '.jpeg':'image/jpeg','.ico':'image/x-icon','.webmanifest':'application/manifest+json; charset=utf-8',
+        '.woff2':'font/woff2','.txt':'text/plain; charset=utf-8'
+      })[ext2]||'application/octet-stream';
+      return sendBinary(req,res,200,b2,mime2,'public, max-age=3600');
+    }catch(e){
+      return sendError(req,res,404,'err.notfound');
+    }
+  }
+  var body=EMBED[key];
+  if(body===undefined)return sendError(req,res,404,'err.notfound');
+  var ext=path.extname(key)||'.html';
+  var type=({
+    '.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8',
+    '.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8'
+  })[ext]||'text/html; charset=utf-8';
+  var cc=ext==='.html'?'public, max-age=60':(ext==='.js'?'no-cache':'public, max-age=3600');
+  return sendText(req,res,200,body,type,{cache:cc});
+}
+
+async function handleApi(ctx,req,res,url,p){
+  var m=req.method;
+  if(p==='/api/health')return apiHealth(req,res);
+  if(p==='/api/config'&&(m==='GET'||m==='HEAD'))return apiConfig(ctx,req,res);
+  if(p==='/api/strip'&&(m==='GET'||m==='HEAD'))return apiStrip(ctx,req,res);
+  if(p==='/api/profiles'&&(m==='GET'||m==='HEAD'))return apiProfiles(ctx,req,res,url);
+  var mt;
+  if((mt=p.match(/^\/api\/profile\/([a-z0-9-]+)$/))&&(m==='GET'||m==='HEAD'))return apiProfile(ctx,req,res,mt[1]);
+  if(p==='/api/events'&&m==='POST')return apiEvents(ctx,req,res);
+  if(p==='/api/help/ask'&&m==='POST')return apiHelpAsk(ctx,req,res);
+  if(p==='/api/help/contact'&&m==='POST')return apiHelpContact(ctx,req,res);
+  if(p==='/api/report'&&m==='POST')return apiReport(ctx,req,res);
+  if(p==='/api/register'&&m==='POST')return apiRegister(ctx,req,res);
+  if(p==='/api/login'&&m==='POST')return apiLogin(ctx,req,res);
+  if(p==='/api/logout'&&m==='POST')return apiLogout(ctx,req,res);
+  if(p==='/api/me/logout-all'&&m==='POST')return apiLogoutAll(ctx,req,res);
+  if(p==='/api/me/notifications'&&m==='GET')return apiNotificationsList(ctx,req,res);
+  if(p==='/api/me/notifications/read-all'&&m==='POST')return apiNotificationsReadAll(ctx,req,res);
+  if(p==='/api/me/lang'&&m==='PUT')return apiMeLang(ctx,req,res);
+  if(p==='/api/me/verify-email'&&m==='POST')return apiVerifyEmailRequest(ctx,req,res);
+  if(p==='/api/me/verify-phone'&&m==='POST')return apiVerifyPhoneRequest(ctx,req,res);
+  if(p==='/api/me/verify-phone/confirm'&&m==='POST')return apiVerifyPhoneConfirm(ctx,req,res);
+  var vt;
+  if((vt=p.match(/^\/api\/verify-email\/([A-Za-z0-9_-]+)$/))&&(m==='GET'||m==='HEAD'))return apiVerifyEmailToken(ctx,req,res,vt[1]);
+  if(p==='/api/me'&&m==='GET')return apiMeGet(ctx,req,res);
+  if(p==='/api/me'&&m==='PUT')return apiMePut(ctx,req,res);
+  if(p==='/api/me/password'&&m==='POST')return apiMePassword(ctx,req,res);
+  if(p==='/api/me/delete'&&m==='POST')return apiMeDelete(ctx,req,res);
+  if(p==='/api/me/restore'&&m==='POST')return apiMeRestore(ctx,req,res);
+  if(p==='/api/password/forgot'&&m==='POST')return apiPasswordForgot(ctx,req,res);
+  if(p==='/api/password/reset'&&m==='POST')return apiPasswordReset(ctx,req,res);
+  if(p==='/api/saved'&&m==='GET')return apiSavedList(ctx,req,res);
+  if((mt=p.match(/^\/api\/saved\/([a-z0-9]+)$/))&&(m==='PUT'||m==='DELETE'))return apiSavedToggle(ctx,req,res,mt[1],m);
+  if(p==='/api/messages'&&m==='POST')return apiUserMessage(ctx,req,res);
+  if(p==='/api/messages'&&m==='GET')return apiMessagesList(ctx,req,res);
+  var u=ctx.sessionUser(req);
+  if(p.indexOf('/api/admin/')===0){
+    if(!u)return sendError(req,res,401,'err.auth');
+    if(!ctx.isAdmin(u))return sendError(req,res,403,'err.forbidden');
+    var ar=adminRoute(ctx,req,res,p,m,u);
+    if(ar!==NOROUTE)return ar;
+  }
+  return sendError(req,res,404,'err.notfound');
+}
+
+const NOROUTE={};
+const ADMIN_ROUTES=[
+  ['GET','/api/admin/summary','dash.view',function(ctx,req,res,mt,u){return adminSummary(ctx,req,res)}],
+  ['GET','/api/admin/users','users.view',function(ctx,req,res,mt,u){return adminUsers(ctx,req,res,u)}],
+  ['POST','/api/admin/broadcast','broadcast.send',function(ctx,req,res,mt,u){return adminBroadcast(ctx,req,res,u)}],
+  ['GET','/api/admin/reports','reports.handle',function(ctx,req,res,mt,u){return adminReports(ctx,req,res)}],
+  ['GET','/api/admin/requests','requests.handle',function(ctx,req,res,mt,u){return adminRequests(ctx,req,res)}],
+  ['GET','/api/admin/audit','audit.view',function(ctx,req,res,mt,u){return adminAudit(ctx,req,res)}],
+  ['GET','/api/admin/logs','audit.view',function(ctx,req,res,mt,u){return adminLogs(ctx,req,res)}],
+  ['GET','/api/admin/messages','content.edit',function(ctx,req,res,mt,u){return adminMessages(ctx,req,res)}],
+  ['GET','/api/admin/settings','settings.edit',function(ctx,req,res,mt,u){return adminSettings(ctx,req,res)}],
+  ['POST','/api/admin/settings','settings.edit',function(ctx,req,res,mt,u){return adminSettingsUpdate(ctx,req,res,u)}],
+  ['POST','/api/admin/features','settings.edit',function(ctx,req,res,mt,u){return adminFeatureToggle(ctx,req,res,u)}],
+  ['GET','/api/admin/strip','content.edit',function(ctx,req,res,mt,u){return adminStripList(ctx,req,res)}],
+  ['POST','/api/admin/strip','content.edit',function(ctx,req,res,mt,u){return adminStripAdd(ctx,req,res,u)}],
+  ['GET','/api/admin/caps','catalog.edit',function(ctx,req,res,mt,u){return adminCapsList(ctx,req,res)}],
+  ['POST','/api/admin/caps','catalog.edit',function(ctx,req,res,mt,u){return adminCapsAdd(ctx,req,res,u)}],
+  ['GET','/api/admin/cats','catalog.edit',function(ctx,req,res,mt,u){return adminCategoriesList(ctx,req,res)}],
+  ['POST','/api/admin/cats','catalog.edit',function(ctx,req,res,mt,u){return adminCategoriesAdd(ctx,req,res,u)}],
+  ['GET','/api/admin/faq','content.edit',function(ctx,req,res,mt,u){return adminFaqList(ctx,req,res)}],
+  ['POST','/api/admin/faq','content.edit',function(ctx,req,res,mt,u){return adminFaqAdd(ctx,req,res,u)}],
+  ['GET','/api/admin/stats','dash.view',function(ctx,req,res,mt,u){return adminStats(ctx,req,res)}],
+  ['GET',/^\/api\/admin\/users\/(\d+)$/,'users.view',function(ctx,req,res,mt,u){return adminUserGet(ctx,req,res,+mt[1],u)}],
+  ['PUT',/^\/api\/admin\/users\/(\d+)$/,'users.edit',function(ctx,req,res,mt,u){return adminUserPut(ctx,req,res,+mt[1],u)}],
+  ['DELETE',/^\/api\/admin\/users\/(\d+)$/,'users.delete',function(ctx,req,res,mt,u){return adminUserDelete(ctx,req,res,+mt[1],u)}],
+  ['POST',/^\/api\/admin\/users\/(\d+)\/message$/,'users.message',function(ctx,req,res,mt,u){return adminUserMessage(ctx,req,res,+mt[1],u)}],
+  ['POST',/^\/api\/admin\/users\/(\d+)\/reset-password$/,'users.edit',function(ctx,req,res,mt,u){return adminUserResetPw(ctx,req,res,+mt[1],u)}],
+  ['POST',/^\/api\/admin\/reports\/(\d+)$/,'reports.handle',function(ctx,req,res,mt,u){return adminReportUpdate(ctx,req,res,+mt[1],u)}],
+  ['POST',/^\/api\/admin\/requests\/(\d+)$/,'requests.handle',function(ctx,req,res,mt,u){return adminRequestDecide(ctx,req,res,+mt[1],u)}],
+  ['POST',/^\/api\/admin\/profiles\/([a-z0-9]+)$/,'profiles.moderate',function(ctx,req,res,mt,u){return adminProfileSuspend(ctx,req,res,mt[1],u)}],
+  ['PUT',/^\/api\/admin\/messages\/(\d+)$/,'content.edit',function(ctx,req,res,mt,u){return adminMessageUpdate(ctx,req,res,+mt[1],u)}],
+  ['PUT',/^\/api\/admin\/strip\/(\d+)$/,'content.edit',function(ctx,req,res,mt,u){return adminStripUpdate(ctx,req,res,+mt[1],u)}],
+  ['DELETE',/^\/api\/admin\/strip\/(\d+)$/,'content.edit',function(ctx,req,res,mt,u){return adminStripDelete(ctx,req,res,+mt[1],u)}],
+  ['POST',/^\/api\/admin\/strip\/(\d+)\/video$/,'content.edit',function(ctx,req,res,mt,u){return adminStripVideoUpload(ctx,req,res,+mt[1],u)}],
+  ['POST',/^\/api\/admin\/strip\/(\d+)\/image$/,'content.edit',function(ctx,req,res,mt,u){return adminStripImageUpload(ctx,req,res,+mt[1],u)}],
+  ['PUT',/^\/api\/admin\/caps\/(\d+)$/,'catalog.edit',function(ctx,req,res,mt,u){return adminCapsUpdate(ctx,req,res,+mt[1],u)}],
+  ['DELETE',/^\/api\/admin\/caps\/(\d+)$/,'catalog.edit',function(ctx,req,res,mt,u){return adminCapsDelete(ctx,req,res,+mt[1],u)}],
+  ['PUT',/^\/api\/admin\/faq\/(\d+)$/,'content.edit',function(ctx,req,res,mt,u){return adminFaqUpdate(ctx,req,res,+mt[1],u)}],
+  ['DELETE',/^\/api\/admin\/faq\/(\d+)$/,'content.edit',function(ctx,req,res,mt,u){return adminFaqDelete(ctx,req,res,+mt[1],u)}],
+  ['GET','/api/admin/perms',null,function(ctx,req,res,mt,u){return adminPerms(ctx,req,res,u)}],
+  ['GET','/api/admin/staff','staff.manage',function(ctx,req,res,mt,u){return adminStaffList(ctx,req,res,u)}],
+  ['POST','/api/admin/staff','staff.manage',function(ctx,req,res,mt,u){return adminStaffCreate(ctx,req,res,u)}],
+  ['PUT',/^\/api\/admin\/staff\/(\d+)$/,'staff.manage',function(ctx,req,res,mt,u){return adminStaffUpdate(ctx,req,res,+mt[1],u)}],
+  ['DELETE',/^\/api\/admin\/staff\/(\d+)$/,'staff.manage',function(ctx,req,res,mt,u){return adminStaffDelete(ctx,req,res,+mt[1],u)}],
+  ['POST',/^\/api\/admin\/staff\/(\d+)\/invite$/,'staff.manage',function(ctx,req,res,mt,u){return adminStaffInvite(ctx,req,res,+mt[1],u)}]
+];
+function adminRoute(ctx,req,res,p,m,u){
+  for(let i=0;i<ADMIN_ROUTES.length;i++){
+    const r=ADMIN_ROUTES[i];
+    if(r[0]!==m)continue;
+    let mt=null;
+    if(typeof r[1]==='string'){if(p===r[1])mt=[p]}else mt=p.match(r[1]);
+    if(!mt)continue;
+    if(r[2]&&!ctx.can(u,r[2]))return sendError(req,res,403,'err.forbidden');
+    return r[3](ctx,req,res,mt,u);
+  }
+  return NOROUTE;
+}
+
+function staffMayAssign(actor,role){
+  if(staffLevel(actor)==='super')return true;
+  return rankOfLevel(role)<rankOfLevel(staffLevel(actor));
+}
+function staffMayManage(actor,level){
+  if(staffLevel(actor)==='super')return true;
+  return rankOfLevel(level)<rankOfLevel(staffLevel(actor));
+}
+function cleanPermsInput(actor,role,d){
+  if(role==='super')return null;
+  const base=new Set(ROLE_PERMS[role]||[]);
+  const mine=new Set(permsOf(actor));
+  const add=[],remove=[];
+  (Array.isArray(d.add)?d.add:[]).forEach(x=>{if(isPerm(x)&&!base.has(x)&&mine.has(x)&&!add.includes(x))add.push(x)});
+  (Array.isArray(d.remove)?d.remove:[]).forEach(x=>{if(isPerm(x)&&base.has(x)&&!remove.includes(x))remove.push(x)});
+  return(add.length||remove.length)?JSON.stringify({add:add,remove:remove}):null;
+}
+function parsePermsJson(t){
+  try{const o=JSON.parse(t.perms||'{}')||{};return{add:Array.isArray(o.add)?o.add:[],remove:Array.isArray(o.remove)?o.remove:[]}}catch(e){return{add:[],remove:[]}}
+}
+function makeInviteLink(req,userId){
+  const base=trustedBaseUrl();
+  if(!base)return null;
+  const tok=crypto.randomBytes(32).toString('base64url');
+  Q('DELETE FROM resets WHERE user_id=?').run(userId);
+  Q('INSERT INTO resets(th,user_id,expires) VALUES(?,?,?)').run(sha(tok),userId,Date.now()+3*24*HOUR);
+  return base+'/reset/'+tok;
+}
+function staffRow(t){
+  const lv=staffLevelRaw(t);
+  return{id:t.id,name:t.display_name||t.name||t.email,email:t.email,phone:t.phone,level:lv,status:t.status,perms:parsePermsJson(t),effective:permsFor(t),has_profile:!!t.pid,created_at:t.created_at};
+}
+function adminPerms(ctx,req,res,actor){
+  sendJson(req,res,200,{perms:permsCatalog(),roles:rolesCatalog(),mine:permsOf(actor),level:staffLevel(actor)});
+}
+function adminStaffList(ctx,req,res,actor){
+  const rows=ctx.Q("SELECT u.id,u.email,u.phone,u.status,u.role,u.role_level,u.perms,u.display_name,u.created_at,p.pid,p.name FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.role_level IN ('super','admin','mod','editor','viewer') OR u.role='admin' ORDER BY u.id").all();
+  sendJson(req,res,200,{staff:rows.map(staffRow),perms:permsCatalog(),roles:rolesCatalog(),me:{id:actor.id,level:staffLevel(actor),mine:permsOf(actor)}});
+}
+async function adminStaffCreate(ctx,req,res,actor){
+  const b=await readBody(req,8192);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const d=b.data||{};
+  const name=clean(d.name,80);
+  const email=clean(d.email,254).toLowerCase();
+  const phone=np(String(d.phone||''));
+  const role=STAFF_LEVELS.includes(d.role)?d.role:null;
+  if(name.length<2)return sendError(req,res,400,'reg.err.name','name');
+  if(!EM.test(email))return sendError(req,res,400,'reg.err.email','email');
+  if(!MP.test(phone))return sendError(req,res,400,'reg.err.phone','phone');
+  if(!role)return sendError(req,res,400,'common.required','role');
+  if(!staffMayAssign(actor,role))return sendError(req,res,403,'staff.err.rank');
+  const perms=cleanPermsInput(actor,role,d);
+  const us=ctx.Q('SELECT * FROM users WHERE email=?').get(email);
+  let id=0,promoted=false;
+  if(us){
+    if(us.status!=='active')return sendError(req,res,409,'reg.err.email','email');
+    if(staffLevelRaw(us))return sendError(req,res,409,'staff.err.exists');
+    if(us.phone!==phone)return sendError(req,res,409,'reg.err.phone','phone');
+    ctx.Q('UPDATE users SET role=?,role_level=?,perms=?,display_name=? WHERE id=?').run('admin',role,perms,name,us.id);
+    id=us.id;promoted=true;
+  }else{
+    if(ctx.Q('SELECT 1 FROM users WHERE phone=?').get(phone))return sendError(req,res,409,'reg.err.phone','phone');
+    const pw=await hashPw(crypto.randomBytes(24).toString('hex'));
+    try{
+      const r=ctx.Q('INSERT INTO users(email,phone,pw,role,role_level,perms,display_name,terms_at,created_at) VALUES(?,?,?,?,?,?,?,?,?)').run(email,phone,pw,'admin',role,perms,name,Date.now(),Date.now());
+      id=Number(r.lastInsertRowid);
+    }catch(e){return sendError(req,res,409,'reg.err.email','email')}
+  }
+  let invite=null;
+  if(!promoted){
+    invite=makeInviteLink(req,id);
+    if(invite&&ctx.mailer.isLive){
+      try{await ctx.mailer.send(email,'AHABONA: ubutumire bw\'ubuyobozi','Wahawe uburenganzira bwo gufasha kuyobora AHABONA. Kanda hano ushyireho ijambobanga ryawe (rimara iminsi 3): '+invite)}catch(e){}
+    }
+  }
+  ctx.adminLog(actor.id,'staff.create','user',String(id),JSON.stringify({role:role,promoted:promoted}),ctx.ipOf(req));
+  sendJson(req,res,201,{ok:true,id:id,promoted:promoted,invite:invite});
+}
+async function adminStaffUpdate(ctx,req,res,id,actor){
+  const b=await readBody(req,8192);
+  if(!b.ok)return sendError(req,res,b.code||400,b.error||'err.server');
+  const d=b.data||{};
+  const t=ctx.Q('SELECT * FROM users WHERE id=?').get(id);
+  if(!t||!staffLevelRaw(t))return sendError(req,res,404,'err.notfound');
+  const curLv=staffLevelRaw(t);
+  const isSelf=t.id===actor.id;
+  if(isSelf&&(d.role!==undefined||d.status!==undefined||d.add!==undefined||d.remove!==undefined))return sendError(req,res,403,'staff.err.self');
+  if(!isSelf&&!staffMayManage(actor,curLv))return sendError(req,res,403,'staff.err.rank');
+  let role=curLv;
+  if(d.role!==undefined){
+    if(!STAFF_LEVELS.includes(d.role))return sendError(req,res,400,'common.required','role');
+    role=d.role;
+    if(role!==curLv&&!staffMayAssign(actor,role))return sendError(req,res,403,'staff.err.rank');
+  }
+  let status=t.status;
+  if(d.status!==undefined){
+    if(!['active','suspended'].includes(d.status))return sendError(req,res,400,'common.required','status');
+    status=d.status;
+  }
+  let perms=t.perms||null;
+  if(d.add!==undefined||d.remove!==undefined){
+    const cur=parsePermsJson(t);
+    perms=cleanPermsInput(actor,role,{add:d.add!==undefined?d.add:cur.add,remove:d.remove!==undefined?d.remove:cur.remove});
+  }else if(role!==curLv){
+    perms=null;
+  }
+  if(curLv==='super'&&(role!=='super'||status!=='active')){
+    const n=ctx.Q("SELECT COUNT(*) n FROM users WHERE role_level='super' AND status='active' AND id<>?").get(t.id).n;
+    if(n<1)return sendError(req,res,400,'staff.err.lastsuper');
+  }
+  const name=d.name!==undefined?clean(d.name,80):t.display_name;
+  ctx.Q('UPDATE users SET role=?,role_level=?,perms=?,status=?,display_name=? WHERE id=?').run('admin',role,perms,status,name||null,t.id);
+  if(status!=='active')ctx.Q('DELETE FROM sessions WHERE user_id=?').run(t.id);
+  ctx.adminLog(actor.id,'staff.update','user',String(t.id),JSON.stringify({role:role,status:status}),ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true});
+}
+function adminStaffDelete(ctx,req,res,id,actor){
+  const t=ctx.Q('SELECT * FROM users WHERE id=?').get(id);
+  if(!t||!staffLevelRaw(t))return sendError(req,res,404,'err.notfound');
+  if(t.id===actor.id)return sendError(req,res,403,'staff.err.self');
+  const curLv=staffLevelRaw(t);
+  if(!staffMayManage(actor,curLv))return sendError(req,res,403,'staff.err.rank');
+  if(curLv==='super'){
+    const n=ctx.Q("SELECT COUNT(*) n FROM users WHERE role_level='super' AND status='active' AND id<>?").get(t.id).n;
+    if(n<1)return sendError(req,res,400,'staff.err.lastsuper');
+  }
+  const hasProfile=ctx.Q('SELECT 1 FROM profiles WHERE user_id=?').get(t.id);
+  if(hasProfile){
+    ctx.Q("UPDATE users SET role='user',role_level='user',perms=NULL,display_name=NULL WHERE id=?").run(t.id);
+    ctx.Q('DELETE FROM sessions WHERE user_id=?').run(t.id);
+  }else{
+    try{deleteUserData(t.id)}catch(e){return sendError(req,res,500,'err.server')}
+  }
+  ctx.adminLog(actor.id,'staff.remove','user',String(t.id),null,ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true});
+}
+
+async function adminUserResetPw(ctx,req,res,id,admin){
+  const t=ctx.Q('SELECT * FROM users WHERE id=?').get(id);
+  if(!t)return sendError(req,res,404,'err.notfound');
+  const tLv=staffLevelRaw(t);
+  if(tLv&&t.id!==admin.id&&!(ctx.can(admin,'staff.manage')&&staffMayManage(admin,tLv)))return sendError(req,res,403,'staff.err.rank');
+  // 1-hour password-reset token (not the 3-day staff invite)
+  const base=trustedBaseUrl();
+  if(!base)return sendError(req,res,503,'err.server');
+  const tok=crypto.randomBytes(32).toString('base64url');
+  ctx.Q('DELETE FROM resets WHERE user_id=?').run(t.id);
+  ctx.Q('INSERT INTO resets(th,user_id,expires) VALUES(?,?,?)').run(sha(tok),t.id,Date.now()+HOUR);
+  const link=base+'/reset/'+tok;
+  if(ctx.mailer.isLive||ctx.mailer.isDev){
+    try{await ctx.mailer.send(t.email,'AHABONA: reset password','Link (1 hour): '+link)}catch(e){}
+  }
+  ctx.adminLog(admin.id,'user.resetpw','user',String(id),null,ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true,link:link});
+}
+async function adminStaffInvite(ctx,req,res,id,actor){
+  const t=ctx.Q('SELECT * FROM users WHERE id=?').get(id);
+  if(!t||!staffLevelRaw(t))return sendError(req,res,404,'err.notfound');
+  if(t.id!==actor.id&&!staffMayManage(actor,staffLevelRaw(t)))return sendError(req,res,403,'staff.err.rank');
+  if(t.status!=='active')return sendError(req,res,409,'err.forbidden');
+  const invite=makeInviteLink(req,t.id);
+  if(!invite)return sendError(req,res,503,'err.server');
+  if(ctx.mailer.isLive){
+    try{await ctx.mailer.send(t.email,'AHABONA: shyiraho ijambobanga','Kanda hano ushyireho ijambobanga rishya (rimara iminsi 3): '+invite)}catch(e){}
+  }
+  ctx.adminLog(actor.id,'staff.invite','user',String(t.id),null,ctx.ipOf(req));
+  sendJson(req,res,200,{ok:true,invite:invite});
+}
+
+/* ===== END OF IGICE 18/19 ===== */
+
+/* Static web assets are maintained separately under server-v2-modules/assets/. */
+
+
+
+function start(opts){
+  opts=opts||{};
+  // node:sqlite is built-in (Node 22.5+). On Node <24 it may need --experimental-sqlite.
+  try{
+    if(typeof DatabaseSync!=='function')throw new Error('DatabaseSync missing');
+  }catch(e){
+    console.error('[boot] node:sqlite unavailable. Use Node 22.5+ with NODE_OPTIONS=--experimental-sqlite (or Node 24+).');
+    throw e;
+  }
+  var dataDir=opts.dataDir||process.env.AHABONA_DATA||path.join(__dirname,'data');
+  var pubDir=opts.publicDir||path.join(__dirname,'public');
+  var secure=opts.secure!==undefined?!!opts.secure:(process.env.AHABONA_SECURE==='1'||process.env.AHABONA_SECURE==='true');
+  var dev=opts.dev!==undefined?!!opts.dev:(process.env.AHABONA_DEV==='1'||process.env.AHABONA_DEV==='true');
+  var proxy=process.env.AHABONA_TRUST_PROXY==='1'||process.env.AHABONA_TRUST_PROXY==='true';
+  console.log('[boot] env flags set:', {
+    AHABONA_DATA:!!process.env.AHABONA_DATA,
+    AHABONA_SECURE:process.env.AHABONA_SECURE!=null,
+    AHABONA_DEV:process.env.AHABONA_DEV!=null,
+    AHABONA_TRUST_PROXY:process.env.AHABONA_TRUST_PROXY!=null,
+    ADMIN_EMAIL:!!process.env.ADMIN_EMAIL,
+    ADMIN_PHONE:!!process.env.ADMIN_PHONE,
+    ADMIN_PASSWORD:!!process.env.ADMIN_PASSWORD,
+    MAIL_API_URL:!!process.env.MAIL_API_URL,
+    PORT:!!process.env.PORT
+  });
+  var ctx=makeCtx({
+    dataDir:dataDir,
+    pubDir:pubDir,
+    secure:secure,
+    dev:dev,
+    proxy:proxy
+  });
+  if(!process.env.AHABONA_DATA&&!opts.dataDir){
+    console.warn('[warn] AHABONA_DATA is not set: data lives in the app folder ('+dataDir+') and is lost on redeploy unless a persistent disk is mounted there. Attach a disk and set AHABONA_DATA to its mount path.');
+  }
+  try{
+    execFile('ffmpeg',['-version'],{timeout:8000},function(err){
+      if(err)console.warn('[media] ffmpeg NOT found: videos are stored exactly as uploaded (use H.264 mp4).');
+      else console.log('[media] ffmpeg found');
+    });
+  }catch(e){}
+  Q=ctx.Q;
+  caps=ctx.caps;
+  capName=ctx.capName;
+  store=ctx.store;
+  var mediaStore=ctx.mediaStore;
+  deviceOf=ctx.deviceOf;
+  var adminBoot=Promise.resolve(ctx.adminBoot()).catch(function(e){
+    console.error('[admin]',e&&e.message||e);
+    return {ok:false};
+  });
+  var server=http.createServer(function(req,res){
+    Promise.resolve().then(function(){return handleRequest(ctx,req,res)}).catch(function(e){
+      console.error('[req]',e&&e.stack||e);
+      if(!res.headersSent){try{sendError(req,res,500,'err.server')}catch(e2){}}
+    });
+  });
+  process.on('unhandledRejection',function(err){
+    console.error('[unhandledRejection]',err&&err.stack||err);
+  });
+  process.on('uncaughtException',function(err){
+    console.error('[uncaughtException]',err&&err.stack||err);
+    process.exit(1);
+  });
+  function listen(port){
+    return new Promise(function(resolve){
+      server.listen(port||0,function(){resolve(server.address().port)});
+    });
+  }
+  function close(){
+    return new Promise(function(resolve){
+      server.close(function(){
+        try{ctx.db.close()}catch(e){}
+        resolve();
+      });
+    });
+  }
+  return {
+    server:server,
+    ctx:ctx,
+    db:ctx.db,
+    store:ctx.store,
+    settings:ctx.settings,
+    mailer:ctx.mailer,
+    listen:listen,
+    close:close,
+    adminBoot:adminBoot
+  };
+}
+
+module.exports={start:start,makeCtx:makeCtx,nz:nz};
+
+if(require.main===module){
+  var port=+(process.env.PORT||3000);
+  var app=start();
+  app.adminBoot.then(function(){return app.listen(port)}).then(function(p){
+    console.log('AHABONA v2 listening on http://localhost:'+p);
+  }).catch(function(e){
+    console.error('boot failed',e&&e.stack||e);
+    process.exit(1);
+  });
+}
+
+/* ===== END OF IGICE 19/19 ===== */
